@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
 import {
   PixButton,
   PixMeter,
@@ -12,7 +18,17 @@ import { UnitPhoto } from "@/components/homelander/unit-photo";
 import type { Battle, Fighter } from "@/lib/homelander/battle-verdict";
 import type { FightRound, FightScript } from "@/lib/homelander/battle-fight";
 import { cn } from "@/lib/utils";
-import { crown, swords } from "./bits";
+import {
+  playClash,
+  playHit,
+  playReady,
+  playSwing,
+  playVictory,
+  setSfxMuted,
+  sfxMuted,
+  unlockSfx,
+} from "./battle-sfx";
+import { crown, speakerOff, swords } from "./bits";
 import { celebrateWinner, preloadConfetti } from "./celebrate";
 
 export type FightPhase = "idle" | "fighting" | "done";
@@ -49,6 +65,10 @@ export function FightArena({
 }) {
   const fighters = battle.fighters;
   const n = fighters.length;
+  const start = () => {
+    unlockSfx(); // the click is the user gesture that lets audio play
+    onStart();
+  };
 
   return (
     <section aria-labelledby="fight-title" className="grid gap-3">
@@ -60,7 +80,8 @@ export function FightArena({
           <Sprite art={swords} scale={3} className="shrink-0 text-raya" />
           The fight
         </h2>
-        <p className="text-sm text-ink-soft">
+        <SoundToggle />
+        <p className="w-full text-sm text-ink-soft">
           {script.rounds.length} rounds, scored on your priorities. Damage comes
           from the real gaps in the table above.
         </p>
@@ -98,7 +119,7 @@ export function FightArena({
               <PixButton
                 tone="kaya"
                 size="lg"
-                onClick={onStart}
+                onClick={start}
                 onPointerEnter={preloadConfetti}
                 onFocus={preloadConfetti}
               >
@@ -114,7 +135,7 @@ export function FightArena({
               Skip to the result
             </PixButton>
           ) : (
-            <PixButton tone="kaya" onClick={onStart}>
+            <PixButton tone="kaya" onClick={start}>
               <Sprite art="undo" scale={2} />
               Replay the fight
             </PixButton>
@@ -187,6 +208,8 @@ function Bout({
     const ids = fighters.map((f) => f.unit.id);
     const wide = window.matchMedia("(min-width: 640px)").matches;
 
+    at(60, playReady);
+
     script.rounds.forEach((round, i) => {
       const t = INTRO_MS + i * R;
       at(t, () => {
@@ -194,6 +217,8 @@ function Bout({
         setStruck(false);
       });
       at(t + R * 0.3, () => {
+        // The winner's lunge: the blade swings, and lands on the strike below.
+        if (round.winners.length) playSwing();
         round.winners.forEach((id) => {
           const idx = ids.indexOf(id);
           const mid = (ids.length - 1) / 2;
@@ -214,6 +239,13 @@ function Bout({
       at(t + R * 0.48, () => {
         setStruck(true);
         setHp(round.hpAfter);
+        if (round.winners.length) {
+          playClash();
+          if (ids.some((id) => (round.damage[id] ?? 0) >= 0.5))
+            window.setTimeout(playHit, 40);
+        } else {
+          playSwing(); // a draw: a whiff, nobody lands a hit
+        }
         ids.forEach((id) => {
           if ((round.damage[id] ?? 0) < 0.5) return;
           const r = refs.current[id];
@@ -242,6 +274,7 @@ function Bout({
     const end = INTRO_MS + script.rounds.length * R;
     at(end, () => {
       setKo(true);
+      playVictory();
       const rect =
         refs.current[script.winnerId]?.card?.getBoundingClientRect() ?? null;
       void celebrateWinner(rect);
@@ -284,6 +317,31 @@ function Bout({
 }
 
 /* ---------------------------------------------------------------- pieces */
+
+/** Sound on/off for the fight, remembered on this device. */
+function SoundToggle() {
+  const muted = useSyncExternalStore(
+    sfxMuted.subscribe,
+    sfxMuted.get,
+    sfxMuted.getServer,
+  );
+  return (
+    <PixButton
+      tone="white"
+      size="sm"
+      aria-pressed={!muted}
+      aria-label="Fight sound"
+      title={muted ? "Sound is off" : "Sound is on"}
+      onClick={() => {
+        setSfxMuted(!muted);
+        if (muted) unlockSfx();
+      }}
+    >
+      <Sprite art={muted ? speakerOff : "speaker"} scale={2} />
+      Sound
+    </PixButton>
+  );
+}
 
 function Stage({
   fighters,

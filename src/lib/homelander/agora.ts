@@ -30,6 +30,13 @@ const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 
 /** Fixed uid for Mochi in every channel; the buyer gets a random one. */
 export const AGENT_UID = 8888;
+/**
+ * ARES set to any non-English locale hears English, Malay, Mandarin and Tamil, mixed mid-sentence
+ * (tested with real calls). Only en-US / en-SG limit it to English, which is why Mochi used to be
+ * English-only. So the call runs in ms-MY: no key, every language, no picker.
+ */
+const ARES_MULTILINGUAL = "ms-MY";
+
 /** RTC tokens live for an hour; onboarding takes a few minutes. */
 const TOKEN_TTL_S = 3600;
 
@@ -78,7 +85,7 @@ function read() {
       e.AGORA_LLM_MODEL ||
       (e.AGORA_LLM_URL || e.AGORA_LLM_VENDOR === "groq" ? "openai/gpt-oss-120b" : "gpt-4.1-mini"),
     asrVendor,
-    asrLanguage: e.AGORA_ASR_LANGUAGE || (asrVendor === "speechmatics" ? "cmn_en_ms_ta" : asrVendor === "microsoft" ? "ms-MY" : "en-US"),
+    asrLanguage: e.AGORA_ASR_LANGUAGE || (asrVendor === "speechmatics" ? "cmn_en_ms_ta" : asrVendor === "microsoft" ? "ms-MY" : ARES_MULTILINGUAL),
     speechmaticsKey: e.SPEECHMATICS_API_KEY ?? "",
     speechmaticsUri: e.SPEECHMATICS_RT_URL ?? "",
     azureKey,
@@ -144,14 +151,15 @@ function basicAuth() {
   return `Basic ${Buffer.from(`${c.customerId}:${c.customerSecret}`).toString("base64")}`;
 }
 
-/** Agora's ARES hears one language per call; these are the codes for Mochi's four. */
-const ARES_LANG = { en: "en-US", ms: "ms-MY", zh: "zh-CN", ta: "ta-IN" } as const;
-export type CallLang = keyof typeof ARES_LANG;
+export type CallLang = "en" | "ms" | "zh" | "ta";
 
-/** True when the recogniser hears English, Malay, Mandarin and Tamil mixed in one call (Speechmatics). */
+
+/** True when the recogniser hears English, Malay, Mandarin and Tamil mixed in one call. */
 export function agoraMixedLanguages() {
   const c = read();
-  return c.asrVendor === "speechmatics" && c.asrLanguage === "cmn_en_ms_ta";
+  if (c.asrVendor === "speechmatics") return c.asrLanguage === "cmn_en_ms_ta";
+  if (c.asrVendor === "ares") return !c.asrLanguage.toLowerCase().startsWith("en");
+  return false;
 }
 
 /** Words the recognisers should expect. */
@@ -165,7 +173,7 @@ const KEYWORDS = ["Mochi", "Gamuda", "Gamuda Land", "HomeLander", "LRT", "MRT", 
  * - ARES (Agora's own, no key): https://docs.agora.io/en/ai/models/asr/ares
  * - Microsoft: https://docs.agora.io/en/ai/models/asr/microsoft
  */
-function asrConfig(lang: CallLang) {
+function asrConfig() {
   const c = read();
   if (c.asrVendor === "speechmatics") {
     return {
@@ -185,8 +193,7 @@ function asrConfig(lang: CallLang) {
       params: { key: c.azureKey, region: c.azureRegion, language: c.asrLanguage, phrase_list: KEYWORDS },
     };
   }
-  // AGORA_ASR_LANGUAGE pins one language; otherwise the language the buyer picked for this call.
-  return { vendor: "ares", language: process.env.AGORA_ASR_LANGUAGE || ARES_LANG[lang], keywords: KEYWORDS };
+  return { vendor: "ares", language: c.asrLanguage, keywords: KEYWORDS };
 }
 
 /**
@@ -344,7 +351,7 @@ export async function joinAgent({ channel, userUid, systemPrompt, greeting, lang
         max_history: 12,
         params: llmParams(),
       },
-      asr: asrConfig(lang),
+      asr: asrConfig(),
       tts: { ...ttsConfig(), skip_patterns: [3, 4] },
       // Turn-taking and barge-in use the engine defaults: Agora VAD, 640 ms of silence ends the buyer's
       // turn, and talking over Mochi interrupts it (properties.interruption.enable defaults to true).
@@ -366,6 +373,15 @@ export async function updateAgentPrompt(agentId: string, systemPrompt: string) {
     properties: { llm: { system_messages: [{ role: "system", content: systemPrompt }] } },
   });
   if (!res.ok && res.status !== 404) throw await failure(res, "update");
+}
+
+/**
+ * Makes Mochi say a line right now, cutting off whatever it was saying (Agora "speak", v2):
+ * POST .../agents/{agentId}/speak, body { text, priority, interruptable }.
+ */
+export async function speakAgent(agentId: string, text: string) {
+  const res = await call(`/agents/${encodeURIComponent(agentId)}/speak`, { text, priority: "INTERRUPT", interruptable: false });
+  if (!res.ok && res.status !== 404) throw await failure(res, "speak");
 }
 
 export async function leaveAgent(agentId: string) {

@@ -123,10 +123,16 @@ export function OnboardingView() {
     window.setTimeout(() => setFresh(new Set()), 2600);
   }, []);
   /** Live, hands-free call on Agora when the server has the keys; tap-to-talk is the fallback. */
+  /** finish() is declared below; the call's onComplete reaches it through this ref. */
+  const finishRef = useRef(() => {});
   const live = useAgoraCall({
     onPatch: (patch) => {
       homelander.patchProfile(patch);
       flash(patch);
+    },
+    onComplete: () => {
+      toast.success("Got everything! Here are homes that fit you.");
+      finishRef.current();
     },
   });
   const inCall =
@@ -305,6 +311,10 @@ export function OnboardingView() {
   /** The transcript shown under the call: the call's lines while (or after) calling, else the chat. */
   const showCallLog =
     inCall || (live.lines.length > 0 && messages.length === 0);
+
+  useEffect(() => {
+    finishRef.current = finish;
+  });
 
   function finish() {
     if (inCall) void live.hangUp();

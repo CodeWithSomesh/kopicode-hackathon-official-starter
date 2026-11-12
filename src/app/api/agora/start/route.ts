@@ -29,9 +29,12 @@ const GREETING: Record<CallLang, { first: string; back: string }> = {
 };
 
 function greeting(profile: Profile, lang: CallLang, mixed: boolean) {
-  const line = filledKeys(profile).length ? GREETING[lang].back : GREETING[lang].first;
-  // Only a mixed-language recogniser can follow a switch mid-call, so only then offer one.
-  return mixed ? `${line} You can talk to me in English, Bahasa Melayu, Mandarin or Tamil.` : line;
+  // Only a mixed-language recogniser can follow a switch mid-call, so only then offer one, before the question.
+  if (mixed)
+    return filledKeys(profile).length
+      ? "Hi, it's Mochi again! Talk to me in English, Bahasa Melayu, Mandarin or Tamil, or mix them. Let's pick up where we left off."
+      : "Hi, I'm Mochi! I'll help you find a home that fits your life. Talk to me in English, Bahasa Melayu, Mandarin or Tamil, or mix them. So, who will you be living with?";
+  return filledKeys(profile).length ? GREETING[lang].back : GREETING[lang].first;
 }
 
 /**

@@ -1,0 +1,56 @@
+import { transcribe } from "ai";
+import { isDemoMode } from "@/lib/env";
+import { createClient } from "@/lib/supabase/server";
+
+export const maxDuration = 30;
+
+/**
+ * Speech-to-text for Feng Shui Builder's mic. Takes one short recording and returns the
+ * transcript with the detected language. The model detects the language itself and keeps
+ * code-switching ("letak sofa kat living room", "把 sofa 放在 living room") as spoken,
+ * so the buyer never picks a language first.
+ */
+
+const MAX_BYTES = 4 * 1024 * 1024;
+const MODEL = process.env.FENG_SHUI_STT_MODEL ?? "openai/gpt-4o-transcribe";
+
+// Hints the spelling of local words; the model still detects the language itself.
+const HINT =
+  "Malaysian home buyer giving a short command about furniture and rooms. They may mix English, Bahasa Melayu, Mandarin and Tamil in one sentence, e.g. 'letak sofa kat ruang tamu', 'pusing katil', 'panas tak', 'ong tak', 'tutup langsir', '把沙发移到左边'. Write each word in the language it was spoken.";
+
+export async function POST(req: Request) {
+  // Same credit guard as /api/chat and /api/feng-shui.
+  if (!isDemoMode) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getClaims();
+    if (!data?.claims?.sub)
+      return Response.json({ error: "signin" }, { status: 401 });
+  }
+
+  const form = await req.formData().catch(() => null);
+  const file = form?.get("audio");
+  if (
+    !(file instanceof Blob) ||
+    !file.type.startsWith("audio/") ||
+    file.size === 0 ||
+    file.size > MAX_BYTES
+  )
+    return Response.json({ error: "bad-request" }, { status: 400 });
+
+  try {
+    const result = await transcribe({
+      model: MODEL,
+      audio: new Uint8Array(await file.arrayBuffer()),
+      providerOptions: { openai: { prompt: HINT } },
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(20_000),
+    });
+    return Response.json({
+      text: result.text.trim(),
+      language: result.language ?? null,
+    });
+  } catch (err) {
+    console.error("[feng-shui stt]", err);
+    return Response.json({ error: "stt-unavailable" }, { status: 502 });
+  }
+}

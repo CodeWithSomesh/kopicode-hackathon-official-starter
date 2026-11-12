@@ -35,7 +35,8 @@ These override the list above where they differ.
 - `src/app/api/feng-shui/route.ts` turns free text or speech into the parser's own commands (`commands.ts`). It re-parses every command and drops any it can't read, so the model can never edit the layout directly.
 - Same credit guard as `/api/chat`: signed-in users only, unless the app is in demo mode. Locally it needs `AI_GATEWAY_API_KEY` in `.env.local`. `FENG_SHUI_AI_MODEL` overrides `AI_MODEL` for this route only.
 - If the AI fails, the page falls back to the quick parser and stops calling the AI for the rest of the session.
-- Voice uses the browser's own speech recognition and speech output (`voice.ts`). Tamil speech output depends on the device having a Tamil voice installed.
+- Voice in: `recorder.ts` records with MediaRecorder and stops on a pause; `src/app/api/feng-shui/transcribe/route.ts` sends the audio to a multilingual speech-to-text model on the AI Gateway (`openai/gpt-4o-transcribe`, override with `FENG_SHUI_STT_MODEL`). It detects the language itself and keeps mixed-language sentences, so there is no language picker. If that route fails, the mic falls back to the browser's own recogniser (`ms-MY`, one language at a time, needs Google's speech service).
+- Voice out uses the browser's speech output (`voice.ts`). Tamil speech output depends on the device having a Tamil voice installed.
 
 ## How people get here
 

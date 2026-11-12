@@ -73,7 +73,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [showBagua, setShowBagua] = useState(false);
   const [lang, setLang] = useState<Lang>("mg");
   const [log, setLog] = useState<LogEntry[]>([]);
-  const [speechLang, setSpeechLang] = useState<SpeechLang>("en");
   const [speakOn, setSpeakOn] = useState(false);
   const [busy, setBusy] = useState(false);
   /** Set once the AI route fails, so later requests skip straight to the quick parser. */
@@ -546,19 +545,11 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           onLang={setLang}
           onRun={(t) => void runCommand(t)}
           busy={busy}
-          toolbar={
-            <SpeechToolbar
-              lang={speechLang}
-              onLang={setSpeechLang}
-              speakOn={speakOn}
-              onSpeakOn={setSpeakOn}
-            />
-          }
+          toolbar={<SpeechToolbar speakOn={speakOn} onSpeakOn={setSpeakOn} />}
           extra={
             <MicButton
-              lang={speechLang}
               disabled={busy}
-              onHeard={(t) => void runCommand(t, speechLang)}
+              onHeard={(t, l) => void runCommand(t, l)}
             />
           }
         />

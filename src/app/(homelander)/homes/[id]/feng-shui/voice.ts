@@ -99,3 +99,48 @@ export function speak(text: string, lang: SpeechLang): boolean {
 export function stopSpeaking() {
   if (canSpeak()) window.speechSynthesis.cancel();
 }
+
+/**
+ * Fallback when the speech-to-text route is unavailable: the browser's own recogniser.
+ * It needs Google's speech service (Chrome, Edge) and listens in one language at a time.
+ */
+export function listenOnce(bcp47: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = makeRecognition();
+    if (!r) return reject(new Error("unsupported"));
+    r.lang = bcp47;
+    r.interimResults = false;
+    r.maxAlternatives = 1;
+    r.continuous = false;
+    let text = "";
+    r.onresult = (e) => {
+      text = Array.from(e.results)
+        .map((res) => res[0]?.transcript ?? "")
+        .join(" ")
+        .trim();
+    };
+    r.onerror = (e) => reject(new Error(e.error));
+    r.onend = () => (text ? resolve(text) : reject(new Error("no-speech")));
+    r.start();
+  });
+}
+
+/** Map a transcriber's language name or code to the languages the page replies in. */
+export function toSpeechLang(
+  language: string | null | undefined,
+): SpeechLang | undefined {
+  const l = (language ?? "").toLowerCase();
+  if (!l) return undefined;
+  if (l.startsWith("zh") || l.includes("chinese") || l.includes("mandarin"))
+    return "zh";
+  if (l.startsWith("ta") || l.includes("tamil")) return "ta";
+  if (
+    l.startsWith("ms") ||
+    l.includes("malay") ||
+    l.startsWith("id") ||
+    l.includes("indonesian")
+  )
+    return "ms";
+  if (l.startsWith("en")) return "en";
+  return undefined;
+}

@@ -20,7 +20,9 @@ import { z } from "zod";
  *   https://docs.camb.ai/language-support
  * - Models: https://docs.camb.ai/models (mars-8.1-flash-beta: lower latency, better accents, beta).
  * - Voice ids come from GET https://client.camb.ai/apis/list-voices (or CAMB Studio). The docs'
- *   default voice is 147320; set a Malaysian voice per language with CAMB_VOICE_ID_*.
+ *   CAMB's library has no native Malay / Malaysian-English / Malaysian-Tamil voices, so Mochi uses a
+ *   friendly multilingual voice (Audrey Hayes, 144295) and the ms-my / en-sg / ta-my accent settings;
+ *   Mandarin uses a native voice (Xin Xu, 171146). Override per language with CAMB_VOICE_ID_*.
  *   https://docs.camb.ai/api-reference/endpoint/list-voices
  */
 
@@ -30,7 +32,9 @@ const CAMB_URL = "https://client.camb.ai/apis/tts-stream";
 const TIMEOUT_MS = 15_000;
 const MAX_CHARS = 600;
 /** The docs' default voice_id for tts-stream. */
-const DOC_DEFAULT_VOICE = "147320";
+const DOC_DEFAULT_VOICE = "144295";
+/** Native voices where CAMB has a good one for Mochi's tone. */
+const NATIVE_VOICE: Partial<Record<Lang, string>> = { zh: "171146" };
 
 const langs = ["en", "ms", "zh", "ta"] as const;
 type Lang = (typeof langs)[number];
@@ -45,7 +49,7 @@ const LOCALE_DEFAULT: Record<Lang, string> = { en: "en-sg", ms: "ms-my", zh: "zh
 const VOICE_ENV: Record<Lang, string> = { en: "CAMB_VOICE_ID_EN", ms: "CAMB_VOICE_ID_MS", zh: "CAMB_VOICE_ID_ZH", ta: "CAMB_VOICE_ID_TA" };
 
 function voiceFor(lang: Lang) {
-  const raw = process.env[VOICE_ENV[lang]] || process.env.CAMB_VOICE_ID || DOC_DEFAULT_VOICE;
+  const raw = process.env[VOICE_ENV[lang]] || NATIVE_VOICE[lang] || process.env.CAMB_VOICE_ID || DOC_DEFAULT_VOICE;
   const id = Number.parseInt(raw, 10);
   return Number.isInteger(id) && id >= 1 ? id : Number(DOC_DEFAULT_VOICE);
 }
@@ -64,18 +68,25 @@ export async function POST(req: Request) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(CAMB_URL, {
-      method: "POST",
-      headers: { "x-api-key": key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: atLeast3(text),
-        language: process.env[LOCALE_ENV[lang]] || LOCALE_DEFAULT[lang],
-        voice_id: voiceFor(lang),
-        speech_model: process.env.CAMB_SPEECH_MODEL || "mars-8.1-flash-beta",
-        output_configuration: { format: "mp3" },
-      }),
-      signal: ctrl.signal,
-    });
+    const call = () =>
+      fetch(CAMB_URL, {
+        method: "POST",
+        headers: { "x-api-key": key, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: atLeast3(text),
+          language: process.env[LOCALE_ENV[lang]] || LOCALE_DEFAULT[lang],
+          voice_id: voiceFor(lang),
+          speech_model: process.env.CAMB_SPEECH_MODEL || "mars-8.1-flash-beta",
+          output_configuration: { format: "mp3" },
+        }),
+        signal: ctrl.signal,
+      });
+    // CAMB's plan allows one job at a time: if the previous line is still rendering (429), wait and retry.
+    let res = await call();
+    for (let attempt = 1; res.status === 429 && attempt <= 3; attempt++) {
+      await new Promise((r) => setTimeout(r, 700 * attempt));
+      res = await call();
+    }
     if (!res.ok || !res.body) {
       console.error("[mochi/speak]", res.status, (await res.text().catch(() => "")).slice(0, 300));
       return Response.json({ error: "Mochi's voice is unavailable right now." }, { status: 502 });

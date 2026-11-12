@@ -22,7 +22,13 @@ export function useReducedMotion() {
  * RPG dialog text that types out in steps, two characters a tick. Remount it (change `key`)
  * for each new line. With reduced motion the whole line shows at once.
  */
-export function Typewriter({ text, onDone }: { text: string; onDone?: () => void }) {
+export function Typewriter({
+  text,
+  onDone,
+}: {
+  text: string;
+  onDone?: () => void;
+}) {
   const reduced = useReducedMotion();
   const [shown, setShown] = useState(0);
   const done = reduced || shown >= text.length;

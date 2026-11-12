@@ -33,7 +33,7 @@ export const AGENT_UID = 8888;
 const TOKEN_TTL_S = 3600;
 
 export type AsrVendor = "speechmatics" | "ares" | "microsoft";
-export type TtsVendor = "elevenlabs" | "openai" | "microsoft" | "camb";
+export type TtsVendor = "elevenlabs" | "openai" | "microsoft" | "camb" | "minimax";
 
 const pick = <T extends string>(v: string | undefined, allowed: readonly T[]): T | undefined =>
   allowed.includes(v as T) ? (v as T) : undefined;
@@ -51,14 +51,16 @@ function read() {
 
   // TTS: the first vendor with a key, unless AGORA_TTS_VENDOR says otherwise.
   const ttsVendor: TtsVendor =
-    pick(e.AGORA_TTS_VENDOR, ["elevenlabs", "openai", "microsoft", "camb"] as const) ??
+    pick(e.AGORA_TTS_VENDOR, ["elevenlabs", "openai", "microsoft", "camb", "minimax"] as const) ??
     (e.ELEVENLABS_API_KEY
       ? "elevenlabs"
       : e.CAMB_API_KEY && publicBase && e.AGORA_TTS_PROXY_SECRET
         ? "camb"
         : e.OPENAI_API_KEY
           ? "openai"
-          : "microsoft");
+          : e.AZURE_SPEECH_KEY
+            ? "microsoft"
+            : "minimax");
 
   return {
     appId: e.AGORA_APP_ID ?? "",
@@ -104,7 +106,9 @@ export function agoraConfigured() {
         ? Boolean(c.openaiKey)
         : c.ttsVendor === "camb"
           ? Boolean(c.cambKey && c.publicBase.startsWith("https://") && c.ttsProxySecret)
-          : Boolean(c.azureKey);
+          : c.ttsVendor === "minimax"
+            ? true // Agora-managed: billed in Agora's per-minute price, no key of ours
+            : Boolean(c.azureKey);
   return base && asr && tts;
 }
 
@@ -215,6 +219,23 @@ function ttsConfig() {
         url: `${c.publicBase}/api/agora/tts`,
         headers: { Authorization: `Bearer ${c.ttsProxySecret}` },
         params: { model: "camb", voice: "mochi", sample_rate: 16000, response_format: "pcm", speed: 1 },
+      };
+    case "minimax":
+      // Agora-managed MiniMax: no key (credential_mode "managed"), included in Agora's minute price.
+      // https://docs.agora.io/en/ai/reference/pricing. A raised pitch makes Mochi small and cute.
+      return {
+        vendor: "minimax",
+        credential_mode: "managed",
+        params: {
+          url: "wss://api.minimax.io/ws/v1/t2a_v2",
+          model: process.env.MINIMAX_TTS_MODEL || "speech-2.8-turbo",
+          voice_setting: {
+            voice_id: process.env.MINIMAX_VOICE_ID || "English_captivating_female1",
+            speed: 1.05,
+            pitch: Number(process.env.MINIMAX_PITCH ?? 3),
+          },
+          audio_setting: { sample_rate: 24000 },
+        },
       };
     default:
       return {

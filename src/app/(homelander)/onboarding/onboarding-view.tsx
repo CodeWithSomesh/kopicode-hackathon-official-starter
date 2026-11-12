@@ -33,7 +33,7 @@ import {
 import { ProfilePanel } from "./profile-panel";
 import { Typewriter } from "./typewriter";
 import { useAgoraCall } from "./use-agora-call";
-import { useWhisperMic } from "./use-whisper-mic";
+import { useHandsFreeMic } from "./use-handsfree-mic";
 
 type Msg = { role: "user" | "assistant"; content: string };
 type Turn = {
@@ -104,6 +104,8 @@ export function OnboardingView() {
   const started = useRef(false);
   const logRef = useRef<HTMLOListElement>(null);
   const [complete, setComplete] = useState(false);
+  /** Mochi's turn: from sending until it stops talking. The hands-free mic is paused meanwhile. */
+  const [replying, setReplying] = useState(false);
   const flash = useCallback((patch: Partial<Profile>) => {
     const keys = filledKeys(patch);
     if (!keys.length) return;
@@ -131,6 +133,7 @@ export function OnboardingView() {
   const ask = useCallback(
     async (history: Msg[]) => {
       setBusy(true);
+      setReplying(true);
       setError(null);
       try {
         const res = await fetch("/api/mochi/turn", {
@@ -156,10 +159,18 @@ export function OnboardingView() {
         if (soundOn)
           speak(
             data.reply,
-            { start: () => setSpeaking(true), end: () => setSpeaking(false) },
+            {
+              start: () => setSpeaking(true),
+              end: () => {
+                setSpeaking(false);
+                setReplying(false);
+              },
+            },
             data.lang,
           );
+        else setReplying(false);
       } catch (e) {
+        setReplying(false);
         setError(
           e instanceof Error
             ? e.message
@@ -171,13 +182,6 @@ export function OnboardingView() {
     },
     [soundOn, flash],
   );
-
-  // Mochi opens the conversation in the tap-to-talk fallback. With live voice, Mochi greets on the call.
-  useEffect(() => {
-    if (started.current || live.status !== "unavailable") return;
-    started.current = true;
-    void ask([]);
-  }, [ask, live.status]);
 
   useEffect(() => {
     // Keep the newest line in view, inside the transcript only (never scrolls the page).
@@ -204,10 +208,12 @@ export function OnboardingView() {
     void ask(history);
   }
 
-  const mic = useWhisperMic({
+  const mic = useHandsFreeMic({
+    paused: replying || busy,
     onText: (t) => send(t),
     onUnavailable: () => {
       setWhisper(false);
+      setReplying(false);
       toast("Mochi is using the browser's own ears for now.", {
         description: "Add GROQ_API_KEY to use Whisper.",
       });
@@ -228,20 +234,28 @@ export function OnboardingView() {
             : "listening"
     : speaking
       ? "speaking"
-      : listening || mic.state !== "idle"
+      : listening || mic.state === "hearing" || mic.state === "transcribing"
         ? "listening"
         : busy
           ? "thinking"
           : complete || fresh.size
             ? "happy"
-            : "idle";
+            : mic.on
+              ? "listening"
+              : "idle";
 
+  /** Hands-free: one tap opens the mic for the whole chat; Mochi says hello first if it hasn't yet. */
   function talk() {
     if (!whisper) return listen();
-    if (mic.state === "recording") return mic.stop();
-    hush();
-    setSpeaking(false);
+    if (mic.on) {
+      mic.stop();
+      return;
+    }
     void mic.start();
+    if (!started.current && messages.length === 0) {
+      started.current = true;
+      void ask([]);
+    }
   }
 
   function listen() {
@@ -318,17 +332,17 @@ export function OnboardingView() {
           {liveReady
             ? "Live voice call"
             : whisper
-              ? "Tap to talk (fallback)"
+              ? "Hands-free voice"
               : "Browser voice (fallback)"}
         </PixTag>
       </div>
 
-      {/* Mochi, the talk controls and the transcript: right on desktop, first on phones. */}
-      <div className="grid min-w-0 content-start gap-4 lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:flex lg:h-[calc(100svh-7.5rem)] lg:flex-col">
-        <PixPanel className="grid shrink-0 gap-7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-6">
+      {/* One box: Mochi, the transcript, then the talk controls. Right on desktop, first on phones. */}
+      <PixPanel className="flex min-w-0 flex-col lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-[calc(100svh-7.5rem)]">
+        <div className="grid shrink-0 gap-7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-6">
           <div className="grid justify-items-center gap-2">
             <div className="rounded-xl bg-cloud p-3">
-              <MochiBot state={mochiState} size={120} />
+              <MochiBot state={mochiState} size={112} />
             </div>
             <div className="flex items-center gap-1.5">
               <PixTag tone="ink">Mochi</PixTag>
@@ -386,9 +400,70 @@ export function OnboardingView() {
               </div>
             ) : null}
           </div>
-        </PixPanel>
+        </div>
 
-        <PixPanel className="grid shrink-0 gap-4 p-4 sm:p-5 lg:order-last">
+        <section
+          aria-label={showCallLog ? "Call transcript" : "Conversation"}
+          className="flex min-h-0 flex-col gap-2 border-t-2 border-ink/10 px-4 py-3 lg:flex-1"
+        >
+          <h2 className="font-pixel-label text-[11px] text-ink-soft uppercase">
+            {showCallLog
+              ? inCall
+                ? "Live transcript"
+                : "Call transcript"
+              : "Conversation"}
+          </h2>
+          {(showCallLog ? live.lines.length : messages.length) ? (
+            <ol
+              ref={logRef}
+              className="grid max-h-72 min-h-0 content-start gap-2 overflow-y-auto scroll-smooth pr-1 text-sm lg:max-h-none lg:flex-1"
+            >
+              {showCallLog
+                ? live.lines.map((l) => (
+                    <li
+                      key={l.id}
+                      className={cn(
+                        "max-w-[85%] rounded-xl px-3 py-2",
+                        l.who === "agent"
+                          ? "bg-cloud"
+                          : "justify-self-end bg-pandan/15",
+                        !l.final && "opacity-70",
+                      )}
+                    >
+                      <span className="sr-only">
+                        {l.who === "agent" ? "Mochi: " : "You: "}
+                      </span>
+                      {l.text}
+                      {l.interrupted ? (
+                        <span className="text-ink-soft"> (cut off)</span>
+                      ) : null}
+                    </li>
+                  ))
+                : messages.map((m, i) => (
+                    <li
+                      key={i}
+                      className={cn(
+                        "max-w-[85%] rounded-xl px-3 py-2",
+                        m.role === "assistant"
+                          ? "bg-cloud"
+                          : "justify-self-end bg-pandan/15",
+                      )}
+                    >
+                      <span className="sr-only">
+                        {m.role === "assistant" ? "Mochi: " : "You: "}
+                      </span>
+                      {m.content}
+                    </li>
+                  ))}
+            </ol>
+          ) : (
+            <p className="text-sm text-ink-soft">
+              What you and Mochi say shows up here.
+            </p>
+          )}
+        </section>
+
+        <div className="grid shrink-0 gap-3 border-t-2 border-ink/10 p-4">
           {liveReady ? (
             <div className="grid gap-3">
               {inCall ? (
@@ -471,32 +546,49 @@ export function OnboardingView() {
             <>
               <div className="flex flex-wrap items-center gap-3">
                 <PixButton
-                  tone={
-                    listening || mic.state === "recording" ? "raya" : "pandan"
-                  }
+                  tone={listening || mic.on ? "raya" : "pandan"}
                   size="lg"
-                  disabled={
-                    (whisper ? mic.state === "transcribing" : !canListen) ||
-                    busy
-                  }
+                  disabled={!whisper && (!canListen || busy)}
                   onClick={talk}
-                  aria-pressed={listening || mic.state === "recording"}
+                  aria-pressed={listening || mic.on}
                 >
-                  <Sprite art="mic" scale={3} />
-                  {mic.state === "recording"
-                    ? "Recording… tap to send"
-                    : mic.state === "transcribing"
-                      ? "Mochi is listening…"
-                      : listening
-                        ? "Listening… tap to stop"
-                        : busy
-                          ? "Mochi is thinking"
-                          : "Talk to Mochi"}
+                  <Sprite art={mic.on ? phoneSprite : "mic"} scale={3} />
+                  {mic.on
+                    ? "End chat"
+                    : listening
+                      ? "Listening… tap to stop"
+                      : messages.length
+                        ? "Talk to Mochi again"
+                        : "Talk to Mochi"}
                 </PixButton>
+                {mic.on ? (
+                  <p
+                    className="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink-soft"
+                    aria-live="polite"
+                  >
+                    <span
+                      aria-hidden
+                      className="h-2.5 w-2.5 shrink-0 rounded-full bg-pandan transition-transform duration-100"
+                      style={{ transform: `scale(${1 + mic.level * 1.6})` }}
+                    />
+                    {replying || busy
+                      ? speaking
+                        ? "Mochi is talking…"
+                        : "Mochi is thinking…"
+                      : mic.state === "hearing"
+                        ? "Hearing you…"
+                        : mic.state === "transcribing"
+                          ? "Got it…"
+                          : "Your turn, just talk"}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
                 {whisper ? (
-                  <p className="text-sm text-ink-soft">
-                    Speak any mix of English, BM, 中文 or தமிழ். Mochi follows
-                    along.
+                  <p className="min-w-0 flex-1 text-sm text-ink-soft">
+                    {mic.on
+                      ? "No buttons: talk, pause, and Mochi answers."
+                      : "Tap once, then just talk in English, BM, 中文 or தமிழ்."}
                   </p>
                 ) : (
                   <div
@@ -571,78 +663,8 @@ export function OnboardingView() {
               </PixButton>
             </form>
           )}
-        </PixPanel>
-
-        {showCallLog ? (
-          <PixPanel className="flex min-h-0 flex-col gap-2 p-4 sm:p-5 lg:flex-1">
-            <h2 className="font-pixel text-lg font-bold">
-              {inCall ? "Live transcript" : "Call transcript"}
-            </h2>
-            {live.lines.length ? (
-              <ol
-                ref={logRef}
-                className="grid max-h-72 min-h-0 content-start gap-2 overflow-y-auto scroll-smooth pr-1 text-sm lg:max-h-none lg:flex-1"
-              >
-                {live.lines.map((l) => (
-                  <li
-                    key={l.id}
-                    className={cn(
-                      "max-w-[85%] rounded-xl px-3 py-2",
-                      l.who === "agent"
-                        ? "bg-cloud"
-                        : "justify-self-end bg-pandan/15",
-                      !l.final && "opacity-70",
-                    )}
-                  >
-                    <span className="sr-only">
-                      {l.who === "agent" ? "Mochi: " : "You: "}
-                    </span>
-                    {l.text}
-                    {l.interrupted ? (
-                      <span className="text-ink-soft"> (cut off)</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="text-sm text-ink-soft">
-                What you and Mochi say shows up here.
-              </p>
-            )}
-          </PixPanel>
-        ) : (
-          <PixPanel className="flex min-h-0 flex-col gap-2 p-4 sm:p-5 lg:flex-1">
-            <h2 className="font-pixel text-lg font-bold">Conversation</h2>
-            {messages.length ? (
-              <ol
-                ref={logRef}
-                className="grid max-h-72 min-h-0 content-start gap-2 overflow-y-auto scroll-smooth pr-1 text-sm lg:max-h-none lg:flex-1"
-              >
-                {messages.map((m, i) => (
-                  <li
-                    key={i}
-                    className={cn(
-                      "max-w-[85%] rounded-xl px-3 py-2",
-                      m.role === "assistant"
-                        ? "bg-cloud"
-                        : "justify-self-end bg-pandan/15",
-                    )}
-                  >
-                    <span className="sr-only">
-                      {m.role === "assistant" ? "Mochi: " : "You: "}
-                    </span>
-                    {m.content}
-                  </li>
-                ))}
-              </ol>
-            ) : (
-              <p className="text-sm text-ink-soft">
-                What you and Mochi say shows up here.
-              </p>
-            )}
-          </PixPanel>
-        )}
-      </div>
+        </div>
+      </PixPanel>
 
       {/* What Mochi knows: fills in live as the buyer talks. Left on desktop, below the chat on phones. */}
       <div className="min-w-0 lg:sticky lg:top-24 lg:col-start-1 lg:row-start-2">

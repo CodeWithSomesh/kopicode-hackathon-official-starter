@@ -6,7 +6,9 @@
  * CAMB_API_KEY (503) or fails. Listening fallback: SpeechRecognition (Chrome, Edge, Safari).
  */
 
-type RecognitionResult = { results: ArrayLike<ArrayLike<{ transcript: string }>> };
+type RecognitionResult = {
+  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+};
 
 export type Recognition = {
   lang: string;
@@ -23,7 +25,10 @@ type RecognitionCtor = new () => Recognition;
 
 export function recognitionCtor(): RecognitionCtor | null {
   if (typeof window === "undefined") return null;
-  const w = window as unknown as { SpeechRecognition?: RecognitionCtor; webkitSpeechRecognition?: RecognitionCtor };
+  const w = window as unknown as {
+    SpeechRecognition?: RecognitionCtor;
+    webkitSpeechRecognition?: RecognitionCtor;
+  };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
@@ -34,7 +39,12 @@ export function canSpeak() {
 export type VoiceLang = "en" | "ms" | "zh" | "ta";
 
 /** Speech-recognition locale for each language the buyer can talk in. */
-export const listenLocale: Record<VoiceLang, string> = { en: "en-MY", ms: "ms-MY", zh: "zh-CN", ta: "ta-IN" };
+export const listenLocale: Record<VoiceLang, string> = {
+  en: "en-MY",
+  ms: "ms-MY",
+  zh: "zh-CN",
+  ta: "ta-IN",
+};
 
 /**
  * Locales to try per reply language for the browser fallback voice, best first. English prefers
@@ -50,11 +60,15 @@ const voiceLocales: Record<VoiceLang, string[]> = {
 /** Prefers the natural/neural system voices (Edge "Natural", Safari "Enhanced"/"Premium"). */
 function pickVoice(lang: VoiceLang) {
   const voices = window.speechSynthesis.getVoices();
-  const norm = (v: SpeechSynthesisVoice) => v.lang.toLowerCase().replace("_", "-");
+  const norm = (v: SpeechSynthesisVoice) =>
+    v.lang.toLowerCase().replace("_", "-");
   for (const prefix of voiceLocales[lang]) {
     const match = voices.filter((v) => norm(v).startsWith(prefix));
     if (!match.length) continue;
-    return match.find((v) => /natural|online|enhanced|premium/i.test(v.name)) ?? match[0];
+    return (
+      match.find((v) => /natural|online|enhanced|premium/i.test(v.name)) ??
+      match[0]
+    );
   }
   return undefined;
 }
@@ -77,7 +91,12 @@ function stopClip() {
 }
 
 /** The browser's own voice: a calm, friendly delivery. */
-function speakBrowser(text: string, on: Handlers, lang: VoiceLang, run: number) {
+function speakBrowser(
+  text: string,
+  on: Handlers,
+  lang: VoiceLang,
+  run: number,
+) {
   if (!canSpeak()) return on.end?.();
   const synth = window.speechSynthesis;
   synth.cancel();
@@ -112,7 +131,8 @@ function speakBrowser(text: string, on: Handlers, lang: VoiceLang, run: number) 
 export function speak(text: string, on: Handlers = {}, lang: VoiceLang = "en") {
   hush();
   const run = generation;
-  if (cambOff || typeof Audio === "undefined") return speakBrowser(text, on, lang, run);
+  if (cambOff || typeof Audio === "undefined")
+    return speakBrowser(text, on, lang, run);
 
   void (async () => {
     try {

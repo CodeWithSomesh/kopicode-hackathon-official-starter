@@ -21,7 +21,8 @@ import { homelander } from "@/lib/homelander/store";
  * (serialised and throttled, so Groq's free tier of 8k tokens a minute per model isn't hammered).
  */
 
-export type CallStatus = "checking" | "unavailable" | "ready" | "connecting" | "live" | "ending";
+export type CallStatus =
+  "checking" | "unavailable" | "ready" | "connecting" | "live" | "ending";
 
 export type CallLine = {
   id: number;
@@ -39,7 +40,11 @@ const EXTRACT_MIN_GAP_MS = 4_000;
 /** Lines sent to the note-taker; the profile carries everything older. */
 const EXTRACT_LINES = 6;
 
-export function useAgoraCall({ onPatch }: { onPatch: (patch: Partial<Profile>) => void }) {
+export function useAgoraCall({
+  onPatch,
+}: {
+  onPatch: (patch: Partial<Profile>) => void;
+}) {
   const [status, setStatus] = useState<CallStatus>("checking");
   const [error, setError] = useState<string | null>(null);
   const [lines, setLines] = useState<CallLine[]>([]);
@@ -71,7 +76,13 @@ export function useAgoraCall({ onPatch }: { onPatch: (patch: Partial<Profile>) =
 
   /* ------------------------------------------------------------ note-taking (profile extract) */
 
-  const extract = useRef({ timer: 0, inFlight: false, again: false, lastStart: 0, doneUpTo: 0 });
+  const extract = useRef({
+    timer: 0,
+    inFlight: false,
+    again: false,
+    lastStart: 0,
+    doneUpTo: 0,
+  });
   /** Lets runExtract re-queue itself. */
   const rerun = useRef(() => {});
 
@@ -103,14 +114,20 @@ export function useAgoraCall({ onPatch }: { onPatch: (patch: Partial<Profile>) =
       const res = await fetch("/api/mochi/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, profile: homelander.snapshot().profile }),
+        body: JSON.stringify({
+          messages,
+          profile: homelander.snapshot().profile,
+        }),
       });
-      const data = (await res.json().catch(() => ({}))) as { patch?: Partial<Profile> };
+      const data = (await res.json().catch(() => ({}))) as {
+        patch?: Partial<Profile>;
+      };
       const patch = data.patch ?? {};
       if (filledKeys(patch).length) {
         onPatchRef.current(patch);
         // Tell Mochi what the form now knows, so it doesn't ask again.
-        if (agentId.current) void updateAgoraAgent(agentId.current, homelander.snapshot().profile);
+        if (agentId.current)
+          void updateAgoraAgent(agentId.current, homelander.snapshot().profile);
       }
     } catch {
       // Missing one note is fine: the next answer carries the context again.
@@ -139,8 +156,17 @@ export function useAgoraCall({ onPatch }: { onPatch: (patch: Partial<Profile>) =
         t.who === "you"
           ? list.findLastIndex((l) => l.who === "you" && !l.final)
           : list.findLastIndex((l) => l.who === "agent" && l.turn === t.turn);
-      if (i >= 0 && !(t.who === "agent" && list[i]!.final && list[i]!.interrupted)) {
-        list[i] = { ...list[i]!, text: t.text, final: t.final, interrupted: t.interrupted, turn: t.turn };
+      if (
+        i >= 0 &&
+        !(t.who === "agent" && list[i]!.final && list[i]!.interrupted)
+      ) {
+        list[i] = {
+          ...list[i]!,
+          text: t.text,
+          final: t.final,
+          interrupted: t.interrupted,
+          turn: t.turn,
+        };
       } else if (i < 0) {
         list.push({ id: nextId.current++, ...t });
       }
@@ -153,7 +179,9 @@ export function useAgoraCall({ onPatch }: { onPatch: (patch: Partial<Profile>) =
 
   const onInterrupt = useCallback((turn: number) => {
     linesRef.current = linesRef.current.map((l) =>
-      l.who === "agent" && l.turn === turn ? { ...l, final: true, interrupted: true } : l,
+      l.who === "agent" && l.turn === turn
+        ? { ...l, final: true, interrupted: true }
+        : l,
     );
     setLines(linesRef.current);
   }, []);
@@ -181,7 +209,13 @@ export function useAgoraCall({ onPatch }: { onPatch: (patch: Partial<Profile>) =
     setSeconds(0);
     linesRef.current = [];
     setLines([]);
-    extract.current = { timer: 0, inFlight: false, again: false, lastStart: 0, doneUpTo: 0 };
+    extract.current = {
+      timer: 0,
+      inFlight: false,
+      again: false,
+      lastStart: 0,
+      doneUpTo: 0,
+    };
     try {
       const session = await startAgoraSession(homelander.snapshot().profile);
       agentId.current = session.agentId;
@@ -250,7 +284,8 @@ export function useAgoraCall({ onPatch }: { onPatch: (patch: Partial<Profile>) =
 
   const last = lines.at(-1);
   /** Mochi is working out a reply: the buyer just finished and Mochi hasn't started talking. */
-  const thinking = status === "live" && !agentSpeaking && last?.who === "you" && last.final;
+  const thinking =
+    status === "live" && !agentSpeaking && last?.who === "you" && last.final;
 
   return {
     status,

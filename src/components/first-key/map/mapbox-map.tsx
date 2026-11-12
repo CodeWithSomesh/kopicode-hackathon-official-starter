@@ -24,6 +24,7 @@ import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
 import { LandedModels } from "./landed-models";
 import { EnclaveSwitch } from "./enclave-switch";
 import SiteBuildings, { SITE_CLICK_IDS } from "./site-buildings";
+import { siteFit } from "./site-shared";
 
 // Mapbox GL JS v3 + the Standard style (3D buildings, landmarks, building shadows, lightPreset). Used when
 // NEXT_PUBLIC_MAPBOX_TOKEN is set; neighbourhood-map.tsx (MapLibre) is the fallback. Same props, same camera helpers.
@@ -61,7 +62,9 @@ const klangView = () => {
 const devView = (id: string) => {
   const t = townshipById[id];
   if (id === COVE_ID) return townshipView();
-  return { center: [t.pos.lng, t.pos.lat] as [number, number], zoom: 14.6, pitch: 50, bearing: 0, padding: cameraPadding(true) };
+  const padding = cameraPadding(true);
+  const fit = siteFit(id, Math.max(200, Math.min(window.innerWidth - padding.left - padding.right, window.innerHeight - padding.top - padding.bottom)));
+  return { center: fit?.center ?? ([t.pos.lng, t.pos.lat] as [number, number]), zoom: fit?.zoom ?? 14.6, pitch: 50, bearing: 0, padding };
 };
 
 // the enclave's terrace rows, pairs and bungalows are selectable by their group id too

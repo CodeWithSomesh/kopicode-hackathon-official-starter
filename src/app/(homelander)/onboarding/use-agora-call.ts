@@ -14,7 +14,7 @@ import {
 } from "@/lib/homelander/agora-client";
 import { filledKeys, missingEssentials, type Profile } from "@/lib/homelander/profile";
 import { homelander } from "@/lib/homelander/store";
-import type { MochiLang } from "@/lib/homelander/mochi-brain";
+import { clearLang, type MochiLang } from "@/lib/homelander/lang";
 
 /**
  * A live, hands-free voice call with Mochi on Agora's Conversational AI Engine. The engine does the
@@ -79,6 +79,8 @@ export function useAgoraCall({
   /** off → waiting (form complete, Mochi about to say goodbye) → speaking → done. */
   const wrap = useRef<{ stage: "off" | "waiting" | "speaking" | "done"; timer: number; at: number }>({ stage: "off", timer: 0, at: 0 });
   const finishCall = useRef(() => {});
+  /** The language Mochi was last told to answer in; changes as soon as the buyer switches. */
+  const replyLang = useRef<MochiLang>("en");
 
   // Is Agora set up on the server?
   useEffect(() => {
@@ -146,7 +148,7 @@ export function useAgoraCall({
         onPatchRef.current(patch);
         const profile = homelander.snapshot().profile;
         // Tell Mochi what the form now knows, so it doesn't ask again (and, once nothing is missing, to say goodbye).
-        if (agentId.current) void updateAgoraAgent(agentId.current, profile, callLang.current);
+        if (agentId.current) void updateAgoraAgent(agentId.current, profile, callLang.current, replyLang.current);
         if (!missingEssentials(profile).length && wrap.current.stage === "off") {
           wrap.current = { stage: "waiting", at: Date.now(), timer: window.setTimeout(() => finishCall.current(), WRAP_UP_MAX_MS) };
           // Cut off any next question and say goodbye in the buyer's language.
@@ -196,6 +198,13 @@ export function useAgoraCall({
       }
       linesRef.current = list.slice(-80);
       setLines(linesRef.current);
+      // Switch Mochi's reply language while the buyer is still talking, so the reply that follows
+      // this line is already in it (the LLM alone tends to drift back to English).
+      const heard = t.who === "you" ? clearLang(t.text) : null;
+      if (heard && heard !== replyLang.current && agentId.current && !callLang.current) {
+        replyLang.current = heard;
+        void updateAgoraAgent(agentId.current, homelander.snapshot().profile, undefined, heard);
+      }
       if (t.who === "you" && t.final) scheduleExtract();
     },
     [scheduleExtract],
@@ -244,6 +253,7 @@ export function useAgoraCall({
       callLang.current = mixedLanguages ? undefined : lang;
       window.clearTimeout(wrap.current.timer);
       wrap.current = { stage: "off", timer: 0, at: 0 };
+      replyLang.current = "en";
       const session = await startAgoraSession(homelander.snapshot().profile, lang);
       agentId.current = session.agentId;
       call.current = await joinLiveCall(session, {

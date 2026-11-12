@@ -24,8 +24,8 @@ const GROQ_MODELS = (process.env.GROQ_MODELS ?? process.env.GROQ_MODEL ?? "opena
 /** Only the turns Mochi needs to stay in context; the profile JSON carries everything older. */
 const HISTORY = 12;
 
-export const mochiLangs = ["en", "ms", "zh", "ta"] as const;
-export type MochiLang = (typeof mochiLangs)[number];
+import { detectLang, mochiLangs, type MochiLang } from "./lang";
+export { detectLang, mochiLangs, type MochiLang };
 
 export type MochiMessage = { role: "user" | "assistant"; content: string };
 
@@ -131,14 +131,16 @@ If this is the first turn and the buyer hasn't spoken yet, greet them in English
  * The same Mochi for a live voice agent that only talks (no JSON, no patch): persona, what to ask
  * and what's already known. Something else records the answers.
  */
-export function mochiPersonaForVoice(profile: Profile, callLang?: MochiLang) {
+export function mochiPersonaForVoice(profile: Profile, callLang?: MochiLang, replyLang?: MochiLang) {
   const missing = missingEssentials(profile).map((m) => `- ${m.label}`);
   // On a one-language call the recogniser only hears that language, so Mochi must stay in it.
   const langRule = callLang
     ? `\n\nLanguage of this call: ${langName[callLang]}. The buyer chose it before calling and the speech recogniser only understands ${langName[callLang]}. Always reply in ${langName[callLang]}, even if a line looks like another language. If they want another language, tell them kindly to hang up and pick it before calling again.`
     : "";
   const known = Object.keys(profile).length ? JSON.stringify(profile) : "(nothing yet)";
-  return `MOST IMPORTANT RULE: reply in the language of the buyer's LATEST line. 中文 → reply in Mandarin (simplified Chinese). Bahasa Melayu → reply in Malay. தமிழ் → reply in Tamil. English → English. Mixed → mix the same way. Ignore the language of your own earlier lines and of this prompt.
+  // Set live from the buyer's words as they speak (see use-agora-call), so the next reply can't drift to English.
+  const now = replyLang && !callLang ? `RIGHT NOW the buyer is speaking ${langName[replyLang]}. Your next reply MUST be entirely in ${langName[replyLang]}${replyLang === "en" ? "" : ", not English"}, unless their newest line is clearly in another language.\n\n` : "";
+  return `${now}MOST IMPORTANT RULE: reply in the language of the buyer's LATEST line. 中文 → reply in Mandarin (simplified Chinese). Bahasa Melayu → reply in Malay. தமிழ் → reply in Tamil. English → English. Mixed → mix the same way. Ignore the language of your own earlier lines and of this prompt.
 
 You are Mochi, a friendly helper bot who guides first-time buyers to a Gamuda Land home in the HomeLander app. You are talking to the buyer live on a voice call. Just talk: everything you say is spoken aloud, so never read out JSON, field names, brackets or lists.
 
@@ -157,16 +159,6 @@ Language: answer in the language of the buyer's LATEST line, whatever language e
 Never ask the same thing twice. If the buyer already answered something earlier in this call, even if it isn't in the list above yet, take that answer and move on to the next item. If they don't know or won't say, accept it and move on.
 
 If the buyer hasn't spoken yet, greet them briefly${callLang ? ` in ${langName[callLang]}` : ""}, introduce yourself as Mochi, here to help find a home that fits their life, and ask who they will be living with.`;
-}
-
-/** Rough language of a message: script first (Tamil, Chinese), then common Malay words. */
-export function detectLang(text: string): MochiLang {
-  if (/[\u0B80-\u0BFF]/.test(text)) return "ta";
-  if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
-  const malay = text
-    .toLowerCase()
-    .match(/\b(saya|kami|kerja|rumah|tiada|takde|tak|dengan|dan|ada|nak|boleh|sebulan|gaji|hari|naik|simpanan|hutang|anak|isteri|suami|dekat|mahu|untuk|bilik|tahun|umur|ribu|seminggu|tinggal|bersama|pinjaman|kereta|takut|duit|tunggu|teruk|banjir|lama)\b/g);
-  return (malay?.length ?? 0) >= 2 ? "ms" : "en";
 }
 
 const langName: Record<MochiLang, string> = { en: "English", ms: "Bahasa Melayu", zh: "Mandarin (simplified Chinese)", ta: "Tamil" };

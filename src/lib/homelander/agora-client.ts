@@ -90,11 +90,13 @@ export function stopAgoraAgent(agentId: string) {
   }).catch(() => undefined);
 }
 
-export function updateAgoraAgent(agentId: string, profile: Profile, lang?: "en" | "ms" | "zh" | "ta") {
+type Lang = "en" | "ms" | "zh" | "ta";
+
+export function updateAgoraAgent(agentId: string, profile: Profile, lang?: Lang, replyLang?: Lang) {
   return fetch("/api/agora/update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agentId, profile, lang }),
+    body: JSON.stringify({ agentId, profile, lang, replyLang }),
   }).catch(() => undefined);
 }
 

@@ -13,7 +13,23 @@ import {
   type SpeechLang,
 } from "./voice";
 
-/** Mic button: listens once in the chosen language and hands back the final transcript. */
+/** What each SpeechRecognition error code means for the buyer. */
+const MIC_ERRORS: Record<string, string> = {
+  "no-speech":
+    "Didn't hear anything. Tap the mic, then start speaking straight away.",
+  "audio-capture":
+    "No microphone found, or another app (Zoom, Meet) is using it.",
+  "not-allowed":
+    "Microphone is blocked. Allow it from the icon in the address bar, then try again.",
+  "service-not-allowed":
+    "This browser won't allow speech input here. In Safari, turn on Siri / Dictation; otherwise try Chrome.",
+  network:
+    "The browser's speech service couldn't be reached. Chrome needs internet for this, and Brave, Arc, Opera and Chromium block it. Try Google Chrome or Edge.",
+  "language-not-supported":
+    "This browser can't listen in that language. Try Chrome, or type instead.",
+};
+
+/** Mic button: tap once, speak, and it stops on a pause; hands back the final transcript. */
 export function MicButton({
   lang,
   disabled,
@@ -59,22 +75,27 @@ export function MicButton({
       if (text) onHeard(text);
     };
     r.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed")
-        toast.error(
-          "Microphone is blocked. Allow it in the address bar, or type instead.",
-        );
-      else if (e.error === "language-not-supported")
-        toast.error(
-          "This browser can't listen in that language. Try Chrome, or type instead.",
-        );
-      else if (e.error !== "no-speech" && e.error !== "aborted")
-        toast.error("Didn't catch that. Try again?");
+      // Name the real cause: the browser's error code is the only clue we get.
+      console.warn("[feng-shui mic]", e.error);
+      const msg = MIC_ERRORS[e.error];
+      if (e.error === "aborted") return;
+      toast.error(
+        msg ?? `Voice failed (${e.error}). Try again, or type instead.`,
+        { id: "fs-mic" },
+      );
     };
-    r.onend = () => setListening(false);
+    r.onend = () => {
+      setListening(false);
+      toast.dismiss("fs-mic-listening");
+    };
     rec.current = r;
     try {
       r.start();
       setListening(true);
+      toast("Listening… speak now. It stops when you pause.", {
+        id: "fs-mic-listening",
+        duration: 8000,
+      });
     } catch {
       setListening(false);
     }

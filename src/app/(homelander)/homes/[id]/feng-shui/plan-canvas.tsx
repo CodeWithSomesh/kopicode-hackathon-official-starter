@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useHomeLanderTheme } from "@/lib/homelander/theme";
 import { cn } from "@/lib/utils";
 import { drawItems } from "./draw-items";
 import { CATALOG, type Item } from "./furniture";
@@ -73,6 +74,8 @@ export function PlanCanvas({
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  // The palette is read from CSS on each draw; the theme is a dependency so a switch redraws.
+  const theme = useHomeLanderTheme();
   /** CSS-pixel to plan-metre mapping from the last draw, for pointer hit tests. */
   const view = useRef({ scale: 1, offX: 0, offY: 0 });
   const drag = useRef<{ uid: string; dx: number; dy: number } | null>(null);
@@ -409,6 +412,7 @@ export function PlanCanvas({
       ctx.stroke();
     }
   }, [
+    theme,
     size,
     floor,
     bounds,

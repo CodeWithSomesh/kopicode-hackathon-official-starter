@@ -21,8 +21,5 @@ export const shell: Dict = {
   "About this prototype and photo credits": "Pasal prototype ni dan photo credits",
   "Language": "Bahasa",
   "Theme": "Theme",
-  "Design theme: {name}. Change theme": "Theme: {name}. Tukar theme",
-  "Choose a design theme": "Pilih theme",
-  "Pick a look. Same screens, same data.": "Pilih rupa. Screen sama, data sama.",
-  "Current": "Sekarang",
+  "Design theme": "Theme",
 };

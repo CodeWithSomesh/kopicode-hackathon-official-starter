@@ -20,6 +20,7 @@ import { EnclaveSwitch } from "./enclave-switch";
 import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
 import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
+import { SITE_MIN_ZOOM, SiteChip, siteFootprints, siteLabels, typeFill, useZoomGate } from "./site-shared";
 
 // Turbopack can't resolve MapLibre's module worker next to the bundle, so it is served from /public (a copy of
 // node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs; re-copy it if MapLibre is upgraded). The only worker setup in the app.
@@ -267,6 +268,20 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
         },
       },
       {
+        // The spawned site buildings (illustrative, site-layout.json) as plain footprints, flat colour by typology; the click target too.
+        id: "site-boxes",
+        type: "fill-extrusion",
+        source: "site-footprints",
+        minzoom: SITE_MIN_ZOOM,
+        paint: {
+          "fill-extrusion-height": ["get", "h"],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 0.95,
+          "fill-extrusion-vertical-gradient": true,
+          "fill-extrusion-color": typeFill(colors) as ExpressionSpecification,
+        },
+      },
+      {
         id: "township-selected",
         type: "fill-extrusion",
         source: "buildings",
@@ -282,6 +297,7 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
     ];
     const ours = {
       buildings: { type: "geojson" as const, data: buildingsGeoJson },
+      "site-footprints": { type: "geojson" as const, data: siteFootprints },
       rail: { type: "geojson" as const, data: railGeoJson },
       "homelander-rail": { type: "geojson" as const, data: railGeoJSON },
       "homelander-stations": { type: "geojson" as const, data: stationGeoJSON },
@@ -428,11 +444,12 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
   }, [devId, loaded]);
 
   const onClick = (e: MapLayerMouseEvent) => {
-    const id = e.features?.[0]?.properties?.id;
-    if (id) onSelect(id);
+    const p = e.features?.[0]?.properties;
+    if (p?.id) onSelect(p.id);
+    else if (p?.site) onSelectDev(p.site); // a spawned site building: open that township
   };
   const showTownship = devId === COVE_ID || !!selectedId;
-
+  const siteChips = useZoomGate(() => mapRef.current?.getMap(), loaded);
 
   const from = selectedId ? centres[selectedId] : undefined;
   const poiFit = useNamedPois(() => mapRef.current?.getMap(), loaded && showTownship, from);
@@ -449,7 +466,7 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
         maxPitch={70}
         minZoom={8.5}
         maxBounds={withBasemap ? PMTILES_BOUNDS : undefined}
-        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected", ...LANDED_PICK_LAYERS]}
+        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected", ...LANDED_PICK_LAYERS, "site-boxes"]}
         cursor="auto"
         onError={(e) => {
           // Only a request that was really aborted (the view moved on) is quiet. Everything else stays loud, most of
@@ -473,6 +490,12 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
                 <Layer key={l.id} {...(l as unknown as LayerProps)} />
               ))}
             </Source>
+          ))}
+        {siteChips &&
+          siteLabels.map((l) => (
+            <Marker key={l.site} longitude={l.lng} latitude={l.lat} anchor="bottom" offset={[0, -8]} style={{ pointerEvents: "none", zIndex: 0 }}>
+              <SiteChip />
+            </Marker>
           ))}
         {!selectedId &&
           towns.map((x) => {

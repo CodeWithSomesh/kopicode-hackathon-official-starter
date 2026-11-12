@@ -5,7 +5,37 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { ThemeColors } from "../use-theme-colors";
-import { FLOOR_H, LOW_H, PALETTE, WALL_H, WALL_T, roomFloor, type FloorPlan } from "./layout";
+import { FLOOR_H, LOW_H, WALL_H, WALL_T, roomFloor, type FloorPlan, type PaletteKey } from "./layout";
+
+/**
+ * Interior colours mixed from theme tokens, so a theme change recolours the rooms. Mixed towards a light "paper"
+ * in both modes (in dark that is the light foreground): the rooms stay a lit architectural model; dark mode
+ * darkens them with the lighting, not the paint.
+ */
+export function paletteFrom(c: ThemeColors, dark: boolean): Record<PaletteKey, string> {
+  const paper = dark ? c.foreground : c.background;
+  const card = dark ? c.foreground : c.card;
+  return {
+    wall: mix(card, paper, 0.5),
+    wood: mix(c["chart-2"], paper, 0.38),
+    tile: mix(c.muted, paper, 0.35),
+    carpet: mix(c["chart-4"], paper, 0.65),
+    corridor: mix(c["muted-foreground"], paper, 0.6),
+    sofa: mix(c["chart-3"], paper, 0.3),
+    cushion: mix(c["chart-2"], paper, 0.7),
+    darkWood: mix(c.primary, c["chart-2"], 0.4),
+    table: mix(c["chart-2"], c.primary, 0.3),
+    chair: mix(card, c["chart-4"], 0.15),
+    counter: card,
+    counterTop: mix(c["muted-foreground"], paper, 0.4),
+    fridge: mix(c.muted, card, 0.5),
+    bed: card,
+    blanket: mix(c["chart-1"], paper, 0.35),
+    blanket2: mix(c["chart-3"], paper, 0.55),
+    rug: mix(c["chart-4"], paper, 0.45),
+    lamp: mix(c["chart-2"], card, 0.5),
+  };
+}
 
 // ---------- glass facade (shell above and below the cut) ----------
 
@@ -101,7 +131,7 @@ export function glassMaterials(colors: ThemeColors, dark: boolean) {
     fadingSlab: fSlab,
     fadingRoof: fRoof,
     fading: [fSide, fRoof] as THREE.Material[],
-    plate: new THREE.MeshStandardMaterial({ color: dark ? "#6b6862" : PALETTE.corridor, roughness: 0.85 }),
+    plate: new THREE.MeshStandardMaterial({ color: mix(paletteFrom(colors, dark).corridor, colors.background, dark ? 0.35 : 0), roughness: 0.85 }),
   };
 }
 
@@ -181,8 +211,19 @@ const merge = (parts: THREE.BufferGeometry[]) => (parts.length ? mergeGeometries
  * Rooms, walls, glazing and furniture of one floor, merged into a few meshes (one per material).
  * The dollhouse cut: outer walls facing away from the camera stand full height as glass; every other wall is a third high.
  */
-export function InteriorMeshes({ plan, toCam, dark }: { plan: FloorPlan; toCam: [number, number]; dark: boolean }) {
+export function InteriorMeshes({
+  plan,
+  toCam,
+  dark,
+  colors,
+}: {
+  plan: FloorPlan;
+  toCam: [number, number];
+  dark: boolean;
+  colors: ThemeColors;
+}) {
   const built = useMemo(() => {
+    const P = paletteFrom(colors, dark);
     const floors: Record<string, THREE.BufferGeometry[]> = {};
     const add = (k: string, g: THREE.BufferGeometry) => (floors[k] ??= []).push(g);
     for (const u of plan.units) {
@@ -224,20 +265,20 @@ export function InteriorMeshes({ plan, toCam, dark }: { plan: FloorPlan; toCam: 
     const mat = (color: string, extra?: THREE.MeshStandardMaterialParameters) =>
       new THREE.MeshStandardMaterial({ color, roughness: 0.75, ...extra });
     return {
-      floors: Object.entries(floors).map(([k, g]) => ({ k, geom: merge(g), mat: mat(PALETTE[k as keyof typeof PALETTE], { roughness: k === "tile" ? 0.4 : 0.8 }) })),
-      low: { geom: merge(low), mat: mat(PALETTE.wall, { roughness: 0.9 }) },
+      floors: Object.entries(floors).map(([k, g]) => ({ k, geom: merge(g), mat: mat(P[k as PaletteKey], { roughness: k === "tile" ? 0.4 : 0.8 }) })),
+      low: { geom: merge(low), mat: mat(P.wall, { roughness: 0.9 }) },
       glass: {
         geom: merge(glass),
-        mat: new THREE.MeshStandardMaterial({ color: dark ? "#2d3f52" : "#b9d3e2", transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.3, depthWrite: false }),
+        mat: new THREE.MeshStandardMaterial({ color: mix(colors["chart-3"], dark ? colors.background : colors.card, dark ? 0.6 : 0.7), transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.3, depthWrite: false }),
       },
-      frame: { geom: merge(frame), mat: mat("#59616a", { roughness: 0.5, metalness: 0.4 }) },
+      frame: { geom: merge(frame), mat: mat(mix(colors.foreground, colors["muted-foreground"], 0.5), { roughness: 0.5, metalness: 0.4 }) },
       furniture: Object.entries(furniture).map(([k, g]) => ({
         k,
         geom: merge(g),
-        mat: mat(PALETTE[k as keyof typeof PALETTE], k === "lamp" ? { emissive: "#ffb867", emissiveIntensity: dark ? 2.5 : 0.3 } : undefined),
+        mat: mat(P[k as PaletteKey], k === "lamp" ? { emissive: P.lamp, emissiveIntensity: dark ? 2.5 : 0.3 } : undefined),
       })),
     };
-  }, [plan, toCam, dark]);
+  }, [plan, toCam, dark, colors]);
 
   return (
     <>

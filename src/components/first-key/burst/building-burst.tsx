@@ -203,7 +203,14 @@ function Scene({
   const rig = useRef<Rig>({ bearing: 0, pitch: 60, dist: 300, tx: 0, ty: 0, tz: 0, off: 0, bg: 0, lift: 0 });
   const played = useRef(false);
   const [labels, setLabels] = useState(false);
-  const showLabels = open && (reduced || labels); // chips appear once the roof is off
+  // drei's Html mounts its own React root; mounting it in the scene's first commit trips StrictMode's double mount
+  // (a reduced-motion deep link did exactly that), so chips wait one tick after the scene mounts.
+  const [labelReady, setLabelReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setLabelReady(true), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const showLabels = labelReady && open && (reduced || labels); // chips appear once the roof is off
 
   // The shot: one timeline in, a shorter one back out. Reduced motion jumps to the end pose.
   useEffect(() => {
@@ -301,7 +308,7 @@ function Scene({
           <boxGeometry args={[fp.w + 0.5, 0.3, fp.d + 0.5]} />
         </mesh>
         <group scale={[sx, 1, sz]} position-y={0.02}>
-          <InteriorMeshes plan={plan} toCam={toCam} dark={dark} />
+          <InteriorMeshes plan={plan} toCam={toCam} dark={dark} colors={colors} />
           {plan.units.map((pu) => {
             const u = floorUnits[pu.index];
             if (!u) return null;

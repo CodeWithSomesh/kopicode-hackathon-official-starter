@@ -13,34 +13,33 @@ const DOOR_W = 0.95;
 
 export type Rect = { x0: number; z0: number; x1: number; z1: number };
 export type Wall = { x0: number; z0: number; x1: number; z1: number; nx: number; nz: number; outer: boolean; unit: number };
-export type Piece = { x: number; z: number; y: number; sx: number; sy: number; sz: number; color: keyof typeof PALETTE; r?: number };
+export type Piece = { x: number; z: number; y: number; sx: number; sy: number; sz: number; color: PaletteKey; r?: number };
 export type PlacedRoom = { id: string; rect: Rect };
 export type PlacedUnit = { index: number; rect: Rect; rooms: PlacedRoom[]; furniture: Piece[] };
 export type FloorPlan = { w: number; d: number; units: PlacedUnit[]; walls: Wall[] };
 
-/** Soft model colours (architectural model look, not theme tokens: the 3D interior is not UI chrome). */
-export const PALETTE = {
-  wall: "#f4f0ea",
-  wood: "#d8b58e",
-  tile: "#e6e3dd",
-  carpet: "#eadfd0",
-  corridor: "#cfcac2",
-  sofa: "#7f93aa",
-  cushion: "#e9d9c4",
-  darkWood: "#a07a58",
-  table: "#b58a62",
-  chair: "#efe6d8",
-  counter: "#f6f4f0",
-  counterTop: "#cfc6b8",
-  fridge: "#dde2e6",
-  bed: "#fbf8f2",
-  blanket: "#c98f6b",
-  blanket2: "#8fa88d",
-  rug: "#d9ccba",
-  lamp: "#ffd9a0",
-} as const;
+/** Material roles of the interior; colours come from theme tokens at runtime (`paletteFrom` in dollhouse.tsx). */
+export type PaletteKey =
+  | "wall"
+  | "wood"
+  | "tile"
+  | "carpet"
+  | "corridor"
+  | "sofa"
+  | "cushion"
+  | "darkWood"
+  | "table"
+  | "chair"
+  | "counter"
+  | "counterTop"
+  | "fridge"
+  | "bed"
+  | "blanket"
+  | "blanket2"
+  | "rug"
+  | "lamp";
 
-export const ROOM_FLOOR: Record<string, keyof typeof PALETTE> = { ruang_tamu: "wood", makan: "wood", dapur: "tile" };
+export const ROOM_FLOOR: Record<string, PaletteKey> = { ruang_tamu: "wood", makan: "wood", dapur: "tile" };
 export const roomFloor = (id: string) => ROOM_FLOOR[id] ?? "carpet";
 
 const bbox = (u: Unit) => {
@@ -52,7 +51,7 @@ const bbox = (u: Unit) => {
 type LocalPiece = Omit<Piece, "x" | "z"> & { lx: number; ly: number };
 function furnish(id: string, rx: number, ry: number, rw: number, rh: number): LocalPiece[] {
   const out: LocalPiece[] = [];
-  const add = (lx: number, ly: number, y: number, sx: number, sy: number, sz: number, color: keyof typeof PALETTE, r = 0.06) =>
+  const add = (lx: number, ly: number, y: number, sx: number, sy: number, sz: number, color: PaletteKey, r = 0.06) =>
     out.push({ lx, ly, y, sx, sy, sz, color, r });
   const cx = rx + rw / 2;
   if (id === "ruang_tamu") {

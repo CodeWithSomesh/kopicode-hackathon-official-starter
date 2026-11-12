@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
+import { useLang } from "@/lib/homelander/i18n/client";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
 import { CommandConsole, type LogEntry } from "./command-console";
 import {
@@ -82,7 +83,8 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [view, setView] = useState<"plan" | "3d">("plan");
-  const [lang, setLang] = useState<Lang>("mg");
+  // Replies follow the site-wide EN | Manglish switch in the header.
+  const lang: Lang = useLang() === "mglish" ? "mg" : "en";
   const [log, setLog] = useState<LogEntry[]>([]);
   const [speakOn, setSpeakOn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -635,7 +637,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
         <CommandConsole
           log={log}
           lang={lang}
-          onLang={setLang}
           onRun={(t) => void runCommand(t)}
           busy={busy}
           toolbar={<SpeechToolbar speakOn={speakOn} onSpeakOn={setSpeakOn} />}

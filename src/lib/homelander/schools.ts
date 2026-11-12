@@ -1,8 +1,11 @@
 import { distanceKm, type LatLng } from "./data";
+import { schoolRows } from "./schools-data";
 
 /**
- * Schools near a home, by type. CONTRACT: the data agent replaces `schools` with real
- * OpenStreetMap schools (ODbL) around every project; the functions keep their signatures.
+ * Schools near a home, by type. Real OpenStreetMap schools within 8 km of every Gamuda Land
+ * project (nearest 40 each), generated into schools-data.ts by scripts/fetch-schools.mjs.
+ * © OpenStreetMap contributors, ODbL. Type is guessed from the school's name; religious
+ * (KAFA / tahfiz) and other non-government schools fall under "private".
  */
 
 export type SchoolType = "national_primary" | "chinese_primary" | "tamil_primary" | "secondary" | "international" | "private";
@@ -19,7 +22,7 @@ export const schoolTypeLabel: Record<SchoolType, string> = {
 export type School = { name: string; type: SchoolType; pos: LatLng };
 export type NearbySchool = School & { km: number };
 
-export const schools: School[] = [];
+export const schools: School[] = schoolRows.map((r) => ({ name: r.name, type: r.type, pos: { lat: r.lat, lng: r.lng } }));
 
 export function schoolsWithin(pos: LatLng, km: number): NearbySchool[] {
   return schools

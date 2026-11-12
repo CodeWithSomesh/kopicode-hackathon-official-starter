@@ -1,41 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
-import { anchorOptions, availabilityOf, passReasons, rm, unitById } from "@/lib/homelander/data";
-import { DECK_LIKE_LIMIT, anchorFor, recommend } from "@/lib/homelander/recommend";
+import { anchorOptions, availabilityOf, passReasons, rm, townshipById, unitById, type Unit } from "@/lib/homelander/data";
+import { BATTLE_MAX, DECK_LIKE_LIMIT, LIKES_TO_BATTLE, anchorFor, recommend } from "@/lib/homelander/recommend";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
-import { cn } from "@/lib/utils";
-import { EncounterCard, THRESHOLD } from "./_swipe/encounter-card";
+import { moneyBasis } from "./_swipe/buyer";
+import { CardStack, type Dir, type StackHandle } from "./_swipe/card-stack";
+import { celebrateLike, preloadConfetti } from "./_swipe/confetti";
+import { EncounterCard } from "./_swipe/encounter-card";
 import { Controls, EndOfDeck, Insights, Shortlist, matchesFilter, type StockFilter } from "./_swipe/panels";
 import { swipeSprites } from "./_swipe/sprites";
 
-const LEAVE_MS = 240;
-
 /**
- * The encounter deck: one Gamuda Land unit at a time with its availability up front.
- * Right = like (or "notify me" when sold out), left = pass then optionally say why.
- * Desktop: deck on the left, filters/insights/shortlist in a right column. Phones: one column.
+ * The swipe deck: Uncle's picks, best match first, one home at a time.
+ * Right = like (confetti!) or "notify me" when sold out; left = pass, then optionally say why.
+ * Up (or tap the card) flips to the details worked out for this buyer.
+ * Desktop: deck on the left, filters / insights / shortlist on the right. Phones: one column.
  */
 export function SwipeDeck() {
   const s = useHomeLander();
+  const router = useRouter();
+  const stack = useRef<StackHandle>(null);
   const [filter, setFilter] = useState<StockFilter>("all");
   /** Sold-out units the buyer asked to be notified about, this visit only (nothing is stored). */
   const [notified, setNotified] = useState<{ id: string; atHistory: number }[]>([]);
-  const [dx, setDx] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [leaving, setLeaving] = useState<"left" | "right" | null>(null);
   const [askReasonFor, setAskReasonFor] = useState<string | null>(null);
+  const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const [announce, setAnnounce] = useState("");
-  const start = useRef(0);
 
-  const anchor = anchorFor(s.profile.workArea) ?? anchorOptions.find((a) => a.id === s.anchorId) ?? anchorOptions[0]!;
+  useEffect(preloadConfetti, []);
+
+  const uncleAnchor = anchorFor(s.profile.workArea);
+  const anchor = uncleAnchor ?? anchorOptions.find((a) => a.id === s.anchorId) ?? anchorOptions[0]!;
   // Uncle's order: best match for this buyer first.
   const picks = useMemo(() => recommend(s.profile, s.budget, anchor), [s.profile, s.budget, anchor]);
   const pickById = useMemo(() => new Map(picks.map((p) => [p.unit.id, p])), [picks]);
+  const basis = useMemo(() => moneyBasis(s.profile, s.budget), [s.profile, s.budget]);
   const units = picks.map((p) => p.unit);
   const likedByMatch = [...s.liked].sort((a, b) => (pickById.get(b)?.score ?? 0) - (pickById.get(a)?.score ?? 0));
   const full = s.liked.length >= DECK_LIKE_LIMIT;
@@ -44,8 +49,8 @@ export function SwipeDeck() {
   const unseen = units.filter((u) => !seen.has(u.id));
   const queue = full ? [] : unseen.filter((u) => matchesFilter(u.id, filter));
   const top = queue[0];
-  const next = queue[1];
   const topSold = top ? availabilityOf(top.id).status === "Sold out" : false;
+  const open = !!top && detailsFor === top.id;
   const counts = {
     all: unseen.length,
     available: unseen.filter((u) => matchesFilter(u.id, "available")).length,
@@ -53,49 +58,79 @@ export function SwipeDeck() {
   };
   const position = units.length - unseen.length + 1;
 
-  function commit(dir: "left" | "right", id: string) {
-    const unit = unitById[id]!;
-    const sold = availabilityOf(id).status === "Sold out";
+  function goBattle() {
+    const ranked = [...homelander.snapshot().liked].sort(
+      (a, b) => (pickById.get(b)?.score ?? 0) - (pickById.get(a)?.score ?? 0),
+    );
+    homelander.setCompare(ranked.slice(0, BATTLE_MAX));
+    router.push("/battle");
+  }
+
+  /** The card is on its way out: celebrate a like now, so it lands with the gesture. */
+  function onRelease(dir: Dir, unit: Unit, rect: DOMRect | null) {
+    setDetailsFor(null);
+    const sold = availabilityOf(unit.id).status === "Sold out";
+    if (dir !== "right" || sold) return;
+    const likes = homelander.snapshot().liked.filter((id) => id !== unit.id).length + 1;
+    void celebrateLike(rect, likes);
+  }
+
+  /** The card has left: record the decision. */
+  function onDone(dir: Dir, unit: Unit) {
+    const sold = availabilityOf(unit.id).status === "Sold out";
+    const name = townshipById[unit.townshipId]?.name ?? unit.name;
     if (dir === "right" && sold) {
-      setNotified((n) => [...n, { id, atHistory: s.history.length }]);
+      setNotified((n) => [...n, { id: unit.id, atHistory: homelander.snapshot().history.length }]);
       setAskReasonFor(null);
       toast.success(`Okay, we'll ping you if a ${unit.name} frees up.`, {
         description: "Demo only: no alert is actually set.",
       });
       setAnnounce(`Notify me set for ${unit.name}.`);
     } else if (dir === "right") {
-      homelander.like(id);
+      homelander.like(unit.id);
       setAskReasonFor(null);
-      setAnnounce(`Liked ${unit.name}. Added to your shortlist.`);
+      const likes = homelander.snapshot().liked.length;
+      setAnnounce(`Liked ${name}. ${likes} on your shortlist.`);
+      if (likes === LIKES_TO_BATTLE) {
+        toast.success("Battle unlocked!", {
+          description: "Three homes liked. Make them fight it out, or keep swiping.",
+          action: { label: "Battle", onClick: goBattle },
+        });
+      } else if (likes === DECK_LIKE_LIMIT) {
+        toast.success("Ten suka! Your shortlist is full.", {
+          description: `Your top ${BATTLE_MAX} by match go into Battle.`,
+          action: { label: "Battle", onClick: goBattle },
+        });
+      }
     } else {
-      homelander.pass(id);
-      setAskReasonFor(id);
-      setAnnounce(`Passed on ${unit.name}.`);
+      homelander.pass(unit.id);
+      setAskReasonFor(unit.id);
+      setAnnounce(`Passed on ${name}.`);
     }
-    setLeaving(null);
-    setDx(0);
   }
 
-  function decide(dir: "left" | "right") {
-    if (!top || leaving) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return commit(dir, top.id);
-    setLeaving(dir);
-    const id = top.id;
-    window.setTimeout(() => commit(dir, id), LEAVE_MS);
+  function decide(dir: Dir) {
+    if (!top) return;
+    stack.current?.fling(dir);
   }
 
   function undo() {
     const lastNotify = notified.at(-1);
+    let back: { id: string; dir: Dir } | null = null;
     if (lastNotify && lastNotify.atHistory === s.history.length) {
       setNotified((n) => n.slice(0, -1));
-      setAnnounce(`Brought back ${unitById[lastNotify.id]?.name}.`);
+      back = { id: lastNotify.id, dir: "right" };
     } else if (s.history.length) {
       const id = s.history.at(-1)!;
+      back = { id, dir: s.liked.includes(id) ? "right" : "left" };
       homelander.undo();
-      setAnnounce(`Brought back ${unitById[id]?.name}.`);
     }
+    if (!back) return;
+    setAnnounce(`Brought back ${unitById[back.id]?.name}.`);
     setAskReasonFor(null);
+    setDetailsFor(null);
+    // Only fly it back in if it will be the top card (the filter might hide it).
+    if (matchesFilter(back.id, filter)) stack.current?.returnFrom(back.dir);
   }
 
   const canUndo = s.history.length > 0 || notified.length > 0;
@@ -103,12 +138,21 @@ export function SwipeDeck() {
   const onKey = useEffectEvent((e: KeyboardEvent) => {
     const el = e.target as HTMLElement | null;
     if (el && (el.tagName === "SELECT" || el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === "ArrowLeft") {
       e.preventDefault();
       decide("left");
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
       decide("right");
+    } else if (e.key === "ArrowUp" && top && !open) {
+      e.preventDefault();
+      setDetailsFor(top.id);
+    } else if ((e.key === "ArrowDown" || e.key === "Escape") && open) {
+      // Leave ArrowDown alone when it's scrolling the details sheet... unless it's at the top.
+      if (e.key === "ArrowDown" && el?.closest("[data-no-drag]")) return;
+      e.preventDefault();
+      setDetailsFor(null);
     } else if (e.key === "Backspace" && canUndo) {
       undo();
     }
@@ -119,93 +163,82 @@ export function SwipeDeck() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const offset = leaving === "left" ? -760 : leaving === "right" ? 760 : dx;
-  // Rotation snaps to 2-degree steps so the card tilts like a sprite.
-  const tilt = Math.round(offset / 44) * 2;
+  const closeDetails = useCallback(() => setDetailsFor(null), []);
+  const openDetails = useCallback((id: string) => setDetailsFor(id), []);
   const asked = askReasonFor ? s.passed.find((p) => p.id === askReasonFor) : null;
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-6 overflow-x-clip [overflow-clip-margin:8px]">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <div className="grid gap-1">
-          <h1 className="font-pixel text-3xl leading-none font-bold sm:text-4xl">Find your home</h1>
-          <p className="text-[15px] text-ink">
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="grid gap-1.5">
+          <h1 className="font-pixel text-3xl leading-none sm:text-4xl">Find your home</h1>
+          <p className="max-w-xl text-[15px] text-ink">
             {s.onboardedAt
-              ? "Uncle's picks for you, best match first. Like up to 10, then make them battle."
-              : "Every card is a Gamuda Land home type with sample prices and stock. Suka or tak nak?"}
+              ? `Uncle's picks for you, best match first. Like up to ${DECK_LIKE_LIMIT}, then make them battle.`
+              : "Every card is a real Gamuda Land home. Suka or tak nak?"}
           </p>
           {s.onboardedAt ? null : (
             <p className="text-sm text-ink-soft">
-              <Link href="/onboarding" className="font-medium text-pandan-deep underline underline-offset-4">
+              <Link href="/onboarding" className="font-semibold text-pandan-deep underline underline-offset-4">
                 Sit with Uncle first
               </Link>{" "}
               and the deck sorts itself to your life and budget.
             </p>
           )}
         </div>
-        <PixPanel flat className="px-2.5 py-1.5 font-pixel text-base leading-none tabular-nums">
-          {Math.min(position, units.length)} / {units.length}
-          <span className="sr-only"> homes</span>
-        </PixPanel>
+        <div className="flex items-center gap-2">
+          <PixTag tone="white" className="text-[12px]">
+            <Sprite art="heart" scale={1.5} className="text-raya" />
+            <span className="tabular-nums">
+              {s.liked.length}/{DECK_LIKE_LIMIT}
+            </span>
+            <span className="sr-only"> liked</span>
+          </PixTag>
+          <PixPanel flat className="px-3 py-1.5 font-pixel text-base leading-none tabular-nums">
+            {Math.min(position, units.length)} / {units.length}
+            <span className="sr-only"> homes</span>
+          </PixPanel>
+        </div>
       </header>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)] lg:gap-10">
-        {/* Deck column. On lg it spans the right column's rows. */}
-        <section aria-label="Encounter deck" className="grid content-start gap-5 lg:row-span-3 lg:row-start-1">
-          <div className="mx-auto grid w-full max-w-[560px] select-none lg:max-w-[820px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,370px)] lg:gap-10">
+        <section aria-label="Swipe deck" className="grid content-start gap-4 lg:row-span-3 lg:row-start-1">
+          <div className="mx-auto grid w-full max-w-[460px] select-none">
             <p className="sr-only" aria-live="polite">
               {announce}
             </p>
 
             {top ? (
-              <div className="grid p-1 pb-3 [&>*]:[grid-area:1/1]">
-                {next ? (
-                  <PixPanel aria-hidden className="translate-y-3 opacity-90" style={{ "--pix-drop": "0px" } as React.CSSProperties}>
-                    <div className="h-full" />
-                  </PixPanel>
-                ) : null}
-                <PixPanel
-                  key={top.id}
-                  asChild
-                  className={cn(
-                    "relative flex touch-pan-y flex-col overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]",
-                    dragging ? "cursor-grabbing" : "cursor-grab",
-                    !dragging &&
-                      "transition-transform duration-200 ease-[steps(5)] motion-reduce:transition-none",
-                  )}
-                  style={{ transform: `translateX(${offset}px) rotate(${tilt}deg)` }}
-                >
-                  <article
-                    aria-label={`${top.name}, ${rm(top.priceRM)}, ${availabilityOf(top.id).status}`}
-                    onPointerDown={(e) => {
-                      if (leaving) return;
-                      start.current = e.clientX;
-                      setDragging(true);
-                      e.currentTarget.setPointerCapture?.(e.pointerId);
-                    }}
-                    onPointerMove={(e) => {
-                      if (dragging) setDx(e.clientX - start.current);
-                    }}
-                    onPointerUp={() => {
-                      if (!dragging) return;
-                      setDragging(false);
-                      if (dx > THRESHOLD) decide("right");
-                      else if (dx < -THRESHOLD) decide("left");
-                      else setDx(0);
-                    }}
-                    onPointerCancel={() => {
-                      setDragging(false);
-                      setDx(0);
-                    }}
-                  >
-                    <EncounterCard unit={top} anchor={anchor} drag={offset} pick={pickById.get(top.id)} />
-                  </article>
-                </PixPanel>
-              </div>
+              <CardStack
+                ref={stack}
+                cards={queue.slice(0, 3)}
+                dragDisabled={open}
+                yesLabel={(u) => (availabilityOf(u.id).status === "Sold out" ? "PING ME" : "SUKA!")}
+                label={(u) =>
+                  `${townshipById[u.townshipId]?.name}, ${u.product ?? u.name}, ${rm(u.priceRM)}, ${pickById.get(u.id)?.score ?? "?"}% match, ${availabilityOf(u.id).status}`
+                }
+                onRelease={onRelease}
+                onDone={onDone}
+                onTap={() => setDetailsFor(top.id)}
+                renderCard={(u, isTop) => (
+                  <EncounterCard
+                    unit={u}
+                    pick={pickById.get(u.id)}
+                    profile={s.profile}
+                    basis={basis}
+                    anchor={anchor}
+                    isTop={isTop}
+                    open={isTop && open}
+                    onOpen={openDetails}
+                    onClose={closeDetails}
+                  />
+                )}
+              />
             ) : (
-              <div className="p-1 pb-3">
+              <div className="h-[clamp(360px,calc(100svh-26rem),560px)] lg:h-[clamp(440px,64svh,640px)]">
                 <EndOfDeck
                   s={s}
+                  full={full}
                   rankedLikes={likedByMatch}
                   filtered={!full && unseen.length > 0}
                   onShowAll={() => setFilter("all")}
@@ -213,63 +246,29 @@ export function SwipeDeck() {
               </div>
             )}
 
-            <div className="mt-4 flex items-center justify-center gap-4 p-1 pb-2 sm:gap-6">
-              <PixButton
-                type="button"
-                tone="raya"
-                size="lg"
-                className="min-w-[7.5rem] flex-1 sm:flex-none"
-                disabled={!top}
-                onClick={() => decide("left")}
-                aria-label="Pass on this home (left arrow)"
-              >
-                <Sprite art="cross" scale={3} />
-                Tak nak
-              </PixButton>
-              <PixButton
-                type="button"
-                size="lg"
-                className="size-14 shrink-0 px-0"
-                disabled={!canUndo}
-                onClick={undo}
-                aria-label="Undo last swipe"
-              >
+            <div className="mt-6 flex items-center justify-center gap-5 p-1 pb-2">
+              <RoundButton tone="raya" label="Pass on this home (left arrow)" disabled={!top} onClick={() => decide("left")}>
+                <Sprite art="cross" scale={4} />
+              </RoundButton>
+              <RoundButton tone="white" small label="Undo last swipe (Backspace)" disabled={!canUndo} onClick={undo}>
                 <Sprite art="undo" scale={3} />
-              </PixButton>
+              </RoundButton>
               {topSold ? (
-                <PixButton
-                  type="button"
-                  tone="kaya"
-                  size="lg"
-                  className="min-w-[7.5rem] flex-1 sm:flex-none"
-                  onClick={() => decide("right")}
-                  aria-label="Notify me if a unit frees up (right arrow)"
-                >
-                  <Sprite art={swipeSprites.bell} scale={3} />
-                  Notify me
-                </PixButton>
+                <RoundButton tone="kaya" label="Notify me if a unit frees up (right arrow)" onClick={() => decide("right")}>
+                  <Sprite art={swipeSprites.bell} scale={4} />
+                </RoundButton>
               ) : (
-                <PixButton
-                  type="button"
-                  tone="pandan"
-                  size="lg"
-                  className="min-w-[7.5rem] flex-1 sm:flex-none"
-                  disabled={!top}
-                  onClick={() => decide("right")}
-                  aria-label="Like this home (right arrow)"
-                >
-                  <Sprite art="heart" scale={3} className="text-raya-deep" />
-                  Suka!
-                </PixButton>
+                <RoundButton tone="pandan" label="Like this home (right arrow)" disabled={!top} onClick={() => decide("right")}>
+                  <Sprite art="heart" scale={4} className="text-white" />
+                </RoundButton>
               )}
             </div>
-            <p className="mt-3 hidden text-center text-xs text-ink lg:block">
-              Drag the card, or use <Kbd>&larr;</Kbd> <Kbd>&rarr;</Kbd> and <Kbd>Backspace</Kbd> to undo.
+            <p className="mt-3 hidden text-center text-xs text-ink-soft lg:block">
+              Drag or flick the card. <Kbd>&larr;</Kbd> tak nak, <Kbd>&rarr;</Kbd> suka, <Kbd>&uarr;</Kbd> details,{" "}
+              <Kbd>Backspace</Kbd> undo.
             </p>
 
-            <div className="mt-4 min-h-[4.5rem]">
-              {asked ? <ReasonPicker id={asked.id} picked={asked.reason} /> : null}
-            </div>
+            <div className="mt-4 min-h-[4.5rem]">{asked ? <ReasonPicker id={asked.id} picked={asked.reason} /> : null}</div>
           </div>
         </section>
 
@@ -280,44 +279,80 @@ export function SwipeDeck() {
             counts={counts}
             anchorId={s.anchorId}
             secondAnchorId={s.secondAnchorId}
+            fromUncle={uncleAnchor && s.profile.workArea ? { anchor: uncleAnchor, said: s.profile.workArea } : null}
           />
         </div>
         <div className="lg:col-start-2 lg:row-start-2">
-          <Insights s={s} />
+          <Shortlist liked={likedByMatch} scoreOf={(id) => pickById.get(id)?.score} />
         </div>
         <div className="lg:col-start-2 lg:row-start-3">
-          <Shortlist liked={likedByMatch} />
+          <Insights s={s} />
         </div>
       </div>
     </div>
   );
 }
 
+/** Big round action button, like a dating app's, in the enamel-pill style. */
+function RoundButton({
+  tone,
+  small,
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  tone: "raya" | "pandan" | "kaya" | "white";
+  small?: boolean;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <PixButton
+      type="button"
+      tone={tone}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={small ? "size-14 shrink-0 px-0" : "size-[4.5rem] shrink-0 px-0"}
+    >
+      {children}
+    </PixButton>
+  );
+}
+
 function Kbd({ children }: { children: React.ReactNode }) {
-  return <kbd className="border-2 border-ink bg-white px-1 font-pixel-label text-[10px] text-ink">{children}</kbd>;
+  return <kbd className="rounded border-2 border-ink bg-white px-1 font-pixel-label text-[10px] text-ink">{children}</kbd>;
 }
 
 function ReasonPicker({ id, picked }: { id: string; picked?: string }) {
   const unit = unitById[id];
   if (!unit) return null;
+  const name = townshipById[unit.townshipId]?.name ?? unit.name;
   return (
-    <PixPanel flat className="grid gap-3 p-3">
+    <PixPanel flat className="grid animate-in gap-3 p-3 duration-200 fade-in-0 slide-in-from-top-1 motion-reduce:animate-none">
       <p className="text-sm">
-        <span className="font-medium">Why tak nak {unit.name}?</span>{" "}
+        <span className="font-semibold">Why tak nak {name}?</span>{" "}
         <span className="text-ink-soft">Optional. It teaches HomeLander your taste.</span>
       </p>
-      <div className="flex flex-wrap gap-3 p-1">
+      <div className="flex flex-wrap gap-2">
         {passReasons.map((r) => (
-          <PixButton
+          <button
             key={r}
             type="button"
-            size="sm"
-            tone={picked === r ? "kaya" : "white"}
             aria-pressed={picked === r}
             onClick={() => homelander.reason(id, r)}
+            className={
+              picked === r
+                ? "rounded-full border-2 border-ink bg-kaya px-3 py-1.5 text-sm font-semibold text-ink"
+                : "rounded-full border-2 border-ink bg-white px-3 py-1.5 text-sm font-semibold text-ink hover:bg-cloud"
+            }
           >
             {r}
-          </PixButton>
+          </button>
         ))}
         {picked ? (
           <PixTag tone="pandan" className="self-center">

@@ -4,51 +4,95 @@ import Link from "next/link";
 import { useState } from "react";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
-import { anchorOptions, rm, unitById, units, type Unit } from "@/lib/homelander/data";
 import {
-  analysisContext,
-  battle,
+  analyseHome,
   PRESETS,
-  startingLineup,
-  STATS,
-  type LineupSource,
-  type PresetId,
+  uncleWeights,
+  type StatKey,
   type Weights,
 } from "@/lib/homelander/analysis";
+import {
+  battleContext,
+  budgetForMatch,
+  type BattleContext,
+  type CommuteMode,
+} from "@/lib/homelander/battle-context";
+import {
+  BATTLE_MAX,
+  runBattle,
+  startingLineup,
+  type LineupSource,
+} from "@/lib/homelander/battle-verdict";
+import { anchorOptions, unitById, type Unit } from "@/lib/homelander/data";
+import { recommend } from "@/lib/homelander/recommend";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
-import { swords } from "./bits";
-import { FighterCard } from "./fighter-card";
+import { kRM, swords, UnitSelect } from "./bits";
 import { HeadToHead } from "./head-to-head";
+import { Priorities, type WeightMode } from "./priorities";
 import { VerdictBox } from "./verdict-box";
 
 const isUnit = (id: string) => id in unitById;
 
-const sourceCopy: Record<LineupSource, { tag: string; tone: "kaya" | "pandan" | "lilac"; text: string }> = {
-  sample: { tag: "Sample lineup", tone: "kaya", text: "You have not liked two homes yet, so here is a sample lineup." },
-  mixed: { tag: "1 like + sample", tone: "kaya", text: "Your one like, padded with sample fighters." },
-  liked: { tag: "From your likes", tone: "pandan", text: "Your first liked homes." },
-  picks: { tag: "Your picks", tone: "lilac", text: "The fighters you picked." },
+const sourceCopy: Record<
+  LineupSource,
+  { tag: string; tone: "kaya" | "pandan" | "lilac"; text: string }
+> = {
+  sample: {
+    tag: "Sample lineup",
+    tone: "kaya",
+    text: "You haven't liked two homes yet, so here are top matches from different projects.",
+  },
+  mixed: {
+    tag: "1 like + samples",
+    tone: "kaya",
+    text: "Your one like, against top matches from other projects.",
+  },
+  liked: {
+    tag: "From your likes",
+    tone: "pandan",
+    text: "Your liked homes, best match first.",
+  },
+  picks: {
+    tag: "Your lineup",
+    tone: "lilac",
+    text: "The homes you sent to Battle.",
+  },
 };
 
 export function BattleView() {
   const s = useHomeLander();
-  const { ids, source } = startingLineup(s, isUnit);
-  const list = ids.map((id) => unitById[id]) as Unit[];
 
+  const [workId, setWorkId] = useState<string | null>(null);
   const [officeDays, setOfficeDays] = useState<number | null>(null);
-  const [mode, setMode] = useState<PresetId | "custom" | null>(null);
-  const [custom, setCustom] = useState<Weights>(PRESETS.time.weights);
+  const [mode, setMode] = useState<CommuteMode | null>(null);
+  const [weightMode, setWeightMode] = useState<WeightMode>("uncle");
+  const [custom, setCustom] = useState<Weights | null>(null);
 
-  const autoPreset: PresetId = s.answers?.priority === "space" ? "space" : "time";
-  const activePreset = mode ?? autoPreset;
-  const weights = activePreset === "custom" ? custom : PRESETS[activePreset].weights;
+  const ctx = battleContext(s, { workId, officeDays, mode });
+  const matchBudget = budgetForMatch(ctx, s.budget);
+  const ranked = recommend(s.profile, matchBudget, ctx.work);
+  const matchById = new Map(ranked.map((p) => [p.unit.id, p.score]));
 
-  const ctx = analysisContext(s, { officeDays: officeDays ?? undefined });
-  const result = battle(list, ctx, weights);
-  const winnerId = result.winner.unit.id;
+  const { ids, source } = startingLineup(
+    s,
+    isUnit,
+    ranked.map((p) => p.unit),
+  );
+  const list = ids.map((id) => unitById[id]).filter(Boolean) as Unit[];
 
-  const save = (next: string[]) => homelander.setCompare(next);
+  const uncle = uncleWeights(ctx, list[0] ? analyseHome(list[0], ctx) : null);
+  const weights: Weights =
+    weightMode === "custom" && custom
+      ? custom
+      : weightMode === "uncle" || weightMode === "custom"
+        ? uncle.weights
+        : PRESETS[weightMode].weights;
+
+  const result = runBattle(list, ctx, weights, (u) => matchById.get(u.id) ?? 0);
+
+  const save = (next: string[]) =>
+    homelander.setCompare(next.slice(0, BATTLE_MAX));
   const swap = (slot: number, id: string) => {
     const next = [...ids];
     const other = next.indexOf(id);
@@ -56,230 +100,317 @@ export function BattleView() {
     next[slot] = id;
     save(next);
   };
-  const remove = (slot: number) => save(ids.filter((_, i) => i !== slot));
-  const addFighter = () => {
-    const extra = units.find((u) => !ids.includes(u.id) && u.id !== "kundang-sd");
-    if (extra) save([...ids, extra.id]);
+  const remove = (slot: number) => {
+    if (ids.length > 1) save(ids.filter((_, i) => i !== slot));
+  };
+  const add = (id: string) => {
+    if (ids.length < BATTLE_MAX && !ids.includes(id)) save([...ids, id]);
+  };
+  const setWeight = (k: StatKey, v: number) => {
+    setCustom({ ...weights, [k]: v });
+    setWeightMode("custom");
   };
 
-  const setWeight = (key: keyof Weights, v: number) => {
-    setCustom({ ...weights, [key]: v });
-    setMode("custom");
-  };
+  const likedTop = s.liked
+    .filter(isUnit)
+    .sort((a, b) => (matchById.get(b) ?? 0) - (matchById.get(a) ?? 0))
+    .slice(0, BATTLE_MAX);
+  const canUseLikes =
+    source === "picks" &&
+    likedTop.length >= 2 &&
+    likedTop.join() !== ids.join();
 
   const src = sourceCopy[source];
+  const winnerId = result?.winner.unit.id ?? "";
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:gap-10">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:gap-8">
       {/* Title */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
-        <div className="grid gap-2">
-          <h1 className="flex items-center gap-3 font-pixel text-3xl leading-none font-bold lg:text-5xl">
-            <Sprite art={swords} scale={4} className="shrink-0 text-ink" />
-            Battle of the homes
-          </h1>
-          <p className="max-w-2xl text-ink-soft">
-            {result.fighters.length} Gamuda Land homes go head to head on commute, space, money and more. HomeLander
-            calls the winner. All units and prices are sample data.
-          </p>
-          <p className="flex flex-wrap items-center gap-2 text-sm">
-            <PixTag tone={src.tone}>{src.tag}</PixTag>
-            <span className="text-ink-soft">{src.text}</span>
-            {source === "sample" || source === "mixed" ? (
-              <Link href="/swipe" className="font-medium underline decoration-2 underline-offset-4">
-                Swipe to pick your own
-              </Link>
-            ) : null}
-          </p>
-        </div>
-        <ContextBar
-          anchorId={ctx.anchorId}
-          onAnchor={(id) => homelander.anchors(id, s.secondAnchorId)}
-          officeDays={ctx.officeDays}
-          onOfficeDays={setOfficeDays}
-          moneyFromBank={ctx.money.source === "bank"}
-          maxPrice={ctx.money.maxPriceRM}
-          modeNote={ctx.mode ? `by ${ctx.mode}, as you told us` : "faster of car or train"}
-        />
-      </div>
-
-      {/* Fighters */}
-      <section aria-label="Fighters" className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
-        <p className="text-sm text-ink-soft lg:hidden">Swipe sideways to see every fighter.</p>
-        <div
-          className={cn(
-            "-mx-4 flex snap-x snap-mandatory gap-5 overflow-x-auto px-4 pt-1 pb-6",
-            "lg:mx-0 lg:grid lg:gap-10 lg:overflow-visible lg:px-0",
-            result.fighters.length === 2 ? "lg:grid-cols-[1fr_1fr_14rem]" : "lg:grid-cols-3",
-          )}
-        >
-          {result.fighters.map((f, i) => (
-            <div key={i} className="relative w-[84%] max-w-sm shrink-0 snap-center sm:w-[58%] lg:w-auto lg:max-w-none">
-              {i > 0 ? (
-                <span
-                  aria-hidden
-                  className="absolute top-1/3 -left-[38px] z-20 hidden size-9 items-center justify-center border-[3px] border-ink bg-raya font-pixel text-base text-white lg:flex"
-                >
-                  VS
-                </span>
-              ) : null}
-              <FighterCard
-                fighter={f}
-                slot={i}
-                isWinner={f.unit.id === winnerId}
-                winnerId={winnerId}
-                lineup={ids}
-                onSwap={(id) => swap(i, id)}
-                onRemove={ids.length > 2 ? () => remove(i) : undefined}
-              />
-            </div>
-          ))}
-          {ids.length < 3 ? (
-            <div className="flex w-[70%] max-w-xs shrink-0 snap-center pt-7 sm:w-[40%] lg:w-auto">
-              <button
-                type="button"
-                onClick={addFighter}
-                className="flex w-full flex-col items-center justify-center gap-3 border-[3px] border-dashed border-ink bg-white/50 p-6 font-pixel text-lg hover:bg-white/80"
-              >
-                <Sprite art="sparkle" scale={5} className="text-ink" />
-                Add a 3rd fighter
-              </button>
-            </div>
+      <header className="grid gap-2">
+        <h1 className="flex items-center gap-3 font-pixel text-3xl leading-none lg:text-5xl">
+          <Sprite
+            art={swords}
+            scale={4}
+            className="shrink-0 text-pandan-deep"
+          />
+          Battle of the homes
+        </h1>
+        <p className="max-w-3xl text-ink-soft">
+          Up to {BATTLE_MAX} Gamuda Land homes, side by side on what you&apos;d
+          pay every month, how long you&apos;d spend getting to work, room for
+          the family and the home itself. Every figure is an estimate you can
+          check row by row.
+        </p>
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <PixTag tone={src.tone}>{src.tag}</PixTag>
+          <span className="text-ink-soft">{src.text}</span>
+          {source === "sample" || source === "mixed" ? (
+            <Link
+              href="/swipe"
+              className="font-semibold underline decoration-2 underline-offset-4"
+            >
+              Swipe to pick your own
+            </Link>
           ) : null}
+          {canUseLikes ? (
+            <button
+              type="button"
+              onClick={() => save(likedTop)}
+              className="font-semibold underline decoration-2 underline-offset-4"
+            >
+              Use my top {likedTop.length} likes
+            </button>
+          ) : null}
+        </p>
+      </header>
+
+      {!ctx.hasProfile ? <NoProfile ctx={ctx} /> : null}
+
+      <SetupBar
+        ctx={ctx}
+        onWork={setWorkId}
+        onOfficeDays={setOfficeDays}
+        onMode={setMode}
+        ids={ids}
+        onAdd={add}
+      />
+
+      {result && list.length >= 2 ? (
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
+          <VerdictBox key={winnerId} battle={result} ctx={ctx} />
+          <Priorities
+            mode={weightMode}
+            weights={weights}
+            uncleWhy={uncle.why}
+            hasProfile={ctx.hasProfile}
+            onPreset={(p) => setWeightMode(p)}
+            onWeight={setWeight}
+          />
         </div>
-      </section>
+      ) : (
+        <NeedTwo ids={ids} onAdd={add} />
+      )}
 
-      {/* Verdict + weights */}
-      <div className="grid gap-8 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
-        <VerdictBox key={winnerId} battle={result} />
-        <WeightsPanel active={activePreset} weights={weights} onPreset={setMode} onWeight={setWeight} />
-      </div>
-
-      <HeadToHead fighters={result.fighters} ctx={ctx} winnerId={winnerId} />
+      {result ? (
+        <HeadToHead
+          fighters={result.fighters}
+          ctx={ctx}
+          winnerId={list.length >= 2 ? winnerId : ""}
+          weights={weights}
+          lineup={ids}
+          onSwap={swap}
+          onRemove={remove}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ContextBar({
-  anchorId,
-  onAnchor,
-  officeDays,
-  onOfficeDays,
-  moneyFromBank,
-  maxPrice,
-  modeNote,
-}: {
-  anchorId: string;
-  onAnchor: (id: string) => void;
-  officeDays: number;
-  onOfficeDays: (n: number) => void;
-  moneyFromBank: boolean;
-  maxPrice: number;
-  modeNote: string;
-}) {
-  const select =
-    "pix-frame pix-flat block w-full cursor-pointer appearance-none px-2.5 py-1.5 font-pixel text-base leading-tight";
+/* ---------------------------------------------------------------- pieces */
+
+function NoProfile({ ctx }: { ctx: BattleContext }) {
   return (
-    <PixPanel flat tone="sky" className="grid gap-3 p-3 text-sm lg:w-[22rem]">
-      <div className="grid grid-cols-[1fr_6.5rem] gap-3">
-        <label className="grid gap-1.5">
-          <span className="font-pixel-label text-[11px] uppercase">Work at</span>
-          <select className={select} value={anchorId} onChange={(e) => onAnchor(e.target.value)}>
-            {anchorOptions.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="grid gap-1.5">
-          <span className="font-pixel-label text-[11px] uppercase">Office days</span>
-          <select className={select} value={officeDays} onChange={(e) => onOfficeDays(Number(e.target.value))}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n}>
-                {n} a week
-              </option>
-            ))}
-          </select>
-        </label>
+    <PixPanel
+      tone="kaya"
+      flat
+      className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-5"
+    >
+      <Sprite art="uncle" scale={4} className="hidden text-ink sm:block" />
+      <div className="grid gap-1">
+        <p className="font-pixel text-lg leading-tight">
+          You haven&apos;t sat with Uncle yet
+        </p>
+        <p className="text-sm">
+          So this battle uses stand-ins: {ctx.defaults.join(", ")}. Ten minutes
+          with Uncle and every row uses your life instead.
+        </p>
       </div>
-      <p className="text-ink-soft">
-        Commute score uses the {modeNote}.{" "}
-        {moneyFromBank ? (
-          <>Money uses your bank check (up to about {rm(maxPrice)}).</>
-        ) : (
-          <>
-            Money uses a sample payslip.{" "}
-            <Link href="/bank" className="font-medium text-ink underline decoration-2 underline-offset-4">
-              Use yours
-            </Link>
-          </>
-        )}
-      </p>
+      <PixButton asChild tone="white">
+        <Link href="/onboarding">
+          <Sprite art="uncle" scale={2} />
+          Sit with Uncle
+        </Link>
+      </PixButton>
     </PixPanel>
   );
 }
 
-function WeightsPanel({
-  active,
-  weights,
-  onPreset,
-  onWeight,
+const MODES: { id: CommuteMode; label: string }[] = [
+  { id: "car", label: "Car" },
+  { id: "train", label: "Train" },
+  { id: "fastest", label: "Faster" },
+];
+
+function SetupBar({
+  ctx,
+  onWork,
+  onOfficeDays,
+  onMode,
+  ids,
+  onAdd,
 }: {
-  active: PresetId | "custom";
-  weights: Weights;
-  onPreset: (p: PresetId) => void;
-  onWeight: (k: keyof Weights, v: number) => void;
+  ctx: BattleContext;
+  onWork: (id: string) => void;
+  onOfficeDays: (n: number) => void;
+  onMode: (m: CommuteMode) => void;
+  ids: string[];
+  onAdd: (id: string) => void;
+}) {
+  const select =
+    "pix-frame pix-flat block min-h-11 w-full cursor-pointer appearance-none px-3 py-2 text-sm font-semibold";
+  const m = ctx.money;
+  const moneyText =
+    m.source === "bank"
+      ? `Your bank check: up to about ${kRM(m.maxPriceRM)}`
+      : m.source === "profile"
+        ? `From what you told Uncle: up to about ${kRM(m.maxPriceRM)}`
+        : `Sample payslip: up to about ${kRM(m.maxPriceRM)}`;
+  return (
+    <PixPanel
+      flat
+      tone="sky"
+      className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_8rem_minmax(0,1fr)_minmax(0,1.3fr)]"
+    >
+      <label className="grid content-start gap-1.5">
+        <span className="font-pixel-label text-[11px] uppercase">Work at</span>
+        <select
+          className={select}
+          value={ctx.work.id}
+          onChange={(e) => onWork(e.target.value)}
+        >
+          {anchorOptions.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-ink-soft">
+          {ctx.workSource === "profile"
+            ? `You told Uncle "${ctx.workLabel}"`
+            : ctx.workSource === "picked"
+              ? "Picked here"
+              : "Default, until you tell Uncle"}
+          {ctx.partner ? `. Partner: ${ctx.partner.name}` : ""}
+        </span>
+      </label>
+
+      <label className="grid content-start gap-1.5">
+        <span className="font-pixel-label text-[11px] uppercase">
+          Office days
+        </span>
+        <select
+          className={select}
+          value={ctx.officeDays}
+          onChange={(e) => onOfficeDays(Number(e.target.value))}
+        >
+          {[0, 1, 2, 3, 4, 5, 6].map((n) => (
+            <option key={n} value={n}>
+              {n} a week
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="grid content-start gap-1.5">
+        <span
+          id="mode-label"
+          className="font-pixel-label text-[11px] uppercase"
+        >
+          Getting there
+        </span>
+        <div className="flex gap-2" role="group" aria-labelledby="mode-label">
+          {MODES.map((o) => (
+            <PixButton
+              key={o.id}
+              size="sm"
+              tone={ctx.mode === o.id ? "kaya" : "white"}
+              aria-pressed={ctx.mode === o.id}
+              onClick={() => onMode(o.id)}
+              className="min-h-11 flex-1 px-2"
+            >
+              {o.label}
+            </PixButton>
+          ))}
+        </div>
+        <span className="text-xs text-ink-soft">
+          {ctx.modeSource === "profile"
+            ? "As you told Uncle"
+            : ctx.modeSource === "picked"
+              ? "Picked here"
+              : "Default"}
+        </span>
+      </div>
+
+      <div className="grid content-start gap-1.5">
+        <span className="font-pixel-label text-[11px] uppercase">
+          Add a home ({ids.length} of {BATTLE_MAX})
+        </span>
+        {ids.length < BATTLE_MAX ? (
+          <UnitSelect
+            taken={ids}
+            onChange={onAdd}
+            label="Add a home to the battle"
+            placeholder="Pick a home to add"
+          />
+        ) : (
+          <p className="pix-frame pix-flat flex min-h-11 items-center px-3 text-sm text-ink-soft">
+            Ring is full. Remove one to add.
+          </p>
+        )}
+        <span
+          className={cn(
+            "text-xs",
+            m.source === "sample" ? "font-semibold text-ink" : "text-ink-soft",
+          )}
+        >
+          {moneyText}
+          {m.source !== "bank" ? (
+            <>
+              {" · "}
+              <Link
+                href="/bank"
+                className="underline decoration-2 underline-offset-4"
+              >
+                Run the bank check
+              </Link>
+            </>
+          ) : null}
+        </span>
+      </div>
+    </PixPanel>
+  );
+}
+
+function NeedTwo({
+  ids,
+  onAdd,
+}: {
+  ids: string[];
+  onAdd: (id: string) => void;
 }) {
   return (
-    <PixPanel className="grid gap-4 p-4" aria-labelledby="weights-title">
+    <PixPanel className="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_20rem] sm:items-center">
       <div className="grid gap-1">
-        <h2 id="weights-title" className="font-pixel text-xl leading-none">
-          What matters most?
+        <h2 className="font-pixel text-2xl leading-tight">
+          A battle needs two homes
         </h2>
-        <p className="text-sm text-ink-soft">Pick a play style, or tune each stat yourself.</p>
+        <p className="text-ink-soft">
+          {ids.length === 1 ? "One home is in the ring. " : ""}Add another to
+          see who wins, or go swipe and like a few.
+        </p>
+        <Link
+          href="/swipe"
+          className="w-fit text-sm font-semibold underline decoration-2 underline-offset-4"
+        >
+          Go to the swipe deck
+        </Link>
       </div>
-      <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Presets">
-        {(Object.keys(PRESETS) as PresetId[]).map((p) => (
-          <PixButton
-            key={p}
-            size="sm"
-            tone={active === p ? "kaya" : "white"}
-            aria-pressed={active === p}
-            onClick={() => onPreset(p)}
-            className="min-h-11 px-1.5 text-center text-sm leading-tight"
-          >
-            {PRESETS[p].label}
-          </PixButton>
-        ))}
-      </div>
-      <p className="text-xs text-ink-soft">
-        {active === "custom" ? "Your own mix." : PRESETS[active].blurb + "."}
-      </p>
-      <ul className="grid gap-2.5">
-        {STATS.map((s) => (
-          <li key={s.key} className="grid grid-cols-[5rem_1fr_1.5rem] items-center gap-3">
-            <label htmlFor={`w-${s.key}`} className="font-pixel-label text-[11px] uppercase">
-              {s.label}
-            </label>
-            <input
-              id={`w-${s.key}`}
-              type="range"
-              min={0}
-              max={10}
-              step={1}
-              value={weights[s.key]}
-              onChange={(e) => onWeight(s.key, Number(e.target.value))}
-              className="h-6 w-full cursor-pointer accent-ink"
-              aria-describedby={`w-${s.key}-hint`}
-            />
-            <span className="text-right font-pixel text-base tabular-nums">{weights[s.key]}</span>
-            <span id={`w-${s.key}-hint`} className="sr-only">
-              {s.hint}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <UnitSelect
+        taken={ids}
+        onChange={onAdd}
+        label="Add a home to the battle"
+        placeholder="Pick a home to add"
+      />
     </PixPanel>
   );
 }

@@ -134,6 +134,12 @@ export function scoreUnit(unit: Unit, p: Profile, budget: Budget | null, work: A
   if (p.underConstructionOk === false && unit.completion > thisYear) catches.push(`Ready only in ${unit.completion}`);
   else score += 5;
 
+  // Gamuda sells new homes; completed townships are resale examples, shown after what's on sale.
+  if (t.status === "completed") {
+    score -= 20;
+    catches.unshift("Completed township: resale only, sample price");
+  }
+
   if (availabilityOf(unit.id).status === "Sold out") {
     score = Math.min(score, 10);
     catches.unshift("Sold out right now");

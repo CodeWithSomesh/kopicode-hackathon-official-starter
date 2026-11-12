@@ -2,15 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { defineSprite, Sprite } from "@/components/homelander/sprite";
-import { townships, units, rmShort, availabilityOf } from "@/lib/homelander/data";
+import {
+  availabilityOf,
+  rm,
+  rmShort,
+  townships,
+  units,
+} from "@/lib/homelander/data";
 import { cn } from "@/lib/utils";
 
-/* Sprites only this screen uses. */
-export const crown = defineSprite(
-  ["#..#..#", "##.#.##", "#######", "#k#k#k#", "#######"],
-  { k: "#ef4560" },
-);
+/* Sprites only this screen uses. Colours are currentColor, so they follow the theme. */
+export const crown = defineSprite(["#..#..#", "##.#.##", "#######", "#######"]);
 export const caret = defineSprite(["#######", ".#####.", "..###..", "...#..."]);
+export const tick = defineSprite([
+  "......#",
+  ".....##",
+  "#...##.",
+  "##.##..",
+  ".###...",
+  "..#....",
+]);
+export const dash = defineSprite(["#####"]);
 export const swords = defineSprite([
   "#.......#",
   ".#.....#.",
@@ -21,12 +33,70 @@ export const swords = defineSprite([
   ".##...##.",
   "##.....##",
 ]);
+export const wallet = defineSprite([
+  "########",
+  "#......#",
+  "#....###",
+  "#....#.#",
+  "#....###",
+  "########",
+]);
+export const car = defineSprite([
+  "..####..",
+  ".#....#.",
+  "########",
+  "#.####.#",
+  "########",
+  ".##..##.",
+]);
+export const family = defineSprite([
+  ".#...#..",
+  "###.###.",
+  ".#...#.#",
+  "###.####",
+  "#.#.#.#.",
+  "#.#.#.#.",
+]);
+export const home = defineSprite([
+  "...##...",
+  "..####..",
+  ".######.",
+  "########",
+  ".##..##.",
+  ".##..##.",
+]);
+export const chart = defineSprite([
+  "......#",
+  ".....##",
+  "..#.###",
+  ".######",
+  "#######",
+]);
+export const gauge = defineSprite([
+  "..###..",
+  ".#...#.",
+  "#..#..#",
+  "#...#.#",
+  "#######",
+]);
+
+/* ---------------------------------------------------------------- formatting */
+
+export const money = (n: number) => rm(Math.round(n));
+export const kRM = (n: number) =>
+  Math.abs(n) >= 1_000_000
+    ? `RM${(n / 1_000_000).toFixed(2)}M`
+    : `RM${Math.round(n / 1000)}k`;
+export const pct = (f: number) => `${Math.round(f * 100)}%`;
+export const signedPct = (f: number) =>
+  `${f > 0 ? "+" : f < 0 ? "−" : ""}${Math.round(Math.abs(f) * 100)}%`;
+export const sqft = (n: number) => `${n.toLocaleString("en-MY")} sq ft`;
 
 /**
  * Steps 0 -> 1 in `steps` hard frames after mount, like an HP bar filling block by block.
  * Reduced motion: jumps straight to 1. Remount (change the key) to replay.
  */
-export function useStepIn(steps = 10, frameMs = 70) {
+export function useStepIn(steps = 10, frameMs = 60) {
   const [n, setN] = useState(0);
   useEffect(() => {
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -44,45 +114,99 @@ export function useStepIn(steps = 10, frameMs = 70) {
   return n / steps;
 }
 
-/** Pixel-framed native select listing every unit, grouped by township. */
+/**
+ * Native select listing every home, grouped by project. With `placeholder`, it is an "add"
+ * picker: it resets after each pick.
+ */
 export function UnitSelect({
   value,
   taken,
   onChange,
   label,
+  placeholder,
+  compact,
   className,
 }: {
-  value: string;
+  value?: string;
   taken: string[];
   onChange: (id: string) => void;
   label: string;
+  placeholder?: string;
+  compact?: boolean;
   className?: string;
 }) {
   return (
     <label className={cn("relative block", className)}>
       <span className="sr-only">{label}</span>
       <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="pix-frame pix-flat block w-full cursor-pointer appearance-none py-2 pr-9 pl-3 font-pixel text-base leading-tight text-ink"
+        value={value ?? ""}
+        onChange={(e) => e.target.value && onChange(e.target.value)}
+        className={cn(
+          "pix-frame pix-flat block w-full cursor-pointer appearance-none text-ink",
+          compact
+            ? "min-h-9 py-1.5 pr-7 pl-2.5 text-xs font-semibold"
+            : "min-h-11 py-2 pr-9 pl-3 text-sm font-semibold",
+        )}
       >
-        {townships.map((t) => (
-          <optgroup key={t.id} label={t.name}>
-            {units
-              .filter((u) => u.townshipId === t.id)
-              .map((u) => {
+        {placeholder ? (
+          <option value="" disabled>
+            {placeholder}
+          </option>
+        ) : null}
+        {townships.map((t) => {
+          const list = units.filter((u) => u.townshipId === t.id);
+          if (!list.length) return null;
+          return (
+            <optgroup
+              key={t.id}
+              label={
+                t.status === "completed" ? `${t.name} (completed)` : t.name
+              }
+            >
+              {list.map((u) => {
                 const soldOut = availabilityOf(u.id).left === 0;
+                const inRing = u.id !== value && taken.includes(u.id);
                 return (
-                  <option key={u.id} value={u.id} disabled={u.id !== value && taken.includes(u.id)}>
+                  <option key={u.id} value={u.id} disabled={inRing}>
+                    {u.product ? `${u.product}: ` : ""}
                     {u.name}, {rmShort(u.priceRM)}
                     {soldOut ? " (sold out)" : ""}
+                    {inRing ? " (in the ring)" : ""}
                   </option>
                 );
               })}
-          </optgroup>
-        ))}
+            </optgroup>
+          );
+        })}
       </select>
-      <Sprite art={caret} scale={2} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-ink" />
+      <Sprite
+        art={caret}
+        scale={compact ? 1.5 : 2}
+        className={cn(
+          "pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink",
+          compact ? "right-2.5" : "right-3",
+        )}
+      />
     </label>
+  );
+}
+
+/** Horizontal DSR bar with the 60% and 70% lines drawn in. */
+export function DsrBar({ value }: { value: number }) {
+  const max = 1;
+  const w = Math.min(value, max) * 100;
+  const tone = value > 0.7 ? "bg-raya" : value > 0.6 ? "bg-kaya" : "bg-pandan";
+  return (
+    <span
+      className="relative mt-1 block h-2.5 w-full max-w-[9rem] rounded-full bg-cloud ring-1 ring-ink/40"
+      aria-hidden
+    >
+      <span
+        className={cn("absolute inset-y-0 left-0 rounded-full", tone)}
+        style={{ width: `${w}%` }}
+      />
+      <span className="absolute -inset-y-0.5 left-[60%] w-0.5 bg-ink" />
+      <span className="absolute -inset-y-0.5 left-[70%] w-0.5 bg-ink/50" />
+    </span>
   );
 }

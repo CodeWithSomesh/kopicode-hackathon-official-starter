@@ -35,6 +35,10 @@ Extend it rather than starting over. Gotchas already solved, so keep them:
 - **The map container** needs `!absolute inset-0 h-full w-full`, because MapLibre's CSS forces `position: relative` and the map collapses to 0 px.
 - **First load is slow:** tiles can take a few seconds the first time.
 
+## Existing map work on `main`
+
+`main` already has a PayGap-style map at `/find` (the "First Key" work: `src/app/find/`, `src/components/first-key/`, `src/lib/first-key/`, `docs/FIRST-KEY.md`). It uses its own PMTiles basemap, building bursts and three.js. If that's your work, decide which map becomes `/` and bring the best of both here. Don't keep two landing maps. MapLibre is pinned to 6.16.0; if you change the version, re-copy `node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs` into `public/homelander/maplibre/`.
+
 ## Data
 
 - **Project data is shared.** The project and unit list lives in `src/lib/homelander/data.ts` (`townships`, `units`, `availabilityOf`, commute helpers). The owner of the shared code is replacing the sample data with real Gamuda Land projects from `docs/research/jodoh-data-sources.md`. Read projects from there; don't hard-code your own list. If you need a field that isn't there (state, status, official URL, photos), ask for it, or add it in a small separate commit.

@@ -11,6 +11,8 @@ import {
 } from "react";
 import * as THREE from "three";
 import { useT } from "@/lib/homelander/i18n/client";
+import { useHomeLanderTheme } from "@/lib/homelander/theme";
+import { DARK_THEMES } from "@/lib/homelander/theme-config";
 import { cn } from "@/lib/utils";
 import { CATALOG, type Item, type Kind } from "./furniture";
 import type { Floor } from "./plans";
@@ -43,50 +45,115 @@ const VIEW_DIR = (() => {
   return v.map((x) => x / n) as [number, number, number];
 })();
 
-type Colors = Record<
-  | "ink"
-  | "soft"
-  | "surface"
-  | "cloud"
-  | "line"
-  | "furniture"
-  | "plant"
-  | "glass"
-  | "sun"
-  | "raya"
-  | "select"
-  | "teh",
-  string
->;
+type Colors = {
+  /** Model materials. */
+  ink: string;
+  soft: string;
+  surface: string;
+  cloud: string;
+  line: string;
+  furniture: string;
+  plant: string;
+  glass: string;
+  sun: string;
+  raya: string;
+  select: string;
+  teh: string;
+  /** Behind and around the model. */
+  backdrop: string;
+  ground: string;
+  /** Hemisphere light: from above, and bounced from below. */
+  skyLight: string;
+  groundLight: string;
+  glassOpacity: number;
+  /** Sunlight strength. A dark floor needs more of it for a sun patch to read as sun. */
+  sunIntensity: number;
+};
 
-function readColors(el: Element): Colors {
+/** Teh Susu's tokens: the model in daylight, also used for dark themes without their own palette. */
+const DAYLIGHT: Omit<Colors, "backdrop" | "ground"> = {
+  ink: "#17332a",
+  soft: "#4a6359",
+  surface: "#ffffff",
+  cloud: "#e4efe8",
+  line: "#c9dbd1",
+  furniture: "#d6ebf3",
+  plant: "#1f9d6b",
+  glass: "#3f8fb5",
+  sun: "#f2b632",
+  raya: "#d8452f",
+  select: "#12704b",
+  teh: "#8a5a33",
+  skyLight: "#ffffff",
+  groundLight: "#e4efe8",
+  glassOpacity: 0.18,
+  sunIntensity: 1.7,
+};
+
+/**
+ * Kopi O: the same kopitiam after dark. Latte floors inside dark coffee walls, cream and
+ * jade furniture, and windows lit kaya from inside, so the plan reads at night instead of
+ * just going dim. Built from Kopi O's own tokens (cream #f6ede1, jade #3fbf8a, kaya #f2b632).
+ */
+const KOPI_O: Omit<Colors, "backdrop" | "ground"> = {
+  ink: "#0e0907",
+  soft: "#2f8a66",
+  surface: "#9a7c62",
+  cloud: "#5e4636",
+  line: "#2a1f18",
+  furniture: "#e8dac6",
+  plant: "#3fbf8a",
+  glass: "#f2b632",
+  sun: "#f2b632",
+  raya: "#ff8570",
+  select: "#f2b632",
+  teh: "#c98a52",
+  skyLight: "#fff1dc",
+  groundLight: "#6b5040",
+  glassOpacity: 0.5,
+  sunIntensity: 2.8,
+};
+
+function readColors(el: Element, theme: string): Colors {
   const css = getComputedStyle(el);
   const v = (n: string, f: string) => css.getPropertyValue(n).trim() || f;
+  const backdrop = v("--j-surface", DAYLIGHT.surface);
+  const ground = v("--color-cloud", DAYLIGHT.cloud);
+  if (theme === "kopio") return { ...KOPI_O, backdrop, ground };
+  // Other dark themes: a daylight model on a dark table, never a near-black one.
+  if (DARK_THEMES.includes(theme)) return { ...DAYLIGHT, backdrop, ground };
   return {
-    ink: v("--color-ink", "#17332a"),
-    soft: v("--color-ink-soft", "#4a6359"),
-    surface: v("--j-surface", "#ffffff"),
-    cloud: v("--color-cloud", "#e4efe8"),
-    line: v("--j-line", "#c9dbd1"),
-    furniture: v("--color-lilac", "#d6ebf3"),
-    plant: v("--color-pandan", "#1f9d6b"),
-    glass: v("--color-sky-deep", "#3f8fb5"),
-    sun: v("--color-kaya", "#f2b632"),
-    raya: v("--color-raya", "#d8452f"),
-    select: v("--color-pandan-deep", "#12704b"),
-    teh: v("--color-teh", "#8a5a33"),
+    ...DAYLIGHT,
+    ink: v("--color-ink", DAYLIGHT.ink),
+    soft: v("--color-ink-soft", DAYLIGHT.soft),
+    surface: backdrop,
+    cloud: ground,
+    line: v("--j-line", DAYLIGHT.line),
+    furniture: v("--color-lilac", DAYLIGHT.furniture),
+    plant: v("--color-pandan", DAYLIGHT.plant),
+    glass: v("--color-sky-deep", DAYLIGHT.glass),
+    sun: v("--color-kaya", DAYLIGHT.sun),
+    raya: v("--color-raya", DAYLIGHT.raya),
+    select: v("--color-pandan-deep", DAYLIGHT.select),
+    teh: v("--color-teh", DAYLIGHT.teh),
+    skyLight: backdrop,
+    groundLight: ground,
+    backdrop,
+    ground,
   };
 }
 
 export function Plan3D(props: Props) {
   const t = useT();
   const wrap = useRef<HTMLDivElement>(null);
+  const theme = useHomeLanderTheme();
   const [colors, setColors] = useState<Colors | null>(null);
 
   useEffect(() => {
-    // Theme colours live in CSS; read them once the wrapper is in the themed tree.
-    if (wrap.current) setColors(readColors(wrap.current));
-  }, []);
+    // Theme colours live in CSS. setTheme() updates data-jtheme before it notifies, so a
+    // theme switch re-reads the new values here with no remount.
+    if (wrap.current) setColors(readColors(wrap.current, theme));
+  }, [theme]);
 
   const { bounds } = props;
   const span = Math.max(bounds.w, bounds.h);
@@ -128,7 +195,7 @@ export function Plan3D(props: Props) {
           onPointerMissed={() => props.onSelect(null)}
           gl={{ antialias: true }}
         >
-          <color attach="background" args={[colors.surface]} />
+          <color attach="background" args={[colors.backdrop]} />
           <Scene {...props} colors={colors} centre={centre} span={span} />
         </Canvas>
       ) : null}
@@ -172,7 +239,7 @@ function Scene({
   // Warm the sunlight so a sunlit patch of floor reads as sun, not just "brighter".
   const sunColor = useMemo(
     () =>
-      new THREE.Color(colors.surface).lerp(new THREE.Color(colors.sun), 0.75),
+      new THREE.Color(colors.skyLight).lerp(new THREE.Color(colors.sun), 0.75),
     [colors],
   );
   const sunPos: [number, number, number] = [
@@ -210,12 +277,12 @@ function Scene({
   return (
     <>
       <hemisphereLight
-        args={[colors.surface, colors.cloud, sun.up ? 1.9 : 2.2]}
+        args={[colors.skyLight, colors.groundLight, sun.up ? 1.9 : 2.2]}
       />
       <directionalLight
         ref={light}
         position={sunPos}
-        intensity={sun.up ? 1.7 : 0}
+        intensity={sun.up ? colors.sunIntensity : 0}
         color={sunColor}
         castShadow
         shadow-mapSize-width={2048}
@@ -236,7 +303,7 @@ function Scene({
         receiveShadow
       >
         <planeGeometry args={[span * 4, span * 4]} />
-        <meshBasicMaterial color={colors.cloud} />
+        <meshBasicMaterial color={colors.ground} />
       </mesh>
 
       {/* Floors. */}
@@ -288,7 +355,7 @@ function Scene({
               <meshStandardMaterial
                 color={colors.glass}
                 transparent
-                opacity={0.18}
+                opacity={colors.glassOpacity}
                 depthWrite={false}
               />
             ) : (

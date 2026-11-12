@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { PixPanel } from "@/components/homelander/pixel";
 import { translate } from "@/lib/homelander/i18n/translate";
 import { cn } from "@/lib/utils";
@@ -17,7 +23,7 @@ export type LogEntry = {
   replies: Reply[];
   /** Commands the AI turned the request into, when the quick parser couldn't read it. */
   heard?: string[];
-  /** The AI's own reply, shown when it's in a language the toggle doesn't cover (中文, தமிழ்). */
+  /** The AI's own reply, shown when it's in a language the header switch doesn't cover (中文, தமிழ்). */
   aiReply?: { text: string; lang: string };
   /** A notice about the AI or voice, e.g. "log in to use AI". */
   note?: { en: string; mg: string };
@@ -25,8 +31,8 @@ export type LogEntry = {
 
 type Props = {
   log: LogEntry[];
+  /** Reply language, from the header's EN | Manglish switch. */
   lang: Lang;
-  onLang: (l: Lang) => void;
   onRun: (text: string) => void;
   /** Extra control inside the input row, e.g. the mic button. */
   extra?: ReactNode;
@@ -53,13 +59,12 @@ const CHIPS = [
 export function CommandConsole({
   log,
   lang,
-  onLang,
   onRun,
   extra,
   toolbar,
   busy,
 }: Props) {
-  // The console follows its own Reply-in toggle (which starts from the EN | Manglish switch in the header).
+  // Replies follow the EN | Manglish switch in the header (lang comes from useLang in builder.tsx).
   const t = (en: string) => translate(lang === "mg" ? "mglish" : "en", en);
   const [text, setText] = useState("");
   const box = useRef<HTMLDivElement>(null);
@@ -75,38 +80,16 @@ export function CommandConsole({
   };
 
   return (
-    <PixPanel tone="ink" className="grid gap-3 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-pixel text-lg font-bold">{t("Talk to it")}</h2>
-        <div
-          className="flex items-center gap-1 text-xs"
-          role="group"
-          aria-label={t("Reply language")}
-        >
-          <span className="mr-1 text-white opacity-75">{t("Reply in")}</span>
-          {(
-            [
-              ["mg", "Manglish"],
-              ["en", "English"],
-            ] as const
-          ).map(([v, l]) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={lang === v}
-              onClick={() => onLang(v)}
-              className={cn(
-                "border-2 border-current px-2 py-0.5 font-semibold",
-                lang === v
-                  ? "bg-white text-[color:var(--color-ink)]"
-                  : "text-white hover:bg-current/10",
-              )}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
-      </div>
+    <PixPanel
+      tone="ink"
+      // A dark board in every theme. Dark themes flip ink to cream, so take their near-black
+      // "on light" colour there instead; light themes don't define it and keep the ink fill.
+      style={
+        { "--pix-fill": "var(--j-on-light, var(--color-ink))" } as CSSProperties
+      }
+      className="grid gap-3 p-4"
+    >
+      <h2 className="font-pixel text-lg font-bold">{t("Talk to it")}</h2>
 
       <div
         ref={box}

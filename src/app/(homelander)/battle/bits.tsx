@@ -29,6 +29,16 @@ export const swords = defineSprite([
   ".##...##.",
   "##.....##",
 ]);
+/** The speaker with a cross: fight sound muted. */
+export const speakerOff = defineSprite([
+  "...#....",
+  "..##....",
+  "####.#.#",
+  "####..#.",
+  "####.#.#",
+  "..##....",
+  "...#....",
+]);
 export const wallet = defineSprite([
   "########",
   "#......#",

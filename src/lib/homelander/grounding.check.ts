@@ -32,4 +32,8 @@ assert.deepEqual(
 );
 assert.deepEqual(groundPatch({ homeType: "landed" }, [{ field: "homeType", quote: "I" }], "I"), {});
 
+// Office days said as weekdays, not digits, still count.
+assert.deepEqual(groundPatch({ officeDays: 5 }, [{ field: "officeDays", quote: "I work every Monday to Friday" }], "I work every Monday to Friday"), { officeDays: 5 });
+assert.deepEqual(groundPatch({ officeDays: 5 }, [{ field: "officeDays", quote: "我星期一到星期五上班" }], "我星期一到星期五上班"), { officeDays: 5 });
+
 console.log("grounding: all checks passed");

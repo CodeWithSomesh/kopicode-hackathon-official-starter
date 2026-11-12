@@ -79,7 +79,6 @@ const heatTag: Record<
 
 export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const t = useT();
-  const siteLang = useLang();
   const plan = plans[planId];
   const bounds = useMemo(() => planBounds(plan), [plan]);
 
@@ -93,10 +92,9 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [view, setView] = useState<"plan" | "3d">("plan");
-  // The console's reply language starts from the EN | Manglish switch; its own toggle overrides until the switch changes.
-  const [langPick, setLangPick] = useState<{ site: typeof siteLang; lang: Lang } | null>(null);
-  const lang: Lang = langPick?.site === siteLang ? langPick.lang : siteLang === "mglish" ? "mg" : "en";
-  const setLang = (l: Lang) => setLangPick({ site: siteLang, lang: l });
+  // Replies follow the site-wide EN | Manglish switch in the header.
+  const siteLang = useLang();
+  const lang: Lang = siteLang === "mglish" ? "mg" : "en";
   const [log, setLog] = useState<LogEntry[]>([]);
   const [speakOn, setSpeakOn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -652,8 +650,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
         <CommandConsole
           log={log}
           lang={lang}
-          onLang={setLang}
-          onRun={(said) => void runCommand(said)}
+          onRun={(t) => void runCommand(t)}
           busy={busy}
           toolbar={<SpeechToolbar speakOn={speakOn} onSpeakOn={setSpeakOn} />}
           extra={

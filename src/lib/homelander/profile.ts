@@ -132,7 +132,7 @@ export type Profile = z.infer<typeof profileSchema>;
 export type ProfileKey = keyof Profile;
 
 /** What Mochi must have before the buyer can move on to swiping, with a plain label for each. */
-export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) => boolean }[] = [
+export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) => boolean; done?: (p: Profile) => boolean }[] = [
   { key: "livingWith", label: tr("Who you live with") },
   { key: "topWorry", label: tr("What worries you most about buying") },
   { key: "workArea", label: tr("Where you work") },
@@ -141,8 +141,14 @@ export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) =
   { key: "preferredAreas", label: tr("Areas you like") },
   { key: "homeType", label: tr("Landed or high-rise") },
   { key: "minBedrooms", label: tr("Bedrooms you need") },
-  { key: "grossRM", label: tr("Monthly salary") },
-  { key: "carRM", label: tr("Loans you're paying") },
+  // Take-home pay is an answer too: Mochi shouldn't ask for the salary again.
+  { key: "grossRM", label: tr("Monthly salary"), done: (p) => filled(p.grossRM) || filled(p.takeHomeRM) },
+  // Any loan answered (a PTPTN amount, "no car loan") settles it; asking per loan type made the call loop.
+  {
+    key: "carRM",
+    label: tr("Loans you're paying"),
+    done: (p) => [p.carRM, p.ptptnRM, p.personalRM, p.housingRM, p.cardBalanceRM].some((v) => v !== undefined),
+  },
   { key: "savingsRM", label: tr("Savings for the down payment") },
   { key: "firstHome", label: tr("First home or not") },
   { key: "age", label: tr("Your age") },
@@ -151,7 +157,7 @@ export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) =
 const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
 
 export function missingEssentials(p: Profile) {
-  return essentials.filter((e) => (e.when ? e.when(p) : true) && !filled(p[e.key]));
+  return essentials.filter((e) => (e.when ? e.when(p) : true) && !(e.done ? e.done(p) : filled(p[e.key])));
 }
 
 /** Merge a patch from Mochi; undefined values never wipe what the buyer already gave. */

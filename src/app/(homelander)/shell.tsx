@@ -121,11 +121,6 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
                   {t("Gamuda view")}
                 </Link>
               </PixPanel>
-              <PixPanel asChild flat>
-                <Link href="/profile" className="px-2 py-1.5 font-pixel text-sm">
-                  {t("Profile")}
-                </Link>
-              </PixPanel>
               <Link href="/login" className="pix-btn inline-flex min-h-9 items-center px-3 text-sm text-white" style={{ "--pix-fill": "var(--color-pandan-deep)" } as React.CSSProperties}>
                 {t("Login")}
               </Link>

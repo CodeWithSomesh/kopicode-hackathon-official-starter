@@ -90,11 +90,22 @@ export function stopAgoraAgent(agentId: string) {
   }).catch(() => undefined);
 }
 
-export function updateAgoraAgent(agentId: string, profile: Profile) {
+type Lang = "en" | "ms" | "zh" | "ta";
+
+export function updateAgoraAgent(agentId: string, profile: Profile, lang?: Lang, replyLang?: Lang) {
   return fetch("/api/agora/update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ agentId, profile }),
+    body: JSON.stringify({ agentId, profile, lang, replyLang }),
+  }).catch(() => undefined);
+}
+
+/** Mochi says its goodbye line now (the form is complete). */
+export function sayGoodbye(agentId: string, lastUserText: string) {
+  return fetch("/api/agora/goodbye", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agentId, lastUserText }),
   }).catch(() => undefined);
 }
 

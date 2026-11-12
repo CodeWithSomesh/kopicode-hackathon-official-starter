@@ -10,10 +10,10 @@ import { unitById, type Unit } from "@/lib/homelander/data";
 import { toIncomeInput, type Profile } from "@/lib/homelander/profile";
 import { homelander, useHomeLander, type HomeLanderState } from "@/lib/homelander/store";
 import { useT } from "@/lib/homelander/i18n/client";
-import { cn } from "@/lib/utils";
 import { BankQuestions, YourNumbers } from "./inputs";
 import { setPrefs, useBankPrefs, type BankPrefs } from "./prefs";
-import { BankList, HowItWorks, NeedAnswers, NextSteps, ResultCard, TargetPicker } from "./results";
+import { BuyerPanel } from "./buyer";
+import { BankList, HowItWorks, NeedAnswers, NextSteps, ResultCard, TargetPicker, summaryText } from "./results";
 
 const noopSubscribe = () => () => {};
 const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
@@ -144,18 +144,36 @@ function Bank({ s, prefs }: { s: HomeLanderState; prefs: BankPrefs }) {
     <div className="grid gap-8">
       <Header />
 
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-8">
-        {/* Phones: open questions first, then results, then the answered questions and numbers. Desktop: questions and numbers in the left column. */}
-        <div className="contents lg:grid lg:min-w-0 lg:gap-6">
-          <div className={cn("min-w-0 lg:order-none", open.length ? "order-1" : "order-3")}>
-            <BankQuestions profile={s.profile} prefs={prefs} />
-          </div>
-          <div className="order-3 min-w-0 lg:order-none">
-            <YourNumbers profile={s.profile} />
-          </div>
-        </div>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:gap-8">
+        {/* Left: who the buyer is and the headline. Sticky on desktop; on phones it comes first, folded. */}
+        <aside
+          aria-label="Your details"
+          className="grid min-w-0 gap-4 lg:sticky lg:top-4 lg:-m-2 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:p-2"
+        >
+          <BuyerPanel
+            profile={s.profile}
+            prefs={prefs}
+            k={result?.k ?? null}
+            top={top ?? null}
+            open={open}
+            summary={top ? summaryText(top, targetUnit) : null}
+          />
+          <details open={open.length > 0 || undefined} className="group">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-full px-4 text-sm font-medium hover:bg-cloud focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-kaya focus-visible:outline-solid [&::-webkit-details-marker]:hidden">
+              {open.length ? `Answer ${open.length} more to see your banks` : "Change your answers"}
+              <svg aria-hidden width="10" height="10" viewBox="0 0 10 10" className="transition-transform group-open:rotate-180">
+                <path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              </svg>
+            </summary>
+            <div className="mt-4 grid gap-4">
+              <BankQuestions profile={s.profile} prefs={prefs} />
+              <YourNumbers profile={s.profile} />
+            </div>
+          </details>
+        </aside>
 
-        <div className="order-2 grid min-w-0 grid-cols-1 gap-6 lg:order-none">
+        {/* Right: every bank the buyer can apply to. */}
+        <div className="grid min-w-0 grid-cols-1 gap-6">
           <TargetPicker homes={homes} target={target} targetUnit={targetUnit} targetPriceRM={targetPriceRM} />
 
           {result && top ? (
@@ -167,10 +185,16 @@ function Bank({ s, prefs }: { s: HomeLanderState; prefs: BankPrefs }) {
                 savingsRM={input?.savingsRM ?? null}
                 firstHome={input?.firstHome ?? false}
               />
-              {maxTenure >= MIN_TENURE ? (
-                <TenurePicker value={prefs.tenureYears} max={maxTenure} current={result.k.tenureYears} />
-              ) : null}
-              <BankList banks={result.banks} k={result.k} hasTarget={targetPriceRM !== null} />
+              <BankList
+                banks={result.banks}
+                k={result.k}
+                hasTarget={targetPriceRM !== null}
+                toolbar={
+                  maxTenure >= MIN_TENURE ? (
+                    <TenurePicker value={prefs.tenureYears} max={maxTenure} current={result.k.tenureYears} />
+                  ) : null
+                }
+              />
               <NextSteps inRange={inRange} top={top} />
             </>
           ) : (
@@ -188,18 +212,18 @@ function TenurePicker({ value, max, current }: { value: number | undefined; max:
   const t = useT();
   const options = Array.from(new Set([max, 30, 25, 20, 15, 10].filter((y) => y <= max && y >= MIN_TENURE)));
   return (
-    <PixPanel flat className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-      <label htmlFor="bank-tenure" className="text-sm font-medium">
-        {t("Loan tenure")}
+    <div className="flex items-center gap-2" title={t("Shorter means a bigger instalment but far less interest.")}>
+      <label htmlFor="bank-tenure" className="text-sm text-ink-soft">
+        {t("Tenure")}
       </label>
       <div className="pix-frame pix-flat focus-within:outline-[3px] focus-within:outline-offset-[6px] focus-within:outline-kaya focus-within:outline-solid">
         <select
           id="bank-tenure"
           value={value === undefined ? "max" : String(current)}
           onChange={(e) => setPrefs({ tenureYears: e.target.value === "max" ? undefined : Number(e.target.value) })}
-          className="h-10 bg-transparent px-3 text-sm font-medium tabular-nums focus-visible:outline-none"
+          className="h-9 bg-transparent px-2 text-sm font-medium tabular-nums focus-visible:outline-none"
         >
-          <option value="max">{t("Longest allowed ({n} years)", { n: max })}</option>
+          <option value="max">{t("Longest ({n} years)", { n: max })}</option>
           {options
             .filter((y) => y !== max)
             .map((y) => (
@@ -209,7 +233,6 @@ function TenurePicker({ value, max, current }: { value: number | undefined; max:
             ))}
         </select>
       </div>
-      <p className="text-xs text-ink-soft">{t("Shorter means a bigger instalment but far less interest.")}</p>
-    </PixPanel>
+    </div>
   );
 }

@@ -804,9 +804,10 @@
   :is(.pix-btn, .pix-frame)[style*="--j-surface"]:is(.text-ink, .text-white) {
     color: var(--color-ink);
   }
-  /* tone="ink" fills are the light ink colour here: their white text goes dark. */
-  :is(.pix-btn, .pix-frame)[style*="--pix-fill:var(--color-ink)"]:is(.text-ink, .text-white),
-  :is(.pix-btn, .pix-frame)[style*="--pix-fill:var(--color-ink)"] :is(.text-ink, .text-white) {
+  /* tone="ink" fills are the light ink colour here: their white text goes dark. Both spellings: server HTML has no space
+     after the colon, but a style React updates on the client (a toggled tone) is re-serialised with one. */
+  :is(.pix-btn, .pix-frame):is([style*="--pix-fill:var(--color-ink)"], [style*="--pix-fill: var(--color-ink)"]):is(.text-ink, .text-white),
+  :is(.pix-btn, .pix-frame):is([style*="--pix-fill:var(--color-ink)"], [style*="--pix-fill: var(--color-ink)"]) :is(.text-ink, .text-white) {
     color: var(--j-on-light);
   }
   /* bg-[color-mix(kaya 10%, white)] (battle highlight rows) was a cream stripe on a dark wall. */

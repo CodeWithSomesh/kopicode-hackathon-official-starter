@@ -8,6 +8,10 @@ export const dynamic = "force-dynamic";
 const Body = z.object({
   agentId: z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/),
   profile: profileSchema,
+  /** The call's language when the recogniser hears only one; omitted on a mixed-language call. */
+  lang: z.enum(["en", "ms", "zh", "ta"]).optional(),
+  /** The language the buyer is speaking right now, so Mochi's next reply matches it. */
+  replyLang: z.enum(["en", "ms", "zh", "ta"]).optional(),
 });
 
 /**
@@ -21,7 +25,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return Response.json({ error: "Bad request" }, { status: 400 });
 
   try {
-    await updateAgentPrompt(parsed.data.agentId, mochiPersonaForVoice(parsed.data.profile));
+    await updateAgentPrompt(parsed.data.agentId, mochiPersonaForVoice(parsed.data.profile, parsed.data.lang, parsed.data.replyLang));
     return Response.json({ ok: true });
   } catch (e) {
     console.error("[agora/update]", e instanceof Error ? e.message : e);

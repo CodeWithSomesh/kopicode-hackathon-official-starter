@@ -5,9 +5,14 @@ import { PixPanel } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import type { Lang, Reply } from "./commands";
 
+/** One language run of what the buyer said; Chinese runs carry pinyin. */
+export type SaidSegment = { text: string; lang: string; pinyin: string | null };
+
 export type LogEntry = {
   id: number;
   said: string;
+  /** What they said split by language, when it has Chinese in it: shown with pinyin. */
+  display?: SaidSegment[];
   replies: Reply[];
   /** Commands the AI turned the request into, when the quick parser couldn't read it. */
   heard?: string[];
@@ -118,7 +123,11 @@ export function CommandConsole({
                 <span className="text-white/60" aria-hidden="true">
                   &gt;{" "}
                 </span>
-                {e.said}
+                {e.display ? (
+                  <Said segments={e.display} raw={e.said} />
+                ) : (
+                  e.said
+                )}
               </p>
               {e.heard?.length ? (
                 <p className="pl-4 text-xs text-white/60">
@@ -195,5 +204,48 @@ export function CommandConsole({
         ))}
       </div>
     </PixPanel>
+  );
+}
+
+/**
+ * The buyer's words with Chinese written in characters and its pinyin above, e.g. a mixed
+ * "tolong move the 沙发 to the left". The raw transcript stays available to screen readers.
+ */
+function Said({ segments, raw }: { segments: SaidSegment[]; raw: string }) {
+  return (
+    <span title={raw}>
+      {segments.map((seg, i) => (
+        <span key={i}>
+          {i > 0 ? " " : null}
+          {seg.lang === "zh" && seg.pinyin ? (
+            <ruby lang="zh-Hans" className="text-base">
+              {seg.text}
+              <rp>(</rp>
+              <rt
+                lang="zh-Latn-pinyin"
+                className="text-[10px] font-normal text-white/70"
+              >
+                {seg.pinyin}
+              </rt>
+              <rp>)</rp>
+            </ruby>
+          ) : (
+            <span
+              lang={
+                seg.lang === "ms"
+                  ? "ms"
+                  : seg.lang === "ta"
+                    ? "ta"
+                    : seg.lang === "zh"
+                      ? "zh-Hans"
+                      : "en"
+              }
+            >
+              {seg.text}
+            </span>
+          )}
+        </span>
+      ))}
+    </span>
   );
 }

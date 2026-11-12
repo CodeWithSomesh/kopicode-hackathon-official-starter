@@ -410,7 +410,12 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
         }),
       });
       if (!res.ok) throw new Error(res.status === 401 ? "signin" : "down");
-      const data = (await res.json()) as { commands: string[]; reply: string };
+      const data = (await res.json()) as {
+        commands: string[];
+        reply: string;
+        said: LogEntry["display"] | null;
+      };
+      const display = data.said ?? undefined;
       const foreign = speech === "zh" || speech === "ta";
       const ai =
         foreign || !data.commands.length
@@ -419,6 +424,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       if (!data.commands.length) {
         addLog({
           said: text,
+          display,
           replies: [],
           aiReply: ai,
           note: voiceOut([], ai),
@@ -429,6 +435,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       applyWorld(r.world);
       addLog({
         said: text,
+        display,
         heard: data.commands,
         aiReply: ai,
         replies: r.replies,

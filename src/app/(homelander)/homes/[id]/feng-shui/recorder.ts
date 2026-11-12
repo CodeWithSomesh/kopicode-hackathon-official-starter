@@ -118,8 +118,10 @@ export async function recordUtterance({
       const rms = Math.sqrt(sum / buf.length);
       const now = performance.now();
       // Learn the room's noise floor in the first moments, then treat clearly louder as speech.
-      if (now - started < 300) floor = Math.max(floor, rms);
-      const loud = rms > Math.max(0.02, floor * 2.5);
+      // Cap it: if the buyer starts talking straight away, the "floor" is their voice, and an
+      // uncapped threshold would sit above it and never hear them.
+      if (now - started < 300) floor = Math.min(0.012, Math.max(floor, rms));
+      const loud = rms > Math.max(0.015, floor * 2.5);
       if (loud) {
         lastLoud = now;
         if (!spokeAt) spokeAt = now;

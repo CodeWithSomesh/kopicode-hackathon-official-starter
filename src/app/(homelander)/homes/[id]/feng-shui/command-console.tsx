@@ -164,6 +164,7 @@ export function CommandConsole({
           value={text}
           onChange={(e) => setText(e.target.value)}
           autoComplete="off"
+          maxLength={400}
           placeholder={
             lang === "mg"
               ? "alih sofa kiri 1 lepas tu pusing dia"

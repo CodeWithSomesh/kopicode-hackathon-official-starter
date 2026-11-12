@@ -35,6 +35,14 @@ import { Typewriter } from "./typewriter";
 import { useAgoraCall } from "./use-agora-call";
 import { useHandsFreeMic } from "./use-handsfree-mic";
 
+type CallLang = "en" | "ms" | "zh" | "ta";
+const CALL_LANGS: { id: CallLang; label: string }[] = [
+  { id: "en", label: "English" },
+  { id: "ms", label: "Bahasa Melayu" },
+  { id: "zh", label: "中文" },
+  { id: "ta", label: "தமிழ்" },
+];
+
 type Msg = { role: "user" | "assistant"; content: string };
 type Turn = {
   reply: string;
@@ -106,6 +114,8 @@ export function OnboardingView() {
   const [complete, setComplete] = useState(false);
   /** Mochi's turn: from sending until it stops talking. The hands-free mic is paused meanwhile. */
   const [replying, setReplying] = useState(false);
+  /** The call's language when the recogniser hears only one (Agora's own, no Speechmatics key). */
+  const [callLang, setCallLang] = useState<CallLang>("en");
   const flash = useCallback((patch: Partial<Profile>) => {
     const keys = filledKeys(patch);
     if (!keys.length) return;
@@ -287,7 +297,7 @@ export function OnboardingView() {
     hush();
     setSpeaking(false);
     recRef.current?.abort();
-    void live.start();
+    void live.start(callLang);
   }
 
   /** Mochi's latest words on the call, as they stream in. */
@@ -324,8 +334,8 @@ export function OnboardingView() {
           </h1>
           <p className="text-ink-soft">
             {liveReady
-              ? "A few minutes about your life, so we only show homes that fit. Call Mochi and just talk, in any language."
-              : "A few minutes about your life, so we only show homes that fit. Speak or type, in any language."}
+              ? "A few minutes about your life, so we only show homes that fit. Call Mochi and just talk, in English, BM, 中文 or தமிழ்."
+              : "A few minutes about your life, so we only show homes that fit. Speak or type, in English, BM, 中文 or தமிழ்."}
           </p>
         </div>
         <PixTag tone="lilac">
@@ -515,15 +525,47 @@ export function OnboardingView() {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center gap-3">
-                  <PixButton tone="pandan" size="lg" onClick={call}>
-                    <Sprite art={phoneSprite} scale={3} />
-                    {live.lines.length ? "Call Mochi again" : "Call Mochi"}
-                  </PixButton>
-                  <p className="min-w-0 flex-1 text-sm text-ink-soft">
-                    Hands-free: just talk, in English, BM, 中文 or தமிழ். Mochi
-                    answers on the spot and fills in your profile as you go.
-                  </p>
+                <div className="grid gap-3">
+                  {live.mixedLanguages ? null : (
+                    <div
+                      role="radiogroup"
+                      aria-label="Language for the call"
+                      className="flex flex-wrap items-center gap-2"
+                    >
+                      <span className="text-xs font-medium uppercase tracking-wide text-ink-soft">
+                        Talk in
+                      </span>
+                      {CALL_LANGS.map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={callLang === l.id}
+                          lang={l.id}
+                          onClick={() => setCallLang(l.id)}
+                          className={cn(
+                            "min-h-9 rounded-md border-2 border-ink px-3 text-sm font-medium transition-colors",
+                            callLang === l.id
+                              ? "bg-ink text-white"
+                              : "bg-white text-ink hover:bg-kaya/40",
+                          )}
+                        >
+                          {l.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <PixButton tone="pandan" size="lg" onClick={call}>
+                      <Sprite art={phoneSprite} scale={3} />
+                      {live.lines.length ? "Call Mochi again" : "Call Mochi"}
+                    </PixButton>
+                    <p className="min-w-0 flex-1 text-sm text-ink-soft">
+                      {live.mixedLanguages
+                        ? "Hands-free: just talk, in English, BM, 中文 or தமிழ், even mixed. Mochi answers on the spot and fills in your profile from what you say."
+                        : "Hands-free: just talk. Mochi listens and answers in the language you picked, and fills in your profile only from what you say."}
+                    </p>
+                  </div>
                 </div>
               )}
               {live.error ? (

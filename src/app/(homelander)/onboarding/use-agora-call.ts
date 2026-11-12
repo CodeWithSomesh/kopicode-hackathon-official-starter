@@ -13,6 +13,7 @@ import {
 } from "@/lib/homelander/agora-client";
 import { filledKeys, type Profile } from "@/lib/homelander/profile";
 import { homelander } from "@/lib/homelander/store";
+import type { MochiLang } from "@/lib/homelander/mochi-brain";
 
 /**
  * A live, hands-free voice call with Mochi on Agora's Conversational AI Engine. The engine does the
@@ -53,6 +54,8 @@ export function useAgoraCall({
   const [agentHere, setAgentHere] = useState(false);
   const [muted, setMuted] = useState(false);
   const [seconds, setSeconds] = useState(0);
+  /** The recogniser hears mixed languages; otherwise the buyer picks one before calling. */
+  const [mixedLanguages, setMixedLanguages] = useState(false);
 
   const call = useRef<LiveCall | null>(null);
   const agentId = useRef<string | null>(null);
@@ -66,8 +69,10 @@ export function useAgoraCall({
   // Is Agora set up on the server?
   useEffect(() => {
     let alive = true;
-    void agoraStatus().then((ok) => {
-      if (alive) setStatus(ok ? "ready" : "unavailable");
+    void agoraStatus().then((s) => {
+      if (!alive) return;
+      setMixedLanguages(s.mixedLanguages);
+      setStatus(s.configured ? "ready" : "unavailable");
     });
     return () => {
       alive = false;
@@ -202,7 +207,7 @@ export function useAgoraCall({
     setMuted(false);
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (lang: MochiLang = "en") => {
     if (call.current || status === "connecting") return;
     setError(null);
     setStatus("connecting");
@@ -217,7 +222,7 @@ export function useAgoraCall({
       doneUpTo: 0,
     };
     try {
-      const session = await startAgoraSession(homelander.snapshot().profile);
+      const session = await startAgoraSession(homelander.snapshot().profile, lang);
       agentId.current = session.agentId;
       call.current = await joinLiveCall(session, {
         onAgentSpeaking: setAgentSpeaking,
@@ -298,6 +303,7 @@ export function useAgoraCall({
     thinking,
     muted,
     seconds,
+    mixedLanguages,
     start,
     hangUp,
     toggleMute,

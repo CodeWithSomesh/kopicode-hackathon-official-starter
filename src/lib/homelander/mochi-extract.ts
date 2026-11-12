@@ -3,7 +3,8 @@ import { groq } from "@ai-sdk/groq";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
-import { mochiSystemPrompt, type MochiMessage } from "./mochi-brain";
+import { groundPatch } from "./grounding";
+import { evidenceWire, mochiSystemPrompt, type MochiMessage } from "./mochi-brain";
 import { legacyProfileKeys, profileSchema, type Profile } from "./profile";
 
 /**
@@ -36,11 +37,12 @@ const patchWire = z.object(
 
 const extractSchema = z.object({
   patch: patchWire.describe("Every field the buyer stated or clearly implied in their LATEST message(s); null for everything else."),
+  evidence: evidenceWire,
 });
 
 const TASK = `IMPORTANT: this time you are NOT replying to the buyer. Mochi is talking to them live and has already answered.
 You are only taking notes. Return "patch" for everything the buyer said in the user messages below, following "Rules for patch" above (here "LATEST message" means all the user messages below).
-The transcript comes from speech recognition, so expect small mistakes and mixed languages. Assistant messages are only context: never take values from what Mochi said unless the buyer clearly confirmed it ("yes", "betul", "对").`;
+The transcript comes from speech recognition, so expect small mistakes and mixed languages. Assistant messages are only context: never take values from what Mochi said. If a user line looks garbled or misheard, it says nothing: leave its fields null.`;
 
 /** "No other debts" in any of Mochi's languages (same rule as mochiTurn): unset loan fields become 0. */
 const NO_DEBT = /\b(no (other )?(debts?|loans?|commitments?)|debt[- ]free|tiada (lagi )?(hutang|pinjaman)|takde (hutang|pinjaman)|tak ada hutang)\b|没有(其他)?(贷款|债务|欠债)|கடன் இல்லை/i;
@@ -55,7 +57,7 @@ async function generate(model: Parameters<typeof generateText>[0]["model"], mess
     maxRetries: retries,
     providerOptions: groqReasoning ? { groq: { reasoningEffort: "low" } } : undefined,
   });
-  return output.patch;
+  return output;
 }
 
 /** The profile fields the buyer just gave, validated one by one; {} when there's nothing new. */
@@ -64,7 +66,7 @@ export async function mochiExtract(transcript: MochiMessage[], profile: Profile)
   const userText = messages.filter((m) => m.role === "user").map((m) => m.content).join(" ");
   if (!userText.trim()) return {};
 
-  let raw: Record<string, unknown> | undefined;
+  let raw: z.infer<typeof extractSchema> | undefined;
   if (!process.env.GROQ_API_KEY) {
     raw = await generate(env.aiModel, messages, profile, 2, false);
   } else {
@@ -84,7 +86,12 @@ export async function mochiExtract(transcript: MochiMessage[], profile: Profile)
 
   // Same clean-up as mochiTurn: drop nulls, check each field alone, keep worries consistent.
   const patch: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(raw)) {
+  const grounded = groundPatch(raw.patch, raw.evidence, userText);
+  if (process.env.NODE_ENV !== "production") {
+    const dropped = Object.keys(raw.patch).filter((k) => raw.patch[k as keyof typeof raw.patch] !== null && !(k in grounded));
+    if (dropped.length) console.info("[mochi-extract] not in the buyer's words, dropped:", dropped.join(", "), JSON.stringify(raw.evidence));
+  }
+  for (const [k, v] of Object.entries(grounded)) {
     if (v === null) continue;
     const ok = profileSchema.shape[k as keyof Profile].safeParse(v);
     if (ok.success) patch[k] = ok.data;

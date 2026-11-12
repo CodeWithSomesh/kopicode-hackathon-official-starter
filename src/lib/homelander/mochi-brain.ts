@@ -3,6 +3,7 @@ import { groq } from "@ai-sdk/groq";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import { EVIDENCE_RULE, groundPatch } from "./grounding";
 import { legacyProfileKeys, missingEssentials, painPointLabel, painPoints, profileSchema, type Profile } from "./profile";
 
 /**
@@ -43,10 +44,21 @@ const patchWire = z.object(
   ) as { [K in WireKey]: z.ZodNullable<ReturnType<(typeof profileSchema.shape)[K]["unwrap"]>> },
 );
 
+/** The buyer's own words behind each patch field; fields without them are dropped (see grounding.ts). */
+export const evidenceWire = z
+  .array(
+    z.object({
+      field: z.enum(Object.keys(patchWire.shape) as [WireKey, ...WireKey[]]),
+      quote: z.string().describe("The buyer's exact words, copied verbatim from a user message."),
+    }),
+  )
+  .describe("One entry per non-null patch field: the buyer's exact words that state it.");
+
 const turnSchema = z.object({
   reply: z.string().describe("What Mochi says out loud next. 1 to 3 short spoken sentences, ending with exactly one question unless wrapping up."),
   lang: z.enum(mochiLangs).describe("Language of the reply: en (Malaysian English), ms, zh (Mandarin, simplified), ta (Tamil)."),
   patch: patchWire.describe("Every field the buyer stated or clearly implied in their LATEST message; null for everything else."),
+  evidence: evidenceWire,
   complete: z.boolean().describe("True only when nothing essential is missing and Mochi has said the wrap-up line."),
 });
 
@@ -97,6 +109,7 @@ ${JOB}
 
 Rules for "patch"
 - Only fields from the buyer's LATEST message. Never invent values. Every other field is null.
+${EVIDENCE_RULE}
 - Money: monthly RM numbers ("8k" = 8000, "RM 2.5k" = 2500). savingsRM and cardBalanceRM are totals, not monthly. A worry can carry a number too: "I only saved 30k" also sets savingsRM to 30000.
 - If they say they have no loans of some kind, set those loan fields to 0. "No car loan" sets carRM to 0.
 - livingWith: alone | partner | partner_kids | parents | friends | other. householdSize counts everyone who will live in the home, the buyer included ("me, my wife and two kids" = 4).
@@ -118,12 +131,16 @@ If this is the first turn and the buyer hasn't spoken yet, greet them in English
  * The same Mochi for a live voice agent that only talks (no JSON, no patch): persona, what to ask
  * and what's already known. Something else records the answers.
  */
-export function mochiPersonaForVoice(profile: Profile) {
+export function mochiPersonaForVoice(profile: Profile, callLang?: MochiLang) {
   const missing = missingEssentials(profile).map((m) => `- ${m.label}`);
+  // On a one-language call the recogniser only hears that language, so Mochi must stay in it.
+  const langRule = callLang
+    ? `\n\nLanguage of this call: ${langName[callLang]}. The buyer chose it before calling and the speech recogniser only understands ${langName[callLang]}. Always reply in ${langName[callLang]}, even if a line looks like another language. If they want another language, tell them kindly to hang up and pick it before calling again.`
+    : "";
   const known = Object.keys(profile).length ? JSON.stringify(profile) : "(nothing yet)";
   return `You are Mochi, a friendly helper bot who guides first-time buyers to a Gamuda Land home in the HomeLander app. You are talking to the buyer live on a voice call. Just talk: everything you say is spoken aloud, so never read out JSON, field names, brackets or lists.
 
-${PERSONA}
+${PERSONA}${langRule}
 
 ${JOB}
 
@@ -133,7 +150,7 @@ ${known}
 Still to find out, roughly in this order:
 ${missing.length ? missing.join("\n") : "(nothing essential: wrap up warmly and tell them you'll show homes that fit)"}${worryNudge(profile)}
 
-If the buyer hasn't spoken yet, greet them briefly, introduce yourself as Mochi, here to help find a home that fits their life, and ask who they will be living with.`;
+If the buyer hasn't spoken yet, greet them briefly${callLang ? ` in ${langName[callLang]}` : ""}, introduce yourself as Mochi, here to help find a home that fits their life, and ask who they will be living with.`;
 }
 
 /** Rough language of a message: script first (Tamil, Chinese), then common Malay words. */
@@ -197,7 +214,8 @@ export async function mochiTurn(messages: MochiMessage[], profile: Profile): Pro
 
   // Drop the "not mentioned" nulls and check each value on its own, so one bad field never loses the rest.
   const patch: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(output.patch)) {
+  const grounded = lastUser ? groundPatch(output.patch, output.evidence, lastUser) : {};
+  for (const [k, v] of Object.entries(grounded)) {
     if (v === null) continue;
     const ok = profileSchema.shape[k as keyof Profile].safeParse(v);
     if (ok.success) patch[k] = ok.data;

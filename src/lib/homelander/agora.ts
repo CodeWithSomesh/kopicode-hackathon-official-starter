@@ -138,6 +138,16 @@ function basicAuth() {
   return `Basic ${Buffer.from(`${c.customerId}:${c.customerSecret}`).toString("base64")}`;
 }
 
+/** Agora's ARES hears one language per call; these are the codes for Mochi's four. */
+const ARES_LANG = { en: "en-US", ms: "ms-MY", zh: "zh-CN", ta: "ta-IN" } as const;
+export type CallLang = keyof typeof ARES_LANG;
+
+/** True when the recogniser hears English, Malay, Mandarin and Tamil mixed in one call (Speechmatics). */
+export function agoraMixedLanguages() {
+  const c = read();
+  return c.asrVendor === "speechmatics" && c.asrLanguage === "cmn_en_ms_ta";
+}
+
 /** Words the recognisers should expect. */
 const KEYWORDS = ["Mochi", "Gamuda", "Gamuda Land", "HomeLander", "LRT", "MRT", "KTM", "PTPTN", "CCRIS", "Kajang", "Cyberjaya", "Puchong", "Semenyih", "Rawang", "Shah Alam"];
 
@@ -149,7 +159,7 @@ const KEYWORDS = ["Mochi", "Gamuda", "Gamuda Land", "HomeLander", "LRT", "MRT", 
  * - ARES (Agora's own, no key): https://docs.agora.io/en/ai/models/asr/ares
  * - Microsoft: https://docs.agora.io/en/ai/models/asr/microsoft
  */
-function asrConfig() {
+function asrConfig(lang: CallLang) {
   const c = read();
   if (c.asrVendor === "speechmatics") {
     return {
@@ -169,7 +179,8 @@ function asrConfig() {
       params: { key: c.azureKey, region: c.azureRegion, language: c.asrLanguage, phrase_list: KEYWORDS },
     };
   }
-  return { vendor: "ares", language: c.asrLanguage, keywords: KEYWORDS };
+  // AGORA_ASR_LANGUAGE pins one language; otherwise the language the buyer picked for this call.
+  return { vendor: "ares", language: process.env.AGORA_ASR_LANGUAGE || ARES_LANG[lang], keywords: KEYWORDS };
 }
 
 /**
@@ -260,7 +271,7 @@ function llmParams() {
   };
 }
 
-export type JoinInput = { channel: string; userUid: number; systemPrompt: string; greeting: string };
+export type JoinInput = { channel: string; userUid: number; systemPrompt: string; greeting: string; lang: CallLang };
 
 export class AgoraError extends Error {
   constructor(
@@ -289,7 +300,7 @@ async function failure(res: Response, what: string) {
 }
 
 /** Starts Mochi in the channel. Returns the agent id needed to update or stop it. */
-export async function joinAgent({ channel, userUid, systemPrompt, greeting }: JoinInput) {
+export async function joinAgent({ channel, userUid, systemPrompt, greeting, lang }: JoinInput) {
   const body = {
     name: `mochi-${channel}`,
     properties: {
@@ -312,7 +323,7 @@ export async function joinAgent({ channel, userUid, systemPrompt, greeting }: Jo
         max_history: 12,
         params: llmParams(),
       },
-      asr: asrConfig(),
+      asr: asrConfig(lang),
       tts: { ...ttsConfig(), skip_patterns: [3, 4] },
       // Turn-taking and barge-in use the engine defaults: Agora VAD, 640 ms of silence ends the buyer's
       // turn, and talking over Mochi interrupts it (properties.interruption.enable defaults to true).

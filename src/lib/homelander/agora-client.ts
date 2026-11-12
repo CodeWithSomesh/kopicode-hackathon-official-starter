@@ -55,21 +55,23 @@ export type LiveHandlers = {
 
 export class MicDeniedError extends Error {}
 
-export async function agoraStatus(): Promise<boolean> {
+/** Whether the live call is set up, and whether it hears mixed languages or one picked per call. */
+export async function agoraStatus(): Promise<{ configured: boolean; mixedLanguages: boolean }> {
   try {
     const res = await fetch("/api/agora/status", { cache: "no-store" });
-    if (!res.ok) return false;
-    return Boolean(((await res.json()) as { configured?: boolean }).configured);
+    if (!res.ok) return { configured: false, mixedLanguages: false };
+    const data = (await res.json()) as { configured?: boolean; mixedLanguages?: boolean };
+    return { configured: Boolean(data.configured), mixedLanguages: Boolean(data.mixedLanguages) };
   } catch {
-    return false;
+    return { configured: false, mixedLanguages: false };
   }
 }
 
-export async function startAgoraSession(profile: Profile): Promise<AgoraSession> {
+export async function startAgoraSession(profile: Profile, lang: "en" | "ms" | "zh" | "ta"): Promise<AgoraSession> {
   const res = await fetch("/api/agora/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ profile }),
+    body: JSON.stringify({ profile, lang }),
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };

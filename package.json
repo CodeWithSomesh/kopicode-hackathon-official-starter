@@ -9,8 +9,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check:geo": "node src/lib/first-key/geo.ts",
+    "check:grounding": "node --no-warnings src/lib/homelander/grounding.check.ts",
     "format": "prettier --write .",
-    "check": "npm run lint && npm run typecheck && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run check:grounding && npm run build"
   },
   "dependencies": {
     "@ai-sdk/groq": "^4.0.81",

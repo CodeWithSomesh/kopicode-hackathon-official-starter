@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { PixButton } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import { cn } from "@/lib/utils";
-import { setMapNight, useMapNight } from "@/components/first-key/use-map-colors";
+import { setMapDusk, setMapNight, useMapDusk, useMapNight } from "@/components/first-key/use-map-colors";
 import { mapSprites } from "./map-data";
 
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -21,10 +21,21 @@ export type ControlMap = MapLike & {
 };
 
 /** Zoom, compass and 2D/3D buttons. They drive the MapLibre map handed up by the map component. */
-export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelOpen: boolean }) {
+export function MapControls({ map, panelOpen, cycleLight }: { map: ControlMap | null; panelOpen: boolean; cycleLight?: boolean }) {
   const [bearing, setBearing] = useState(0);
   const [is3D, setIs3D] = useState(true);
   const night = useMapNight();
+  const dusk = useMapDusk() && !night;
+  // Mapbox: Day -> Dusk -> Night -> Day. MapLibre has only day and night.
+  const light = night ? "Night" : dusk ? "Dusk" : "Day";
+  const nextLight = () => {
+    if (!cycleLight) return setMapNight(!night);
+    if (night) setMapNight(false);
+    else if (dusk) {
+      setMapDusk(false);
+      setMapNight(true);
+    } else setMapDusk(true);
+  };
   useEffect(() => {
     if (!map) return;
     const onRotate = () => setBearing(map.getBearing());
@@ -62,13 +73,14 @@ export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelO
       </PixButton>
       <PixButton
         size="sm"
-        tone={night ? "kaya" : "white"}
+        tone={night || dusk ? "kaya" : "white"}
         className="size-10 px-0 font-pixel-label text-[11px] uppercase"
-        onClick={() => setMapNight(!night)}
-        aria-pressed={night}
-        aria-label="Night view of the map and the building"
+        onClick={nextLight}
+        {...(cycleLight
+          ? { "aria-label": `Time of day: ${light.toLowerCase()}. Switch to ${(night ? "day" : dusk ? "night" : "dusk")}` }
+          : { "aria-pressed": night, "aria-label": "Night view of the map and the building" })}
       >
-        Night
+        {cycleLight ? light : "Night"}
       </PixButton>
     </div>
   );

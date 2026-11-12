@@ -140,7 +140,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
             setDevId(undefined);
           }}
         />
-        <MapControls map={map} panelOpen={!!info && !burstOpen} />
+        <MapControls map={map} panelOpen={!!info && !burstOpen} cycleLight={HAS_MAPBOX} />
         {info && !burstOpen && (
           <TownPanel
             key={info.t.id}

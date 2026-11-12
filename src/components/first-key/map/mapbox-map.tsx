@@ -13,7 +13,7 @@ import { useHomeLander } from "@/lib/homelander/store";
 import { pillLean, pillLeanPhone, pillNudgePhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import type { ControlMap } from "@/app/(homelander)/_landing/map-controls";
-import { useMapColors } from "../use-map-colors";
+import { useMapColors, useMapDusk } from "../use-map-colors";
 import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 
@@ -83,10 +83,16 @@ type Props = {
 };
 
 // Standard's basemap config: calm "faded" theme so our pills and towers stand out; no POI/transit icons (our own pins do that job).
-const standardConfig = (dark: boolean) => ({
-  lightPreset: dark ? "night" : "day",
-  theme: "faded",
+// Detail on (Standard's own options, read from the style's schema): default theme (faded washes the facades out), 3D buildings,
+// facades (off by default), landmarks, trees and objects. Light preset: night > dusk > day.
+const standardConfig = (dark: boolean, dusk: boolean) => ({
+  lightPreset: dark ? "night" : dusk ? "dusk" : "day",
+  theme: "default",
   show3dObjects: true,
+  show3dBuildings: true,
+  show3dFacades: true,
+  show3dLandmarks: true,
+  show3dTrees: true,
   showLandmarkIcons: true,
   showPointOfInterestLabels: false,
   showTransitLabels: false,
@@ -103,6 +109,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
   });
   const reduced = usePrefersReducedMotion();
   const { colors, dark } = useMapColors();
+  const dusk = useMapDusk() && !dark;
 
   const [lit, setLit] = useState(NIGHT_STEPS);
   const idFor = (step: number) =>
@@ -114,7 +121,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
   const applyConfig = () => {
     const map = mapRef.current?.getMap();
     if (!map) return;
-    for (const [k, v] of Object.entries(standardConfig(dark))) {
+    for (const [k, v] of Object.entries(standardConfig(dark, dusk))) {
       try {
         map.setConfigProperty("basemap", k, v);
       } catch {
@@ -126,7 +133,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     if (loaded) applyConfig();
     // applyConfig only reads dark
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dark, loaded]);
+  }, [dark, dusk, loaded]);
 
   // Our township glass textures (same drawing as the MapLibre map); all night-reveal frames up front.
   useEffect(() => {
@@ -220,7 +227,18 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
   const from = selectedId ? centres[selectedId] : undefined;
   const poiFit = useNamedPois(() => mapRef.current?.getMap(), loaded && showTownship, from);
   const sel = selectedId ?? "";
-  const night = dark ? 0.9 : 0; // our towers glow a little at night, like Standard's own lit windows
+  const night = dark ? 0.9 : dusk ? 0.35 : 0; // our towers glow a little at dusk and night, like Standard's own lit windows
+  // Same finish on all three tower layers: rounded edges, soft contact shadow (ambient occlusion) on walls and ground, cast shadows.
+  const finish = {
+    layout: { "fill-extrusion-edge-radius": 0.25 },
+    paint: {
+      "fill-extrusion-ambient-occlusion-intensity": 0.4,
+      "fill-extrusion-ambient-occlusion-wall-radius": 3,
+      "fill-extrusion-ambient-occlusion-ground-radius": 6,
+      "fill-extrusion-ambient-occlusion-ground-attenuation": 0.5,
+      "fill-extrusion-cast-shadows": true,
+    },
+  } as const;
 
   const railCasing: LayerProps = {
     id: "homelander-rail-casing",
@@ -263,7 +281,9 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     slot: "middle",
     minzoom: 14,
     filter: ["!=", ["get", "id"], sel],
+    layout: finish.layout,
     paint: {
+      ...finish.paint,
       "fill-extrusion-height": ["get", "height"],
       "fill-extrusion-base": 0,
       "fill-extrusion-opacity": 1,
@@ -277,7 +297,9 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     slot: "middle",
     minzoom: 14,
     filter: ["!=", ["get", "id"], sel],
+    layout: finish.layout,
     paint: {
+      ...finish.paint,
       "fill-extrusion-height": ["+", ["get", "height"], 0.6],
       "fill-extrusion-base": ["get", "height"],
       "fill-extrusion-opacity": 1,
@@ -290,7 +312,9 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     slot: "middle",
     minzoom: 14,
     filter: ["==", ["get", "id"], sel],
+    layout: finish.layout,
     paint: {
+      ...finish.paint,
       "fill-extrusion-height": ["get", "height"],
       "fill-extrusion-base": 0,
       "fill-extrusion-opacity": 0.92,

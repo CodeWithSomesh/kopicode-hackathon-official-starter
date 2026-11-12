@@ -62,6 +62,19 @@ export function setMapNight(on: boolean) {
   } catch {}
   listeners.forEach((l) => l());
 }
+// Dusk (Mapbox's Standard only): a light preset, not a palette, so the UI and the 3D shot keep their day colours.
+let mapDusk = false;
+export function setMapDusk(on: boolean) {
+  mapDusk = on;
+  listeners.forEach((l) => l());
+}
+export function useMapDusk(): boolean {
+  return useSyncExternalStore(
+    (cb) => (listeners.add(cb), () => void listeners.delete(cb)),
+    () => mapDusk,
+    () => false,
+  );
+}
 export function useMapNight(): boolean {
   return useSyncExternalStore(
     (cb) => (listeners.add(cb), () => void listeners.delete(cb)),

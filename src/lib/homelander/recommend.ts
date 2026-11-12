@@ -154,11 +154,18 @@ export function scoreUnit(unit: Unit, p: Profile, budget: Budget | null, work: A
   };
 }
 
-/** Every home, best match first. Sold-out homes and homes far over budget sink to the end. */
+/**
+ * Homes we can stand behind: price and size from gamudaland.com.my. Homes whose figures were
+ * estimated for the demo (source "sample") stay on the map but never reach the deck or Battle.
+ */
+export const realUnits = units.filter((u) => u.source !== "sample");
+
+/** Every real home, best match first. Sold-out homes and homes far over budget sink to the end. */
 export function recommend(p: Profile, budget: Budget | null, work: Anchor | null): Pick[] {
-  return units.map((u) => scoreUnit(u, p, budget, work)).sort((a, b) => b.score - a.score);
+  return realUnits.map((u) => scoreUnit(u, p, budget, work)).sort((a, b) => b.score - a.score);
 }
 
 export const LIKES_TO_BATTLE = 3;
-export const DECK_LIKE_LIMIT = 10;
+/** Likes are capped: five focused picks give Uncle a sharper read than a long list. */
+export const DECK_LIKE_LIMIT = 5;
 export const BATTLE_MAX = 5;

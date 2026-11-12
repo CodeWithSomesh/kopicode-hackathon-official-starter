@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
 import { rm, unitById } from "@/lib/homelander/data";
-import { useHomeLander } from "@/lib/homelander/store";
+import { homelander, useHomeLander } from "@/lib/homelander/store";
 
 export function ProfileView() {
   const s = useHomeLander();
+  const router = useRouter();
   const rows: [string, string][] = [
     ["Homes liked", String(s.liked.length)],
     ["Bank estimate", s.budget ? `Up to ${rm(s.budget.maxPriceRM)}` : "Not checked yet"],
@@ -30,9 +32,21 @@ export function ProfileView() {
             </div>
           ))}
         </dl>
-        <PixButton asChild tone="pandan" size="sm" className="justify-self-start">
-          <Link href="/onboarding">Chat with Uncle again</Link>
-        </PixButton>
+        <div className="flex flex-wrap gap-3">
+          <PixButton asChild tone="pandan" size="sm">
+            <Link href="/onboarding">Chat with Uncle again</Link>
+          </PixButton>
+          <PixButton
+            size="sm"
+            onClick={() => {
+              if (!window.confirm("Clear your answers, likes and bank estimate, and start fresh with Uncle?")) return;
+              homelander.reset();
+              router.push("/onboarding");
+            }}
+          >
+            Start over
+          </PixButton>
+        </div>
       </PixPanel>
       <PixPanel className="grid gap-3 p-5">
         <h2 className="font-pixel text-xl font-bold">Shortlist</h2>

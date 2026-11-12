@@ -15,6 +15,7 @@ import { townInfoById } from "@/app/(homelander)/_landing/map-data";
 import { MapControls } from "@/app/(homelander)/_landing/map-controls";
 import { TownPanel } from "@/app/(homelander)/_landing/town-panel";
 import { TownshipList } from "@/app/(homelander)/_landing/township-list";
+import { MapProvider, useMapView } from "@/components/first-key/burst/map-view";
 
 // Both scenes need the browser's WebGL: never render them on the server.
 const NeighbourhoodMap = dynamic(() => import("@/components/first-key/map/neighbourhood-map"), { ssr: false });
@@ -34,7 +35,16 @@ const BuildingBurst = dynamic(
 
 type Props = { initialBuilding?: string; initialUnit?: string; initialDev?: string };
 
-export function FindClient({ initialBuilding, initialUnit, initialDev }: Props) {
+// MapProvider lets the page read the map's camera at hand-over, so the 3D view starts on the same frame.
+export function FindClient(props: Props) {
+  return (
+    <MapProvider>
+      <Find {...props} />
+    </MapProvider>
+  );
+}
+
+function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   const valid = township.buildings.some((b) => b.id === initialBuilding);
   const [selectedId, setSelectedId] = useState<string | undefined>(valid ? initialBuilding : undefined);
   const [unitId, setUnitId] = useState<string | undefined>(valid ? initialUnit : undefined);
@@ -46,6 +56,8 @@ export function FindClient({ initialBuilding, initialUnit, initialDev }: Props) 
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const [burstOpen, setBurstOpen] = useState(false);
   const [burstMounted, setBurstMounted] = useState(false); // keep the 3D scene once built; it idles on demand
+  const [leaving, setLeaving] = useState(false); // the 3D shot plays back out before the map returns
+  const [view, captureView] = useMapView();
   const overlay = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
 
@@ -62,30 +74,27 @@ export function FindClient({ initialBuilding, initialUnit, initialDev }: Props) 
 
   const info = devId ? townInfoById[devId] : undefined;
 
-  // Hand-over: the 3D view fades and settles in over the map; the map has stopped moving underneath.
+  // Hand-over: a crossfade on the matched camera pose; the 3D shot then moves on its own.
   useEffect(() => {
     const el = overlay.current;
     if (!el || !burstMounted) return;
     if (reduced) {
-      gsap.set(el, { autoAlpha: burstOpen ? 1 : 0, scale: 1 });
+      gsap.set(el, { autoAlpha: burstOpen ? 1 : 0 });
       return;
     }
-    const tween = gsap.to(el, {
-      autoAlpha: burstOpen ? 1 : 0,
-      scale: burstOpen ? 1 : 0.97,
-      duration: burstOpen ? 0.6 : 0.35,
-      ease: "power2.inOut",
-    });
+    const tween = gsap.to(el, { autoAlpha: burstOpen ? 1 : 0, duration: 0.4, ease: "power1.inOut" });
     return () => void tween.kill();
   }, [burstOpen, burstMounted, reduced]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setBurstOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setLeaving(true);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const open = () => {
+    captureView();
+    setLeaving(false);
     setBurstMounted(true);
     setBurstOpen(true);
   };
@@ -143,7 +152,10 @@ export function FindClient({ initialBuilding, initialUnit, initialDev }: Props) 
       )}
 
       {/* Map credit: always visible (above the tab bar on phones) */}
-      <p className="absolute right-3 bottom-[104px] z-10 bg-white/90 px-1.5 py-0.5 text-[10px] leading-tight text-ink lg:right-2 lg:bottom-2">
+      <p
+        className="absolute right-3 bottom-[104px] z-10 px-1.5 py-0.5 text-[10px] leading-tight text-ink lg:right-2 lg:bottom-2"
+        style={{ background: "color-mix(in srgb, var(--j-surface, white) 90%, transparent)" }} // the theme's surface, so night is not a white box
+      >
         {process.env.NEXT_PUBLIC_PMTILES_URL ? (
           <>
             <a href="https://protomaps.com" target="_blank" rel="noreferrer" className="underline">Protomaps</a> ©{" "}
@@ -160,19 +172,19 @@ export function FindClient({ initialBuilding, initialUnit, initialDev }: Props) 
 
       <div
         ref={overlay}
-        className="invisible absolute inset-0 z-10 flex flex-col bg-background pt-[76px] pb-[104px] opacity-0 lg:pb-0"
+        className="invisible absolute inset-0 z-10 opacity-0"
         aria-hidden={!burstOpen}
         inert={!burstOpen}
       >
-        <div className="flex items-center justify-between border-b bg-card px-4 py-2 text-card-foreground">
+        <div className="absolute inset-x-0 top-[76px] z-10 flex items-center justify-between border-b bg-card/90 px-4 py-2 text-card-foreground backdrop-blur">
           <h1 className="text-base font-semibold">
             {building ? `Block ${building.block}: ${building.floors} floors, ${building.units.length} units` : "Building"}
           </h1>
-          <Button variant="ghost" size="icon" aria-label="Back to the map" onClick={() => setBurstOpen(false)}>
+          <Button variant="ghost" size="icon" aria-label="Back to the map" onClick={() => setLeaving(true)}>
             <X />
           </Button>
         </div>
-        <div className="min-h-0 flex-1">
+        <div className="absolute inset-0">
           {building && burstMounted && (
             <BuildingBurst
               key={building.id}
@@ -180,6 +192,19 @@ export function FindClient({ initialBuilding, initialUnit, initialDev }: Props) 
               selectedUnitId={unitId}
               onSelectUnit={(u: Unit) => setUnitId(u.unit)}
               active={burstOpen}
+              open={burstOpen && !leaving}
+              view={view}
+              onClosed={() =>
+                // the 3D shot is back on the map's pose: crossfade out while the map is still paused, then let it fly out
+                gsap.to(overlay.current, {
+                  autoAlpha: 0,
+                  duration: reduced ? 0 : 0.35,
+                  onComplete: () => {
+                    setLeaving(false);
+                    setBurstOpen(false);
+                  },
+                })
+              }
             />
           )}
         </div>

@@ -99,7 +99,9 @@ export function OnboardingView() {
     hush();
     setSpeaking(false);
     setDraft("");
-    void ask([...messages, { role: "user", content: t }]);
+    const history: Msg[] = [...messages, { role: "user", content: t }];
+    setMessages(history); // show it right away; Uncle's reply is appended when it arrives
+    void ask(history);
   }
 
   function listen() {

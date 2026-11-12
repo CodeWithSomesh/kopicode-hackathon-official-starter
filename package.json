@@ -13,6 +13,7 @@
     "check": "npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
+    "@ai-sdk/groq": "^4.0.81",
     "@ai-sdk/react": "^4.0.174",
     "@protomaps/basemaps": "5.7.2",
     "@react-spring/three": "10.1.2",

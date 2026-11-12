@@ -20,12 +20,15 @@ export async function POST(req: Request) {
     return Response.json(await uncleTurn(parsed.data.messages, parsed.data.profile));
   } catch (e) {
     console.error("[uncle/turn]", e);
-    const noKey = !process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL;
+    const noKey = !process.env.GROQ_API_KEY && !process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL;
+    const needsCard = e instanceof Error && /credit card/i.test(e.message);
     return Response.json(
       {
         error: noKey
-          ? "Uncle has no brain yet: add AI_GATEWAY_API_KEY to .env.local and restart the dev server."
-          : "Uncle lost his train of thought. Try that again.",
+          ? "Uncle has no brain yet: add GROQ_API_KEY (or AI_GATEWAY_API_KEY) to .env.local and restart the dev server."
+          : needsCard
+            ? "Uncle's AI Gateway needs a credit card on the Vercel team before it serves requests (it unlocks the free credits)."
+            : "Uncle lost his train of thought. Try that again.",
       },
       { status: 503 },
     );

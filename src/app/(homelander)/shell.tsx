@@ -82,16 +82,16 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
                     href={t.href}
                     aria-current={isActive(t.href) ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-1.5 px-2 py-1.5 font-pixel text-sm leading-none whitespace-nowrap transition-colors",
+                      "flex items-center gap-1.5 px-2 py-1.5 font-pixel text-sm leading-none whitespace-nowrap transition-colors 2xl:gap-2 2xl:px-3 2xl:text-base",
                       isActive(t.href) ? "bg-kaya" : "hover:bg-sky/40",
                     )}
                   >
                     <Sprite
                       art={t.icon}
                       scale={2}
-                      // Six tabs with icons need about 1,100 px; below xl (1280) the icons drop so the header fits.
+                      // Six tabs fit the header without icons; they return on wide (2xl) screens.
                       className={cn(
-                        "hidden xl:block",
+                        "hidden 2xl:block",
                         isActive(t.href) ? "text-ink" : "text-ink-soft",
                       )}
                     />

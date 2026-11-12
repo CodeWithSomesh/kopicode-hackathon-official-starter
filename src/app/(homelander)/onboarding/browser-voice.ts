@@ -30,14 +30,22 @@ export function canSpeak() {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-/** A Malaysian voice reads the BM words best; fall back to any English voice. */
-function pickVoice() {
+export type VoiceLang = "en" | "ms" | "zh" | "ta";
+
+/** Speech-recognition locale for each language the buyer can talk in. */
+export const listenLocale: Record<VoiceLang, string> = { en: "en-MY", ms: "ms-MY", zh: "zh-CN", ta: "ta-IN" };
+
+/** Pick a voice for the reply's language; English replies prefer a Malaysian voice for the BM words. */
+function pickVoice(lang: VoiceLang) {
   const voices = window.speechSynthesis.getVoices();
   const by = (prefix: string) => voices.find((v) => v.lang.toLowerCase().replace("_", "-").startsWith(prefix));
-  return by("ms-my") ?? by("ms") ?? by("en-gb") ?? by("en");
+  if (lang === "zh") return by("zh-cn") ?? by("zh");
+  if (lang === "ta") return by("ta-my") ?? by("ta");
+  if (lang === "ms") return by("ms-my") ?? by("ms") ?? by("id");
+  return by("en-my") ?? by("en-gb") ?? by("en");
 }
 
-export function speak(text: string, on: { start?: () => void; end?: () => void } = {}) {
+export function speak(text: string, on: { start?: () => void; end?: () => void } = {}, lang: VoiceLang = "en") {
   if (!canSpeak()) {
     on.end?.();
     return;
@@ -45,12 +53,12 @@ export function speak(text: string, on: { start?: () => void; end?: () => void }
   const synth = window.speechSynthesis;
   synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  const voice = pickVoice();
+  const voice = pickVoice(lang);
   if (voice) {
     u.voice = voice;
     u.lang = voice.lang;
   } else {
-    u.lang = "en-GB";
+    u.lang = { en: "en-GB", ms: "ms-MY", zh: "zh-CN", ta: "ta-IN" }[lang];
   }
   u.rate = 1;
   u.pitch = 0.85;

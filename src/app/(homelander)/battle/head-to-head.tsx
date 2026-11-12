@@ -1,206 +1,546 @@
-import type { ReactNode } from "react";
-import { PixPanel } from "@/components/homelander/pixel";
-import { Sprite } from "@/components/homelander/sprite";
-import { rm, units } from "@/lib/homelander/data";
-import { bestIndices, MEDIAN_PSF, type AnalysisContext, type Fighter } from "@/lib/homelander/analysis";
-import { cn } from "@/lib/utils";
+"use client";
 
-type Row = {
-  label: string;
-  note?: string;
-  cell: (f: Fighter) => ReactNode;
-  value?: (f: Fighter) => number;
-  better?: "high" | "low";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import { PixMeter, PixPanel, PixTag } from "@/components/homelander/pixel";
+import { Sprite } from "@/components/homelander/sprite";
+import {
+  bestIndices,
+  leadOverNext,
+  STATS,
+  type Weights,
+} from "@/lib/homelander/analysis";
+import type { BattleContext } from "@/lib/homelander/battle-context";
+import type { Fighter } from "@/lib/homelander/battle-verdict";
+import { cn } from "@/lib/utils";
+import { caret, gauge, kRM, money, useStepIn } from "./bits";
+import { FighterHead } from "./fighter-head";
+import { buildSections, type Row, type Section, type Tone } from "./rows";
+
+const toneText: Record<Tone, string> = {
+  bad: "text-raya-deep",
+  warn: "text-kaya-deep",
+  good: "text-pandan-deep",
+  muted: "text-ink-soft",
 };
 
-const h = (n: number) => `${n.toFixed(1)} h`;
+const stickyCol =
+  "sticky left-0 z-10 bg-white shadow-[1.5px_0_0_0_var(--color-ink)]";
 
-function rows(ctx: AnalysisContext): Row[] {
-  return [
-    { label: "Price", cell: (f) => rm(f.priceRM), value: (f) => f.priceRM, better: "low" },
-    {
-      label: "Price per sqft",
-      note: `Median of all ${units.length} units: RM${Math.round(MEDIAN_PSF)}`,
-      cell: (f) => (
-        <>
-          RM{Math.round(f.psf)}
-          <span className="block text-xs text-ink-soft">
-            {f.psfVsMedian >= 0 ? `${Math.round(f.psfVsMedian * 100)}% under median` : `${Math.round(-f.psfVsMedian * 100)}% over median`}
-          </span>
-        </>
-      ),
-      value: (f) => f.psf,
-      better: "low",
-    },
-    {
-      label: "Monthly instalment",
-      note: "90% loan, 4.2%, 35 years",
-      cell: (f) => rm(Math.round(f.instalmentRM)),
-      value: (f) => f.instalmentRM,
-      better: "low",
-    },
-    {
-      label: "Cash upfront",
-      note: "10% down, stamp duty, legal fees",
-      cell: (f) => rm(f.upfrontRM),
-      value: (f) => f.upfrontRM,
-      better: "low",
-    },
-    {
-      label: "Left each month",
-      note: ctx.money.source === "bank" ? "From your bank check" : "Sample payslip",
-      cell: (f) => (
-        <>
-          <span className={cn(f.leftoverRM < 0 && "text-raya-deep")}>{rm(Math.round(f.leftoverRM))}</span>
-          {f.overBudget ? <span className="block text-xs text-raya-deep">Over what the bank may lend</span> : null}
-        </>
-      ),
-      value: (f) => f.leftoverRM,
-      better: "high",
-    },
-    {
-      label: "Drive, per week",
-      note: `To ${ctx.anchorName}, ${ctx.officeDays} days, both ways`,
-      cell: (f) => (
-        <>
-          {h(f.driveWeekHours)}
-          <span className="block text-xs text-ink-soft">{f.driveOneWay} min one way</span>
-        </>
-      ),
-      value: (f) => f.driveWeekHours,
-      better: "low",
-    },
-    {
-      label: "Train, per week",
-      note: "Rail plus walk or feeder",
-      cell: (f) => (
-        <>
-          {h(f.trainWeekHours)}
-          <span className="block text-xs text-ink-soft">
-            {f.trainOneWay} min, from {f.station} ({f.stationKm.toFixed(1)} km)
-          </span>
-        </>
-      ),
-      value: (f) => f.trainWeekHours,
-      better: "low",
-    },
-    {
-      label: "Bedrooms",
-      note: `You need ${ctx.bedsNeeded}`,
-      cell: (f) => (
-        <>
-          {f.unit.beds} bed, {f.unit.baths} bath
-          {f.bedsShort ? <span className="block text-xs text-raya-deep">{f.bedsShort} short</span> : null}
-        </>
-      ),
-      value: (f) => -f.bedsShort,
-      better: "high",
-    },
-    {
-      label: "Built-up",
-      cell: (f) => `${f.unit.builtUpSqft.toLocaleString("en-MY")} sqft`,
-      value: (f) => f.unit.builtUpSqft,
-      better: "high",
-    },
-    {
-      label: "Tenure",
-      cell: (f) => f.unit.tenure,
-      value: (f) => (f.unit.tenure === "Freehold" ? 1 : 0),
-      better: "high",
-    },
-    {
-      label: "Keys in",
-      cell: (f) => (f.waitYears === 0 ? `${f.unit.completion}, ready` : `${f.unit.completion}, ${f.waitYears} yr wait`),
-      value: (f) => f.waitYears,
-      better: "low",
-    },
-    {
-      label: "Units left",
-      note: "No star: fewer left means move fast, not better",
-      cell: (f) => (
-        <>
-          {f.availability.left} of {f.availability.total}
-          <span className="block text-xs text-ink-soft">
-            {f.availability.status}, {f.availability.phase}
-          </span>
-        </>
-      ),
-    },
-    {
-      label: "Township",
-      cell: (f) => <span className="text-sm">{f.unit.highlights.join(". ")}.</span>,
-    },
-    {
-      label: "Overall",
-      note: "Weighted by your sliders",
-      cell: (f) => <span className="font-pixel text-xl">{f.overall}</span>,
-      value: (f) => f.overall,
-      better: "high",
-    },
-  ];
-}
+/**
+ * The big table. Fighters are columns (5 fit at 1280px), rows are grouped into collapsible
+ * sections. On phones the table scrolls sideways, snapping fighter by fighter, with the
+ * factor column pinned.
+ */
+export function HeadToHead({
+  fighters,
+  ctx,
+  winnerId,
+  weights,
+  lineup,
+  onSwap,
+  onRemove,
+}: {
+  fighters: Fighter[];
+  ctx: BattleContext;
+  winnerId: string;
+  weights: Weights;
+  lineup: string[];
+  onSwap: (slot: number, id: string) => void;
+  onRemove: (slot: number) => void;
+}) {
+  const sections = buildSections(fighters, ctx);
+  const [closed, setClosed] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) => setClosed((c) => ({ ...c, [id]: !c[id] }));
+  const n = fighters.length;
+  const winnerCol = (f: Fighter) => f.unit.id === winnerId && n > 1;
 
-export function HeadToHead({ fighters, ctx, winnerId }: { fighters: Fighter[]; ctx: AnalysisContext; winnerId: string }) {
   return (
-    <section aria-labelledby="h2h-title" className="grid grid-cols-[minmax(0,1fr)] gap-3">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <h2 id="h2h-title" className="font-pixel text-2xl leading-none">
+    <section
+      aria-labelledby="h2h-title"
+      className="grid grid-cols-[minmax(0,1fr)] gap-3"
+    >
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <h2
+          id="h2h-title"
+          className="font-pixel text-2xl leading-none lg:text-3xl"
+        >
           Head to head
         </h2>
-        <p className="flex items-center gap-1.5 text-sm text-ink-soft">
-          <Sprite art="star" scale={2} className="text-kaya-deep" /> marks the better one in each row
-        </p>
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
+          <li className="flex items-center gap-1.5">
+            <Sprite art="star" scale={2} className="text-kaya-deep" /> Best in
+            the row
+          </li>
+          <li className="flex items-center gap-1.5">
+            <PixTag tone="lilac">You</PixTag> Your way to work
+          </li>
+          <li className="flex items-center gap-1.5">
+            <EstChip /> Estimate, not a quote
+          </li>
+        </ul>
       </div>
-      <PixPanel className="p-1">
-        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Head-to-head table, scrolls sideways">
-          <table className="w-full min-w-[620px] border-collapse text-left text-sm tabular-nums">
-            <caption className="sr-only">Every factor for each fighter. A star marks the better cell.</caption>
+      <p className="text-sm text-ink-soft lg:hidden">
+        Swipe the table sideways to see every home. The left column stays put.
+      </p>
+
+      <PixPanel className="overflow-hidden p-0">
+        <div
+          className="snap-x snap-mandatory scroll-pl-[8.5rem] overflow-x-auto overscroll-x-contain lg:snap-none lg:scroll-pl-0"
+          tabIndex={0}
+          role="region"
+          aria-label="Head-to-head table. Scrolls sideways on small screens."
+        >
+          <table
+            className="w-full min-w-[var(--tw)] table-fixed border-separate border-spacing-0 text-left text-sm tabular-nums lg:min-w-[var(--tw-lg)]"
+            style={
+              {
+                "--tw": `calc(8.5rem + ${n} * 11rem)`,
+                "--tw-lg": `calc(12rem + ${n} * 10rem)`,
+              } as CSSProperties
+            }
+          >
+            <caption className="sr-only">
+              Every factor for each home. A star marks the best cell in a row.
+              Figures are estimates.
+            </caption>
+            <colgroup>
+              <col className="w-[8.5rem] lg:w-[12rem]" />
+              {fighters.map((f) => (
+                <col key={f.unit.id} />
+              ))}
+            </colgroup>
+
             <thead>
-              <tr className="border-b-[3px] border-ink">
-                <th scope="col" className="sticky left-0 z-10 w-44 bg-white px-3 py-3 font-pixel-label text-[11px] uppercase">
-                  Factor
+              <tr>
+                <th
+                  scope="col"
+                  className={cn(stickyCol, "z-20 px-3 pt-3 pb-3 align-bottom")}
+                >
+                  <span className="font-pixel-label text-[11px] uppercase">
+                    {n} of 5 homes
+                  </span>
                 </th>
                 {fighters.map((f, i) => (
                   <th
                     key={f.unit.id}
                     scope="col"
-                    className={cn("px-3 py-3 align-bottom font-pixel text-base leading-tight", f.unit.id === winnerId && "bg-kaya/40")}
+                    className={cn(
+                      "snap-start px-2.5 pt-3 pb-3 align-top lg:px-3",
+                      winnerCol(f) && "bg-kaya/15",
+                    )}
                   >
-                    <span className="block text-xs text-ink-soft">P{i + 1}</span>
-                    {f.unit.name}
+                    <FighterHead
+                      f={f}
+                      slot={i}
+                      isWinner={winnerCol(f)}
+                      lineup={lineup}
+                      onSwap={(id) => onSwap(i, id)}
+                      onRemove={n > 1 ? () => onRemove(i) : undefined}
+                    />
                   </th>
                 ))}
               </tr>
+              <HeadlineRow
+                fighters={fighters}
+                winnerCol={winnerCol}
+                ctx={ctx}
+              />
+              <OverallRow
+                key={fighters.map((f) => `${f.unit.id}:${f.overall}`).join()}
+                fighters={fighters}
+                winnerCol={winnerCol}
+              />
             </thead>
-            <tbody>
-              {rows(ctx).map((r) => {
-                const best = r.value && r.better ? bestIndices(fighters.map(r.value), r.better) : new Set<number>();
-                return (
-                  <tr key={r.label} className="border-b-2 border-dotted border-ink/20 last:border-0">
-                    <th scope="row" className="sticky left-0 z-10 bg-white px-3 py-2.5 align-top font-semibold">
-                      {r.label}
-                      {r.note ? <span className="block text-xs font-normal text-ink-soft">{r.note}</span> : null}
-                    </th>
-                    {fighters.map((f, i) => (
-                      <td
-                        key={f.unit.id}
-                        className={cn("px-3 py-2.5 align-top", f.unit.id === winnerId && "bg-kaya/15")}
-                      >
-                        <span className="flex items-start gap-1.5">
-                          <span>{r.cell(f)}</span>
-                          {best.has(i) ? (
-                            <Sprite art="star" scale={2} className="mt-0.5 shrink-0 text-kaya-deep" label="Better" />
-                          ) : null}
+
+            {sections.map((s) => (
+              <SectionBody
+                key={s.id}
+                section={s}
+                fighters={fighters}
+                open={!closed[s.id]}
+                onToggle={() => toggle(s.id)}
+                winnerCol={winnerCol}
+              />
+            ))}
+            <SectionBody
+              section={{
+                id: "scores",
+                title: "Scores out of 100",
+                art: gauge,
+                blurb: "What the overall is made of, on the weights you set",
+                rows: STATS.map((st): Row => ({
+                  id: `stat-${st.key}`,
+                  label: `${st.label} (×${weights[st.key]})`,
+                  hint: st.hint,
+                  cell: (f) => ({
+                    main: (
+                      <span className="grid gap-1">
+                        <span className="font-pixel text-base leading-none">
+                          {f.stats[st.key]}
                         </span>
-                      </td>
-                    ))}
-                  </tr>
-                );
-              })}
-            </tbody>
+                        <PixMeter
+                          value={f.stats[st.key]}
+                          tone="pandan"
+                          label={`${st.label} ${f.stats[st.key]} of 100`}
+                          className="max-w-[8rem]"
+                        />
+                      </span>
+                    ),
+                  }),
+                  value: (f) => f.stats[st.key],
+                  better: "high",
+                })),
+              }}
+              fighters={fighters}
+              open={!closed.scores}
+              onToggle={() => toggle("scores")}
+              winnerCol={winnerCol}
+            />
           </table>
         </div>
       </PixPanel>
     </section>
+  );
+}
+
+function EstChip() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-ink/50 px-1.5 font-pixel-label text-[9px] leading-[1.5] text-ink-soft uppercase">
+      est.
+    </span>
+  );
+}
+
+/* ---------------------------------------------------------------- headline strip */
+
+function HeadlineRow({
+  fighters,
+  winnerCol,
+  ctx,
+}: {
+  fighters: Fighter[];
+  winnerCol: (f: Fighter) => boolean;
+  ctx: BattleContext;
+}) {
+  const items: {
+    label: string;
+    value: (f: Fighter) => number | null;
+    show: (f: Fighter) => ReactNode;
+    sub?: (f: Fighter) => ReactNode;
+  }[] = [
+    {
+      label: "All-in per month",
+      value: (f) => f.totalMonthlyRM,
+      show: (f) => money(f.totalMonthlyRM),
+      sub: (f) =>
+        f.leftRM < 0 ? (
+          <span className="text-raya-deep">
+            {money(-f.leftRM)} short a month
+          </span>
+        ) : (
+          `${money(f.leftRM)} left`
+        ),
+    },
+    {
+      label: "Commuting a year",
+      value: (f) => (f.you.compared ? f.you.hoursPerYear : null),
+      show: (f) => (f.you.compared ? `${f.you.hoursPerYear} h` : "n/a"),
+      sub: (f) =>
+        f.you.compared
+          ? `${f.you.oneWayMin} min each way`
+          : "Not a daily commute",
+    },
+    {
+      label: "Cash upfront",
+      value: (f) => f.upfrontRM,
+      show: (f) => kRM(f.upfrontRM),
+      sub: (f) =>
+        f.savingsGapRM === null ? (
+          "Savings unknown"
+        ) : f.savingsGapRM < 0 ? (
+          <span className="text-raya-deep">{kRM(-f.savingsGapRM)} short</span>
+        ) : (
+          `${kRM(f.savingsGapRM)} to spare`
+        ),
+    },
+  ];
+  const best = items.map((it) => bestIndices(fighters.map(it.value), "low"));
+  return (
+    <tr>
+      <th
+        scope="row"
+        className={cn(
+          stickyCol,
+          "border-t-[1.5px] border-ink bg-cloud px-3 py-3 align-top",
+        )}
+      >
+        <span className="block font-pixel text-base leading-tight">
+          At a glance
+        </span>
+        <span className="mt-1 block text-xs font-normal text-ink-soft">
+          {ctx.officeDays} days to {ctx.work.name}
+          {ctx.money.source === "sample" ? ", sample payslip" : ""}
+        </span>
+      </th>
+      {fighters.map((f, i) => (
+        <td
+          key={f.unit.id}
+          className={cn(
+            "border-t-[1.5px] border-ink bg-cloud px-2.5 py-3 align-top lg:px-3",
+            winnerCol(f) && "bg-kaya/25",
+          )}
+        >
+          <dl className="grid gap-2.5">
+            {items.map((it, j) => (
+              <div key={it.label} className="grid gap-0.5">
+                <dt className="font-pixel-label text-[10px] text-ink-soft uppercase">
+                  {it.label}
+                </dt>
+                <dd className="flex items-center gap-1.5 font-pixel text-lg leading-none">
+                  {it.show(f)}
+                  {best[j]!.has(i) ? (
+                    <Sprite
+                      art="star"
+                      scale={2}
+                      className="shrink-0 text-kaya-deep"
+                      label="Best"
+                    />
+                  ) : null}
+                </dd>
+                {it.sub ? (
+                  <dd className="text-[11px] leading-tight text-ink-soft">
+                    {it.sub(f)}
+                  </dd>
+                ) : null}
+              </div>
+            ))}
+          </dl>
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+/** Overall score, counting up block by block when the result changes. */
+function OverallRow({
+  fighters,
+  winnerCol,
+}: {
+  fighters: Fighter[];
+  winnerCol: (f: Fighter) => boolean;
+}) {
+  const p = useStepIn();
+  const best = bestIndices(
+    fighters.map((f) => f.overall),
+    "high",
+  );
+  return (
+    <tr>
+      <th
+        scope="row"
+        className={cn(
+          stickyCol,
+          "border-b-[1.5px] border-ink px-3 py-3 align-middle",
+        )}
+      >
+        <span className="block font-pixel text-base leading-tight">
+          Overall
+        </span>
+        <span className="block text-xs font-normal text-ink-soft">
+          Weighted by your priorities
+        </span>
+      </th>
+      {fighters.map((f, i) => (
+        <td
+          key={f.unit.id}
+          className={cn(
+            "border-b-[1.5px] border-ink px-2.5 py-3 align-middle lg:px-3",
+            winnerCol(f) && "bg-kaya/15",
+          )}
+        >
+          <div className="grid gap-1.5">
+            <span className="flex items-center gap-1.5 font-pixel text-3xl leading-none">
+              {Math.round(f.overall * p)}
+              {best.has(i) ? (
+                <Sprite
+                  art="star"
+                  scale={2}
+                  className="text-kaya-deep"
+                  label="Best"
+                />
+              ) : null}
+            </span>
+            <PixMeter
+              value={f.overall * p}
+              tone={winnerCol(f) ? "kaya" : "sky"}
+              label={`Overall ${f.overall} of 100`}
+              className="max-w-[9rem]"
+            />
+            {f.penalty ? (
+              <span className="text-[11px] leading-tight font-semibold text-raya-deep">
+                −{f.penalty} for your deal-breakers / must-haves
+              </span>
+            ) : null}
+          </div>
+        </td>
+      ))}
+    </tr>
+  );
+}
+
+/* ---------------------------------------------------------------- sections */
+
+function SectionBody({
+  section,
+  fighters,
+  open,
+  onToggle,
+  winnerCol,
+}: {
+  section: Section;
+  fighters: Fighter[];
+  open: boolean;
+  onToggle: () => void;
+  winnerCol: (f: Fighter) => boolean;
+}) {
+  const bodyId = `sec-${section.id}`;
+  return (
+    <tbody id={bodyId}>
+      <tr>
+        <th
+          colSpan={fighters.length + 1}
+          scope="colgroup"
+          className="border-b border-ink/20 bg-cloud p-0 text-left"
+        >
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-controls={bodyId}
+            className="sticky left-0 flex w-max max-w-[100vw] items-center gap-2.5 px-3 py-2.5 text-left"
+          >
+            <Sprite
+              art={caret}
+              scale={2}
+              className={cn(
+                "shrink-0 text-ink transition-transform motion-reduce:transition-none",
+                !open && "-rotate-90",
+              )}
+            />
+            <Sprite
+              art={section.art}
+              scale={2}
+              className="shrink-0 text-pandan-deep"
+            />
+            <span className="font-pixel text-lg leading-none">
+              {section.title}
+            </span>
+            {section.blurb ? (
+              <span className="hidden text-xs font-normal text-ink-soft sm:inline">
+                {section.blurb}
+              </span>
+            ) : null}
+            {!open ? (
+              <span className="text-xs font-normal text-ink-soft">
+                ({section.rows.length} rows hidden)
+              </span>
+            ) : null}
+          </button>
+        </th>
+      </tr>
+      {open
+        ? section.rows.map((r) => (
+            <RowView
+              key={r.id}
+              row={r}
+              fighters={fighters}
+              winnerCol={winnerCol}
+            />
+          ))
+        : null}
+    </tbody>
+  );
+}
+
+function RowView({
+  row,
+  fighters,
+  winnerCol,
+}: {
+  row: Row;
+  fighters: Fighter[];
+  winnerCol: (f: Fighter) => boolean;
+}) {
+  const values = row.value ? fighters.map(row.value) : null;
+  const best =
+    values && row.better ? bestIndices(values, row.better) : new Set<number>();
+  const gap =
+    values && row.better && best.size === 1
+      ? leadOverNext(values, row.better)
+      : null;
+  return (
+    <tr className={cn("group", row.strong && "bg-kaya/10")}>
+      <th
+        scope="row"
+        className={cn(
+          stickyCol,
+          "border-b border-ink/15 px-3 py-2.5 align-top font-semibold",
+          row.strong && "bg-[color-mix(in_oklab,var(--color-kaya)_10%,white)]",
+        )}
+      >
+        <span className="flex flex-wrap items-center gap-1.5 leading-tight">
+          {row.label}
+          {row.estimated ? <EstChip /> : null}
+          {row.mine ? <PixTag tone="lilac">You</PixTag> : null}
+        </span>
+        {row.hint ? (
+          <span className="mt-0.5 block text-[11px] leading-snug font-normal text-ink-soft">
+            {row.hint}
+          </span>
+        ) : null}
+      </th>
+      {fighters.map((f, i) => {
+        const c = row.cell(f);
+        const isBest = best.has(i);
+        return (
+          <td
+            key={f.unit.id}
+            className={cn(
+              "border-b border-ink/15 px-2.5 py-2.5 align-top lg:px-3",
+              winnerCol(f) && "bg-kaya/10",
+              isBest && "bg-pandan/15",
+            )}
+          >
+            <span
+              className={cn(
+                "flex items-start gap-1.5 font-semibold",
+                row.strong && "font-pixel text-base",
+                c.tone && toneText[c.tone],
+              )}
+            >
+              <span className="min-w-0">{c.main}</span>
+              {isBest ? (
+                <Sprite
+                  art="star"
+                  scale={2}
+                  className="mt-0.5 shrink-0 text-kaya-deep"
+                  label="Best"
+                />
+              ) : null}
+            </span>
+            {c.sub ? (
+              <span className="mt-0.5 block text-[11px] leading-snug text-ink-soft">
+                {c.sub}
+              </span>
+            ) : null}
+            {isBest && gap !== null && row.lead ? (
+              <span className="mt-0.5 block text-[11px] leading-snug font-semibold text-pandan-deep">
+                {row.lead(gap)}
+              </span>
+            ) : null}
+          </td>
+        );
+      })}
+    </tr>
   );
 }

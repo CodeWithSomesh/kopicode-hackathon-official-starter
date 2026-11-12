@@ -13,6 +13,7 @@
     "check": "npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
+    "@ai-sdk/groq": "^4.0.81",
     "@ai-sdk/react": "^4.0.174",
     "@protomaps/basemaps": "5.7.2",
     "@react-spring/three": "10.1.2",
@@ -20,9 +21,11 @@
     "@react-three/fiber": "9.8.2",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.119.0",
+    "@types/canvas-confetti": "^1.9.0",
     "agora-rtc-sdk-ng": "^4.24.9",
     "agora-token": "^2.0.7",
     "ai": "^7.0.170",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "geist": "^1.9.2",

@@ -43,7 +43,10 @@ export function drawItems(
         const a = (i / 5) * Math.PI * 2;
         ctx.beginPath();
         ctx.moveTo(it.cx, it.cy);
-        ctx.lineTo(it.cx + Math.cos(a) * r * 0.7, it.cy + Math.sin(a) * r * 0.7);
+        ctx.lineTo(
+          it.cx + Math.cos(a) * r * 0.7,
+          it.cy + Math.sin(a) * r * 0.7,
+        );
         ctx.stroke();
       }
     } else if (it.kind === "mirror") {
@@ -56,12 +59,25 @@ export function drawItems(
       ctx.fillStyle = cat.fixed ? c.line : c.furniture;
       ctx.fillRect(b.x, b.y, b.w, b.h);
       ctx.strokeRect(b.x, b.y, b.w, b.h);
-      if (it.kind !== "coffee") drawBack(ctx, b, fx, fy, it.kind === "sofa" || it.kind === "bed" ? 0.18 : 0.08, c);
+      if (it.kind !== "coffee")
+        drawBack(
+          ctx,
+          b,
+          fx,
+          fy,
+          it.kind === "sofa" || it.kind === "bed" ? 0.18 : 0.08,
+          c,
+        );
       if (it.kind === "bed") drawPillows(ctx, b, fx, fy, c, px);
       if (it.kind === "stove") drawBurners(ctx, b, c, px);
       if (it.kind === "sink") {
         const inset = 0.12;
-        ctx.strokeRect(b.x + inset, b.y + inset, b.w - inset * 2, b.h - inset * 2);
+        ctx.strokeRect(
+          b.x + inset,
+          b.y + inset,
+          b.w - inset * 2,
+          b.h - inset * 2,
+        );
       }
     }
 
@@ -74,7 +90,8 @@ export function drawItems(
     const textH = 12 * px;
     // Plants, mirrors and stoves read from their drawing; text would sit on top of it.
     if (it.kind !== "plant" && it.kind !== "mirror" && it.kind !== "stove") {
-      if (tw < b.w - 6 * px && textH < b.h) ctx.fillText(cat.label, it.cx, it.cy);
+      if (tw < b.w - 6 * px && textH < b.h)
+        ctx.fillText(cat.label, it.cx, it.cy);
       else if (tw < b.h - 6 * px && textH < b.w) {
         ctx.save();
         ctx.translate(it.cx, it.cy);
@@ -107,15 +124,41 @@ export function drawItems(
   }
 }
 
-function drawBack(ctx: CanvasRenderingContext2D, b: Box, fx: number, fy: number, depth: number, c: ItemColors) {
+function drawBack(
+  ctx: CanvasRenderingContext2D,
+  b: Box,
+  fx: number,
+  fy: number,
+  depth: number,
+  c: ItemColors,
+) {
   ctx.fillStyle = c.soft;
   if (fy > 0) ctx.fillRect(b.x, b.y, b.w, Math.min(depth, b.h / 2));
-  else if (fy < 0) ctx.fillRect(b.x, b.y + b.h - Math.min(depth, b.h / 2), b.w, Math.min(depth, b.h / 2));
+  else if (fy < 0)
+    ctx.fillRect(
+      b.x,
+      b.y + b.h - Math.min(depth, b.h / 2),
+      b.w,
+      Math.min(depth, b.h / 2),
+    );
   else if (fx > 0) ctx.fillRect(b.x, b.y, Math.min(depth, b.w / 2), b.h);
-  else ctx.fillRect(b.x + b.w - Math.min(depth, b.w / 2), b.y, Math.min(depth, b.w / 2), b.h);
+  else
+    ctx.fillRect(
+      b.x + b.w - Math.min(depth, b.w / 2),
+      b.y,
+      Math.min(depth, b.w / 2),
+      b.h,
+    );
 }
 
-function drawPillows(ctx: CanvasRenderingContext2D, b: Box, fx: number, fy: number, c: ItemColors, px: number) {
+function drawPillows(
+  ctx: CanvasRenderingContext2D,
+  b: Box,
+  fx: number,
+  fy: number,
+  c: ItemColors,
+  px: number,
+) {
   ctx.fillStyle = c.surface;
   ctx.lineWidth = 1 * px;
   const along = fy !== 0 ? b.w : b.h;
@@ -136,14 +179,23 @@ function drawPillows(ctx: CanvasRenderingContext2D, b: Box, fx: number, fy: numb
   }
 }
 
-function drawBurners(ctx: CanvasRenderingContext2D, b: Box, c: ItemColors, px: number) {
+function drawBurners(
+  ctx: CanvasRenderingContext2D,
+  b: Box,
+  c: ItemColors,
+  px: number,
+) {
   ctx.strokeStyle = c.ink;
   ctx.lineWidth = 1.2 * px;
   const long = b.w >= b.h;
   for (const i of [0, 1]) {
     for (const j of [0, 1]) {
-      const cx = long ? b.x + b.w * (0.3 + i * 0.2) : b.x + b.w * (0.35 + j * 0.3);
-      const cy = long ? b.y + b.h * (0.35 + j * 0.3) : b.y + b.h * (0.3 + i * 0.2);
+      const cx = long
+        ? b.x + b.w * (0.3 + i * 0.2)
+        : b.x + b.w * (0.35 + j * 0.3);
+      const cy = long
+        ? b.y + b.h * (0.35 + j * 0.3)
+        : b.y + b.h * (0.3 + i * 0.2);
       ctx.beginPath();
       ctx.arc(cx, cy, 0.09, 0, Math.PI * 2);
       ctx.stroke();
@@ -152,7 +204,13 @@ function drawBurners(ctx: CanvasRenderingContext2D, b: Box, c: ItemColors, px: n
 }
 
 /** A table with three chairs down each long side. */
-function drawDining(ctx: CanvasRenderingContext2D, b: Box, turned: boolean, c: ItemColors, px: number) {
+function drawDining(
+  ctx: CanvasRenderingContext2D,
+  b: Box,
+  turned: boolean,
+  c: ItemColors,
+  px: number,
+) {
   const tableLong = 1.4;
   const tableShort = 0.8;
   const tw = turned ? tableShort : tableLong;

@@ -24,14 +24,27 @@ export function boxOf(it: Pick<Item, "kind" | "cx" | "cy" | "rot">): Box {
 
 /** Unit vector the item's front faces, in plan space. */
 export function frontOf(rot: Rot): Pt {
-  return ([[0, 1], [-1, 0], [0, -1], [1, 0]] as Pt[])[rot];
+  return (
+    [
+      [0, 1],
+      [-1, 0],
+      [0, -1],
+      [1, 0],
+    ] as Pt[]
+  )[rot];
 }
 
 const overlaps = (a: Box, b: Box) =>
-  a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS && a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS;
+  a.x < b.x + b.w - EPS &&
+  b.x < a.x + a.w - EPS &&
+  a.y < b.y + b.h - EPS &&
+  b.y < a.y + a.h - EPS;
 
 const inside = (a: Box, r: Room) =>
-  a.x >= r.x - EPS && a.y >= r.y - EPS && a.x + a.w <= r.x + r.w + EPS && a.y + a.h <= r.y + r.h + EPS;
+  a.x >= r.x - EPS &&
+  a.y >= r.y - EPS &&
+  a.x + a.w <= r.x + r.w + EPS &&
+  a.y + a.h <= r.y + r.h + EPS;
 
 export function doorZone(d: Door): Box {
   const vertical = Math.abs(d.p[0] - d.q[0]) < EPS;
@@ -52,14 +65,19 @@ export type Problem =
   | { code: "missing" };
 
 /** Where the item would sit, or why it can't. */
-export function check(item: Item, items: Item[], floor: Floor): { room: Room } | { problem: Problem } {
+export function check(
+  item: Item,
+  items: Item[],
+  floor: Floor,
+): { room: Room } | { problem: Problem } {
   const box = boxOf(item);
   const room = floor.rooms.find((r) => inside(box, r));
   if (!room) return { problem: { code: "outside" } };
   if (room.kind === "stairs") return { problem: { code: "stairs" } };
   for (const d of floor.doors) {
     if (d.kind === "open") continue;
-    if (overlaps(box, doorZone(d))) return { problem: { code: "door", main: d.kind === "main" } };
+    if (overlaps(box, doorZone(d)))
+      return { problem: { code: "door", main: d.kind === "main" } };
   }
   for (const o of items) {
     if (o.uid === item.uid || o.floor !== item.floor) continue;
@@ -68,7 +86,8 @@ export function check(item: Item, items: Item[], floor: Floor): { room: Room } |
   return { room };
 }
 
-export type Result = { ok: true; items: Item[]; item: Item } | { ok: false; problem: Problem };
+export type Result =
+  { ok: true; items: Item[]; item: Item } | { ok: false; problem: Problem };
 
 function commit(items: Item[], next: Item, floor: Floor): Result {
   const c = check(next, items, floor);
@@ -78,7 +97,9 @@ function commit(items: Item[], next: Item, floor: Floor): Result {
   return {
     ok: true,
     item: placed,
-    items: exists ? items.map((i) => (i.uid === next.uid ? placed : i)) : [...items, placed],
+    items: exists
+      ? items.map((i) => (i.uid === next.uid ? placed : i))
+      : [...items, placed],
   };
 }
 
@@ -102,35 +123,68 @@ function candidateRooms(kind: Kind, floor: Floor, roomId?: string) {
 }
 
 /** Place a new item in the first spot where it fits, hugging the room's top-left walls. */
-export function place(kind: Kind, floor: Floor, items: Item[], roomId?: string): Result {
+export function place(
+  kind: Kind,
+  floor: Floor,
+  items: Item[],
+  roomId?: string,
+): Result {
   const uid = nextUid(kind, items);
   const rooms = candidateRooms(kind, floor, roomId);
   for (const room of rooms) {
     for (const rot of [0, 1, 2, 3] as Rot[]) {
       const b = boxOf({ kind, cx: 0, cy: 0, rot });
-      for (let y = room.y + b.h / 2; y <= room.y + room.h - b.h / 2 + EPS; y += 0.1) {
-        for (let x = room.x + b.w / 2; x <= room.x + room.w - b.w / 2 + EPS; x += 0.1) {
-          const r = commit(items, { uid, kind, floor: floor.id, room: room.id, cx: x, cy: y, rot }, floor);
+      for (
+        let y = room.y + b.h / 2;
+        y <= room.y + room.h - b.h / 2 + EPS;
+        y += 0.1
+      ) {
+        for (
+          let x = room.x + b.w / 2;
+          x <= room.x + room.w - b.w / 2 + EPS;
+          x += 0.1
+        ) {
+          const r = commit(
+            items,
+            { uid, kind, floor: floor.id, room: room.id, cx: x, cy: y, rot },
+            floor,
+          );
           if (r.ok) return r;
         }
       }
     }
   }
-  return { ok: false, problem: { code: "full", kind, room: roomId ? rooms[0] : undefined } };
+  return {
+    ok: false,
+    problem: { code: "full", kind, room: roomId ? rooms[0] : undefined },
+  };
 }
 
 function find(items: Item[], uid: string) {
   return items.find((i) => i.uid === uid);
 }
 
-export function moveTo(uid: string, cx: number, cy: number, floor: Floor, items: Item[]): Result {
+export function moveTo(
+  uid: string,
+  cx: number,
+  cy: number,
+  floor: Floor,
+  items: Item[],
+): Result {
   const it = find(items, uid);
   if (!it) return { ok: false, problem: { code: "missing" } };
-  if (CATALOG[it.kind].fixed) return { ok: false, problem: { code: "fixed", kind: it.kind } };
+  if (CATALOG[it.kind].fixed)
+    return { ok: false, problem: { code: "fixed", kind: it.kind } };
   return commit(items, { ...it, cx: snap(cx), cy: snap(cy) }, floor);
 }
 
-export function moveBy(uid: string, dx: number, dy: number, floor: Floor, items: Item[]): Result {
+export function moveBy(
+  uid: string,
+  dx: number,
+  dy: number,
+  floor: Floor,
+  items: Item[],
+): Result {
   const it = find(items, uid);
   if (!it) return { ok: false, problem: { code: "missing" } };
   return moveTo(uid, it.cx + dx, it.cy + dy, floor, items);
@@ -143,7 +197,8 @@ export function moveBy(uid: string, dx: number, dy: number, floor: Floor, items:
 export function rotate(uid: string, floor: Floor, items: Item[]): Result {
   const it = find(items, uid);
   if (!it) return { ok: false, problem: { code: "missing" } };
-  if (CATALOG[it.kind].fixed) return { ok: false, problem: { code: "fixed", kind: it.kind } };
+  if (CATALOG[it.kind].fixed)
+    return { ok: false, problem: { code: "fixed", kind: it.kind } };
   const turned = { ...it, rot: ((it.rot + 1) % 4) as Rot };
   const first = commit(items, turned, floor);
   if (first.ok) return first;
@@ -152,7 +207,11 @@ export function rotate(uid: string, floor: Floor, items: Item[]): Result {
     for (let dy = -1; dy <= 1 + EPS; dy += 0.05) offsets.push([dx, dy]);
   offsets.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
   for (const [dx, dy] of offsets) {
-    const r = commit(items, { ...turned, cx: snap(it.cx + dx), cy: snap(it.cy + dy) }, floor);
+    const r = commit(
+      items,
+      { ...turned, cx: snap(it.cx + dx), cy: snap(it.cy + dy) },
+      floor,
+    );
     // Stay in the same room: sliding a bed into the corridor to turn it isn't what anyone meant.
     if (r.ok && r.item.room === it.room) return r;
   }
@@ -162,7 +221,8 @@ export function rotate(uid: string, floor: Floor, items: Item[]): Result {
 export function remove(uid: string, items: Item[]): Result {
   const it = find(items, uid);
   if (!it) return { ok: false, problem: { code: "missing" } };
-  if (CATALOG[it.kind].fixed) return { ok: false, problem: { code: "fixed", kind: it.kind } };
+  if (CATALOG[it.kind].fixed)
+    return { ok: false, problem: { code: "fixed", kind: it.kind } };
   return { ok: true, item: it, items: items.filter((i) => i.uid !== uid) };
 }
 
@@ -173,12 +233,21 @@ export function hitTest(items: Item[], floorId: string, x: number, y: number) {
     const b = boxOf(it);
     // Thin pieces (a mirror is 10 cm deep) get a bigger target so they can be picked up.
     const pad = Math.max(0, (0.3 - Math.min(b.w, b.h)) / 2);
-    if (x >= b.x - pad && x <= b.x + b.w + pad && y >= b.y - pad && y <= b.y + b.h + pad) return it;
+    if (
+      x >= b.x - pad &&
+      x <= b.x + b.w + pad &&
+      y >= b.y - pad &&
+      y <= b.y + b.h + pad
+    )
+      return it;
   }
   return undefined;
 }
 
-export function describe(p: Problem, roomLabel?: (id: string) => string): string {
+export function describe(
+  p: Problem,
+  roomLabel?: (id: string) => string,
+): string {
   switch (p.code) {
     case "hit":
       return `It bumps into the ${CATALOG[p.other.kind].label.toLowerCase()}.`;
@@ -189,7 +258,9 @@ export function describe(p: Problem, roomLabel?: (id: string) => string): string
     case "stairs":
       return "Can't put furniture on the stairs.";
     case "full": {
-      const where = p.room ? ` in the ${(roomLabel?.(p.room.id) ?? p.room.label).toLowerCase()}` : " on this floor";
+      const where = p.room
+        ? ` in the ${(roomLabel?.(p.room.id) ?? p.room.label).toLowerCase()}`
+        : " on this floor";
       return `No space for the ${CATALOG[p.kind].label.toLowerCase()}${where}. Move or remove something first.`;
     }
     case "fixed":

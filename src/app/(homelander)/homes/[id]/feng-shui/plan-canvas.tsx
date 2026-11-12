@@ -38,7 +38,8 @@ const COMPASS_BAND = 76;
 /** Reads the theme's colours so the drawing follows Kopitiam (and later themes) without hex. */
 function palette(el: Element) {
   const css = getComputedStyle(el);
-  const v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+  const v = (name: string, fallback: string) =>
+    css.getPropertyValue(name).trim() || fallback;
   return {
     ink: v("--color-ink", "#17332a"),
     soft: v("--color-ink-soft", "#4a6359"),
@@ -87,7 +88,10 @@ export function PlanCanvas({
   const toWorld = (clientX: number, clientY: number) => {
     const r = canvas.current!.getBoundingClientRect();
     const { scale, offX, offY } = view.current;
-    return [(clientX - r.left - offX) / scale - PAD, (clientY - r.top - offY) / scale - PAD] as const;
+    return [
+      (clientX - r.left - offX) / scale - PAD,
+      (clientY - r.top - offY) / scale - PAD,
+    ] as const;
   };
 
   // Touching a piece of furniture drags it; touching anywhere else still scrolls the page.
@@ -109,7 +113,9 @@ export function PlanCanvas({
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    const ro = new ResizeObserver(([e]) =>
+      setSize({ w: e.contentRect.width, h: e.contentRect.height }),
+    );
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -135,11 +141,25 @@ export function PlanCanvas({
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.w, size.h);
-    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * (offX + PAD * scale), dpr * (offY + PAD * scale));
+    ctx.setTransform(
+      dpr * scale,
+      0,
+      0,
+      dpr * scale,
+      dpr * (offX + PAD * scale),
+      dpr * (offY + PAD * scale),
+    );
 
     const px = 1 / scale; // one CSS pixel in metres
-    const font = (sizePx: number, weight = 500) => `${weight} ${sizePx * px}px ${c.family}`;
-    const seg = (a: Pt, b: Pt, color: string, width: number, dash?: number[]) => {
+    const font = (sizePx: number, weight = 500) =>
+      `${weight} ${sizePx * px}px ${c.family}`;
+    const seg = (
+      a: Pt,
+      b: Pt,
+      color: string,
+      width: number,
+      dash?: number[],
+    ) => {
       ctx.beginPath();
       ctx.moveTo(a[0], a[1]);
       ctx.lineTo(b[0], b[1]);
@@ -159,7 +179,8 @@ export function PlanCanvas({
         ctx.beginPath();
         ctx.rect(r.x, r.y, r.w, r.h);
         ctx.clip();
-        for (let d = -r.h; d < r.w; d += 0.5) seg([r.x + d, r.y + r.h], [r.x + d + r.h, r.y], c.line, 1.2 * px);
+        for (let d = -r.h; d < r.w; d += 0.5)
+          seg([r.x + d, r.y + r.h], [r.x + d + r.h, r.y], c.line, 1.2 * px);
         ctx.restore();
       }
       if (r.kind === "stairs") {
@@ -167,7 +188,8 @@ export function PlanCanvas({
         const n = Math.floor((across ? r.w : r.h) / 0.28);
         for (let i = 1; i < n; i++) {
           const t = i * 0.28;
-          if (across) seg([r.x + t, r.y], [r.x + t, r.y + r.h], c.line, 1.2 * px);
+          if (across)
+            seg([r.x + t, r.y], [r.x + t, r.y + r.h], c.line, 1.2 * px);
           else seg([r.x, r.y + t], [r.x + r.w, r.y + t], c.line, 1.2 * px);
         }
       }
@@ -268,10 +290,22 @@ export function PlanCanvas({
       // Short jambs at each end so the doorway reads as a door, not a missing wall.
       const vertical = Math.abs(d.p[0] - d.q[0]) < 1e-6;
       const j = 0.12;
-      const jamb = (p: Pt): [Pt, Pt] => (vertical ? [[p[0] - j, p[1]], [p[0] + j, p[1]]] : [[p[0], p[1] - j], [p[0], p[1] + j]]);
+      const jamb = (p: Pt): [Pt, Pt] =>
+        vertical
+          ? [
+              [p[0] - j, p[1]],
+              [p[0] + j, p[1]],
+            ]
+          : [
+              [p[0], p[1] - j],
+              [p[0], p[1] + j],
+            ];
       seg(...jamb(d.p), color, 2.5 * px);
       seg(...jamb(d.q), color, 2.5 * px);
-      seg(d.p, d.q, color, (d.kind === "main" ? 2.5 : 1.2) * px, [3 * px, 3 * px]);
+      seg(d.p, d.q, color, (d.kind === "main" ? 2.5 : 1.2) * px, [
+        3 * px,
+        3 * px,
+      ]);
     }
 
     // Labels.
@@ -281,7 +315,10 @@ export function PlanCanvas({
       ctx.font = font(11, 600);
       const nameW = ctx.measureText(r.label).width;
       if (nameW > r.w - 0.2) continue;
-      const area = r.kind !== "outdoor" && r.kind !== "stairs" && r.h > 1.6 ? `${(r.w * r.h).toFixed(1)} m²` : "";
+      const area =
+        r.kind !== "outdoor" && r.kind !== "stairs" && r.h > 1.6
+          ? `${(r.w * r.h).toFixed(1)} m²`
+          : "";
       ctx.font = font(10);
       const areaW = area ? ctx.measureText(area).width : 0;
       // A light plate behind the label keeps it readable when furniture sits in the corner.
@@ -289,7 +326,12 @@ export function PlanCanvas({
         const pad = 2 * px;
         ctx.globalAlpha = 0.85;
         ctx.fillStyle = c.surface;
-        ctx.fillRect(r.x + 0.15 - pad, r.y + 0.15 - pad, Math.max(nameW, areaW) + pad * 2, (area ? 27 : 13) * px + pad * 2);
+        ctx.fillRect(
+          r.x + 0.15 - pad,
+          r.y + 0.15 - pad,
+          Math.max(nameW, areaW) + pad * 2,
+          (area ? 27 : 13) * px + pad * 2,
+        );
         ctx.globalAlpha = 1;
       }
       ctx.font = font(11, 600);
@@ -310,7 +352,12 @@ export function PlanCanvas({
       const my = (main.p[1] + main.q[1]) / 2;
       // Write the label on the outside of the door so it never sits on a room label.
       const indoorAbove = floor.rooms.some(
-        (r) => r.kind !== "outdoor" && mx > r.x && mx < r.x + r.w && my - 0.3 > r.y && my - 0.3 < r.y + r.h,
+        (r) =>
+          r.kind !== "outdoor" &&
+          mx > r.x &&
+          mx < r.x + r.w &&
+          my - 0.3 > r.y &&
+          my - 0.3 < r.y + r.h,
       );
       ctx.textBaseline = indoorAbove ? "top" : "bottom";
       ctx.fillText("MAIN DOOR", mx, my + (indoorAbove ? 6 * px : -6 * px));
@@ -376,14 +423,27 @@ export function PlanCanvas({
       ctx.strokeStyle = c.sunDeep;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(cx + (sun.sx / len) * k, cy + (sun.sy / len) * k, 5, 0, Math.PI * 2);
+      ctx.arc(
+        cx + (sun.sx / len) * k,
+        cy + (sun.sy / len) * k,
+        5,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
       ctx.stroke();
     }
 
     // Bagua labels last, so walls and furniture never cover them.
     if (bagua) {
-      ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * (offX + PAD * scale), dpr * (offY + PAD * scale));
+      ctx.setTransform(
+        dpr * scale,
+        0,
+        0,
+        dpr * scale,
+        dpr * (offX + PAD * scale),
+        dpr * (offY + PAD * scale),
+      );
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       for (const cell of bagua) {
@@ -403,7 +463,19 @@ export function PlanCanvas({
         ctx.fillText(top, cx, cy + 0.5 * px);
       }
     }
-  }, [size, floor, bounds, patches, sun, facing, items, selected, bagua, flagged, strips]);
+  }, [
+    size,
+    floor,
+    bounds,
+    patches,
+    sun,
+    facing,
+    items,
+    selected,
+    bagua,
+    flagged,
+    strips,
+  ]);
 
   return (
     <div ref={wrap} className={cn("relative", className)}>
@@ -432,7 +504,11 @@ export function PlanCanvas({
             return;
           }
           const hit = hitTest(items, floor.id, x, y);
-          e.currentTarget.style.cursor = hit ? (CATALOG[hit.kind].fixed ? "not-allowed" : "grab") : "default";
+          e.currentTarget.style.cursor = hit
+            ? CATALOG[hit.kind].fixed
+              ? "not-allowed"
+              : "grab"
+            : "default";
         }}
         onPointerUp={() => (drag.current = null)}
         onPointerCancel={() => (drag.current = null)}

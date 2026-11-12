@@ -22,7 +22,9 @@ export function loadLayout(unitId: string, plan: Plan): Saved | null {
     const floors = new Set(plan.floors.map((f) => f.id));
     if (!Array.isArray(s.items) || typeof s.facing !== "number") return null;
     // Drop anything a newer plan or catalogue no longer knows about.
-    const items = s.items.filter((i) => i && i.kind in CATALOG && floors.has(i.floor));
+    const items = s.items.filter(
+      (i) => i && i.kind in CATALOG && floors.has(i.floor),
+    );
     return {
       facing: s.facing,
       time: typeof s.time === "number" ? s.time : 17,

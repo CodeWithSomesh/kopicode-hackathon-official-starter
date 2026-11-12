@@ -9,7 +9,9 @@ import { planFor } from "./plans";
 export const metadata: Metadata = { title: "Feng Shui Builder" };
 
 /** Feng Shui Builder (first pitched as "Tengok Dulu"). Owned by teammate B: read ./CLAUDE.md first. */
-export default async function FengShuiPage({ params }: PageProps<"/homes/[id]/feng-shui">) {
+export default async function FengShuiPage({
+  params,
+}: PageProps<"/homes/[id]/feng-shui">) {
   const { id } = await params;
   const unit = unitById[id];
   if (!unit) notFound();
@@ -30,15 +32,22 @@ export default async function FengShuiPage({ params }: PageProps<"/homes/[id]/fe
           </Link>
         </div>
         <p className="text-ink-soft">
-          <span className="font-semibold text-ink">{unit.name}</span> · {township?.name} · {unit.type} · {unit.beds}{" "}
-          bedrooms · {unit.builtUpSqft.toLocaleString("en-MY")} sq ft
+          <span className="font-semibold text-ink">{unit.name}</span> ·{" "}
+          {township?.name} · {unit.type} · {unit.beds} bedrooms ·{" "}
+          {unit.builtUpSqft.toLocaleString("en-MY")} sq ft
         </p>
         <p className="text-sm text-ink-soft">
-          See where the sun lands before you sign. This is a sample {plan.label.split(" (")[0].toLowerCase()} layout, not
-          this unit&apos;s actual plan.
+          See where the sun lands before you sign. This is a sample{" "}
+          {plan.label.split(" (")[0].toLowerCase()} layout, not this unit&apos;s
+          actual plan.
         </p>
       </header>
-      <FengShuiBuilder unitId={unit.id} planId={plan.id} lat={township?.pos.lat ?? 3.14} lng={township?.pos.lng ?? 101.69} />
+      <FengShuiBuilder
+        unitId={unit.id}
+        planId={plan.id}
+        lat={township?.pos.lat ?? 3.14}
+        lng={township?.pos.lng ?? 101.69}
+      />
     </div>
   );
 }

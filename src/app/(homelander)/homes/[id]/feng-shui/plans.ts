@@ -19,19 +19,57 @@ export type RoomKind =
   | "store"
   | "outdoor";
 
-export type Room = { id: string; label: string; kind: RoomKind; x: number; y: number; w: number; h: number };
+export type Room = {
+  id: string;
+  label: string;
+  kind: RoomKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
 
 /** A window on a wall from p to q. `n` points out of the room, `sill`/`head` are heights in metres. */
-export type Window = { room: string; p: Pt; q: Pt; n: Pt; sill: number; head: number };
+export type Window = {
+  room: string;
+  p: Pt;
+  q: Pt;
+  n: Pt;
+  sill: number;
+  head: number;
+};
 
 /** A doorway on a wall from p to q. `main` is the front door; `open` is an opening with no leaf. */
-export type Door = { kind: "main" | "room" | "back" | "open"; p: Pt; q: Pt; rooms: [string, string] };
+export type Door = {
+  kind: "main" | "room" | "back" | "open";
+  p: Pt;
+  q: Pt;
+  rooms: [string, string];
+};
 
-export type Floor = { id: string; label: string; rooms: Room[]; windows: Window[]; doors: Door[] };
+export type Floor = {
+  id: string;
+  label: string;
+  rooms: Room[];
+  windows: Window[];
+  doors: Door[];
+};
 
-export type Plan = { id: "terrace" | "semid" | "apartment"; label: string; floors: Floor[] };
+export type Plan = {
+  id: "terrace" | "semid" | "apartment";
+  label: string;
+  floors: Floor[];
+};
 
-const room = (id: string, label: string, kind: RoomKind, x: number, y: number, w: number, h: number): Room => ({
+const room = (
+  id: string,
+  label: string,
+  kind: RoomKind,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): Room => ({
   id,
   label,
   kind,
@@ -65,15 +103,47 @@ const terrace: Plan = {
       ],
       windows: [
         { room: "living", p: [0.5, 5], q: [3.3, 5], n: UP, sill: 0, head: 2.4 },
-        { room: "kitchen", p: [0.8, 17.2], q: [3.2, 17.2], n: DOWN, sill: 1, head: 2.1 },
+        {
+          room: "kitchen",
+          p: [0.8, 17.2],
+          q: [3.2, 17.2],
+          n: DOWN,
+          sill: 1,
+          head: 2.1,
+        },
       ],
       doors: [
         { kind: "main", p: [3.9, 5], q: [4.9, 5], rooms: ["porch", "living"] },
-        { kind: "open", p: [0.3, 10], q: [3.7, 10], rooms: ["living", "dining"] },
-        { kind: "open", p: [4.3, 10], q: [6.1, 10], rooms: ["living", "stairs"] },
-        { kind: "room", p: [4, 12.8], q: [4, 13.6], rooms: ["dining", "bath1"] },
-        { kind: "open", p: [0.6, 14], q: [3.4, 14], rooms: ["dining", "kitchen"] },
-        { kind: "back", p: [4.4, 17.2], q: [5.4, 17.2], rooms: ["kitchen", "yard"] },
+        {
+          kind: "open",
+          p: [0.3, 10],
+          q: [3.7, 10],
+          rooms: ["living", "dining"],
+        },
+        {
+          kind: "open",
+          p: [4.3, 10],
+          q: [6.1, 10],
+          rooms: ["living", "stairs"],
+        },
+        {
+          kind: "room",
+          p: [4, 12.8],
+          q: [4, 13.6],
+          rooms: ["dining", "bath1"],
+        },
+        {
+          kind: "open",
+          p: [0.6, 14],
+          q: [3.4, 14],
+          rooms: ["dining", "kitchen"],
+        },
+        {
+          kind: "back",
+          p: [4.4, 17.2],
+          q: [5.4, 17.2],
+          rooms: ["kitchen", "yard"],
+        },
       ],
     },
     {
@@ -91,17 +161,56 @@ const terrace: Plan = {
       ],
       windows: [
         { room: "master", p: [1, 2], q: [5.4, 2], n: UP, sill: 0.9, head: 2.1 },
-        { room: "bed2", p: [0.6, 17.2], q: [2.6, 17.2], n: DOWN, sill: 0.9, head: 2.1 },
-        { room: "bed3", p: [3.8, 17.2], q: [5.8, 17.2], n: DOWN, sill: 0.9, head: 2.1 },
+        {
+          room: "bed2",
+          p: [0.6, 17.2],
+          q: [2.6, 17.2],
+          n: DOWN,
+          sill: 0.9,
+          head: 2.1,
+        },
+        {
+          room: "bed3",
+          p: [3.8, 17.2],
+          q: [5.8, 17.2],
+          n: DOWN,
+          sill: 0.9,
+          head: 2.1,
+        },
       ],
       doors: [
         { kind: "room", p: [3.4, 7], q: [4.2, 7], rooms: ["master", "hall"] },
-        { kind: "room", p: [2.4, 7.8], q: [2.4, 8.6], rooms: ["bath2", "hall"] },
-        { kind: "open", p: [2.5, 10], q: [3.9, 10], rooms: ["hall", "corridor"] },
+        {
+          kind: "room",
+          p: [2.4, 7.8],
+          q: [2.4, 8.6],
+          rooms: ["bath2", "hall"],
+        },
+        {
+          kind: "open",
+          p: [2.5, 10],
+          q: [3.9, 10],
+          rooms: ["hall", "corridor"],
+        },
         { kind: "open", p: [4.2, 10], q: [6.2, 10], rooms: ["hall", "stairs"] },
-        { kind: "room", p: [2.4, 10.6], q: [2.4, 11.4], rooms: ["store", "corridor"] },
-        { kind: "room", p: [2.45, 12.6], q: [3.15, 12.6], rooms: ["corridor", "bed2"] },
-        { kind: "room", p: [3.25, 12.6], q: [3.95, 12.6], rooms: ["corridor", "bed3"] },
+        {
+          kind: "room",
+          p: [2.4, 10.6],
+          q: [2.4, 11.4],
+          rooms: ["store", "corridor"],
+        },
+        {
+          kind: "room",
+          p: [2.45, 12.6],
+          q: [3.15, 12.6],
+          rooms: ["corridor", "bed2"],
+        },
+        {
+          kind: "room",
+          p: [3.25, 12.6],
+          q: [3.95, 12.6],
+          rooms: ["corridor", "bed3"],
+        },
       ],
     },
   ],
@@ -129,19 +238,72 @@ const semid: Plan = {
       ],
       windows: [
         { room: "living", p: [0.5, 5], q: [4.5, 5], n: UP, sill: 0, head: 2.4 },
-        { room: "guest", p: [9.5, 7.6], q: [9.5, 9.6], n: RIGHT, sill: 0.9, head: 2.1 },
-        { room: "bath1", p: [9.5, 11.5], q: [9.5, 12.5], n: RIGHT, sill: 1.5, head: 2.1 },
-        { room: "kitchen", p: [1, 18], q: [3.5, 18], n: DOWN, sill: 1, head: 2.1 },
-        { room: "wet", p: [9.5, 15], q: [9.5, 17], n: RIGHT, sill: 1, head: 2.1 },
+        {
+          room: "guest",
+          p: [9.5, 7.6],
+          q: [9.5, 9.6],
+          n: RIGHT,
+          sill: 0.9,
+          head: 2.1,
+        },
+        {
+          room: "bath1",
+          p: [9.5, 11.5],
+          q: [9.5, 12.5],
+          n: RIGHT,
+          sill: 1.5,
+          head: 2.1,
+        },
+        {
+          room: "kitchen",
+          p: [1, 18],
+          q: [3.5, 18],
+          n: DOWN,
+          sill: 1,
+          head: 2.1,
+        },
+        {
+          room: "wet",
+          p: [9.5, 15],
+          q: [9.5, 17],
+          n: RIGHT,
+          sill: 1,
+          head: 2.1,
+        },
       ],
       doors: [
         { kind: "main", p: [6.6, 5], q: [7.8, 5], rooms: ["porch", "foyer"] },
-        { kind: "open", p: [5.5, 5.4], q: [5.5, 6.8], rooms: ["foyer", "living"] },
+        {
+          kind: "open",
+          p: [5.5, 5.4],
+          q: [5.5, 6.8],
+          rooms: ["foyer", "living"],
+        },
         { kind: "room", p: [6.4, 7], q: [7.2, 7], rooms: ["foyer", "guest"] },
-        { kind: "open", p: [0.4, 10.5], q: [4.8, 10.5], rooms: ["living", "dining"] },
-        { kind: "open", p: [5.5, 11], q: [5.5, 13.8], rooms: ["dining", "stairs"] },
-        { kind: "room", p: [7.7, 13], q: [7.7, 13.8], rooms: ["stairs", "bath1"] },
-        { kind: "open", p: [1, 14.5], q: [4.2, 14.5], rooms: ["dining", "kitchen"] },
+        {
+          kind: "open",
+          p: [0.4, 10.5],
+          q: [4.8, 10.5],
+          rooms: ["living", "dining"],
+        },
+        {
+          kind: "open",
+          p: [5.5, 11],
+          q: [5.5, 13.8],
+          rooms: ["dining", "stairs"],
+        },
+        {
+          kind: "room",
+          p: [7.7, 13],
+          q: [7.7, 13.8],
+          rooms: ["stairs", "bath1"],
+        },
+        {
+          kind: "open",
+          p: [1, 14.5],
+          q: [4.2, 14.5],
+          rooms: ["dining", "kitchen"],
+        },
         { kind: "room", p: [6, 15.4], q: [6, 16.4], rooms: ["kitchen", "wet"] },
         { kind: "back", p: [7, 18], q: [8, 18], rooms: ["wet", "yard"] },
       ],
@@ -164,24 +326,96 @@ const semid: Plan = {
       ],
       windows: [
         { room: "master", p: [1, 2], q: [5, 2], n: UP, sill: 0.9, head: 2.1 },
-        { room: "mbath", p: [9.5, 2.8], q: [9.5, 4], n: RIGHT, sill: 1.5, head: 2.1 },
-        { room: "bed4", p: [9.5, 8], q: [9.5, 10], n: RIGHT, sill: 0.9, head: 2.1 },
-        { room: "bath2", p: [9.5, 11.2], q: [9.5, 12.2], n: RIGHT, sill: 1.5, head: 2.1 },
-        { room: "bed2", p: [1, 18], q: [3.5, 18], n: DOWN, sill: 0.9, head: 2.1 },
-        { room: "bed3", p: [6, 18], q: [8.5, 18], n: DOWN, sill: 0.9, head: 2.1 },
-        { room: "bed3", p: [9.5, 15], q: [9.5, 17], n: RIGHT, sill: 0.9, head: 2.1 },
+        {
+          room: "mbath",
+          p: [9.5, 2.8],
+          q: [9.5, 4],
+          n: RIGHT,
+          sill: 1.5,
+          head: 2.1,
+        },
+        {
+          room: "bed4",
+          p: [9.5, 8],
+          q: [9.5, 10],
+          n: RIGHT,
+          sill: 0.9,
+          head: 2.1,
+        },
+        {
+          room: "bath2",
+          p: [9.5, 11.2],
+          q: [9.5, 12.2],
+          n: RIGHT,
+          sill: 1.5,
+          head: 2.1,
+        },
+        {
+          room: "bed2",
+          p: [1, 18],
+          q: [3.5, 18],
+          n: DOWN,
+          sill: 0.9,
+          head: 2.1,
+        },
+        {
+          room: "bed3",
+          p: [6, 18],
+          q: [8.5, 18],
+          n: DOWN,
+          sill: 0.9,
+          head: 2.1,
+        },
+        {
+          room: "bed3",
+          p: [9.5, 15],
+          q: [9.5, 17],
+          n: RIGHT,
+          sill: 0.9,
+          head: 2.1,
+        },
       ],
       doors: [
         { kind: "room", p: [2, 7.5], q: [2.8, 7.5], rooms: ["master", "hall"] },
         { kind: "room", p: [6, 3.2], q: [6, 4], rooms: ["master", "mbath"] },
         { kind: "room", p: [6, 5.6], q: [6, 6.4], rooms: ["master", "walkin"] },
         { kind: "room", p: [5.5, 8.2], q: [5.5, 9], rooms: ["hall", "bed4"] },
-        { kind: "open", p: [3.6, 10.5], q: [5.4, 10.5], rooms: ["hall", "corridor"] },
-        { kind: "room", p: [3.5, 11.5], q: [3.5, 12.3], rooms: ["study", "corridor"] },
-        { kind: "open", p: [5.5, 11], q: [5.5, 13.6], rooms: ["corridor", "stairs"] },
-        { kind: "room", p: [7.7, 11], q: [7.7, 11.8], rooms: ["stairs", "bath2"] },
-        { kind: "room", p: [3.7, 14], q: [4.5, 14], rooms: ["corridor", "bed2"] },
-        { kind: "room", p: [4.85, 14], q: [5.45, 14], rooms: ["corridor", "bed3"] },
+        {
+          kind: "open",
+          p: [3.6, 10.5],
+          q: [5.4, 10.5],
+          rooms: ["hall", "corridor"],
+        },
+        {
+          kind: "room",
+          p: [3.5, 11.5],
+          q: [3.5, 12.3],
+          rooms: ["study", "corridor"],
+        },
+        {
+          kind: "open",
+          p: [5.5, 11],
+          q: [5.5, 13.6],
+          rooms: ["corridor", "stairs"],
+        },
+        {
+          kind: "room",
+          p: [7.7, 11],
+          q: [7.7, 11.8],
+          rooms: ["stairs", "bath2"],
+        },
+        {
+          kind: "room",
+          p: [3.7, 14],
+          q: [4.5, 14],
+          rooms: ["corridor", "bed2"],
+        },
+        {
+          kind: "room",
+          p: [4.85, 14],
+          q: [5.45, 14],
+          rooms: ["corridor", "bed3"],
+        },
       ],
     },
   ],
@@ -207,22 +441,94 @@ const apartment: Plan = {
         room("bed2", "Bedroom 2", "bedroom", 6, 6.4, 4, 3.6),
       ],
       windows: [
-        { room: "living", p: [0.4, 1.5], q: [5.6, 1.5], n: UP, sill: 0, head: 2.4 },
-        { room: "living", p: [0, 2.4], q: [0, 4.6], n: LEFT, sill: 0.9, head: 2.1 },
-        { room: "kitchen", p: [0, 8.4], q: [0, 9.6], n: LEFT, sill: 1, head: 2.1 },
-        { room: "master", p: [6.6, 0], q: [9.4, 0], n: UP, sill: 0.9, head: 2.1 },
-        { room: "mbath", p: [10, 4.7], q: [10, 5.7], n: RIGHT, sill: 1.5, head: 2.1 },
-        { room: "bed2", p: [10, 7.2], q: [10, 9.2], n: RIGHT, sill: 0.9, head: 2.1 },
+        {
+          room: "living",
+          p: [0.4, 1.5],
+          q: [5.6, 1.5],
+          n: UP,
+          sill: 0,
+          head: 2.4,
+        },
+        {
+          room: "living",
+          p: [0, 2.4],
+          q: [0, 4.6],
+          n: LEFT,
+          sill: 0.9,
+          head: 2.1,
+        },
+        {
+          room: "kitchen",
+          p: [0, 8.4],
+          q: [0, 9.6],
+          n: LEFT,
+          sill: 1,
+          head: 2.1,
+        },
+        {
+          room: "master",
+          p: [6.6, 0],
+          q: [9.4, 0],
+          n: UP,
+          sill: 0.9,
+          head: 2.1,
+        },
+        {
+          room: "mbath",
+          p: [10, 4.7],
+          q: [10, 5.7],
+          n: RIGHT,
+          sill: 1.5,
+          head: 2.1,
+        },
+        {
+          room: "bed2",
+          p: [10, 7.2],
+          q: [10, 9.2],
+          n: RIGHT,
+          sill: 0.9,
+          head: 2.1,
+        },
       ],
       doors: [
         { kind: "main", p: [4, 10], q: [5, 10], rooms: ["lobby", "foyer"] },
-        { kind: "open", p: [0.3, 5.5], q: [5.7, 5.5], rooms: ["living", "dining"] },
-        { kind: "open", p: [0.5, 8], q: [2.5, 8], rooms: ["dining", "kitchen"] },
+        {
+          kind: "open",
+          p: [0.3, 5.5],
+          q: [5.7, 5.5],
+          rooms: ["living", "dining"],
+        },
+        {
+          kind: "open",
+          p: [0.5, 8],
+          q: [2.5, 8],
+          rooms: ["dining", "kitchen"],
+        },
         { kind: "open", p: [3.4, 8], q: [5.6, 8], rooms: ["dining", "foyer"] },
-        { kind: "open", p: [6, 4.6], q: [6, 5.4], rooms: ["living", "hallway"] },
-        { kind: "room", p: [6.6, 4.2], q: [7.4, 4.2], rooms: ["hallway", "master"] },
-        { kind: "room", p: [8.5, 4.2], q: [9.3, 4.2], rooms: ["master", "mbath"] },
-        { kind: "room", p: [6.6, 6.4], q: [7.4, 6.4], rooms: ["hallway", "bed2"] },
+        {
+          kind: "open",
+          p: [6, 4.6],
+          q: [6, 5.4],
+          rooms: ["living", "hallway"],
+        },
+        {
+          kind: "room",
+          p: [6.6, 4.2],
+          q: [7.4, 4.2],
+          rooms: ["hallway", "master"],
+        },
+        {
+          kind: "room",
+          p: [8.5, 4.2],
+          q: [9.3, 4.2],
+          rooms: ["master", "mbath"],
+        },
+        {
+          kind: "room",
+          p: [6.6, 6.4],
+          q: [7.4, 6.4],
+          rooms: ["hallway", "bed2"],
+        },
       ],
     },
   ],
@@ -248,5 +554,7 @@ export function floorBounds(floor: Floor) {
 
 /** The plan's overall footprint across all floors, so switching floors keeps the same scale. */
 export function planBounds(plan: Plan) {
-  return plan.floors.map(floorBounds).reduce((a, b) => ({ w: Math.max(a.w, b.w), h: Math.max(a.h, b.h) }));
+  return plan.floors
+    .map(floorBounds)
+    .reduce((a, b) => ({ w: Math.max(a.w, b.w), h: Math.max(a.h, b.h) }));
 }

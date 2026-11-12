@@ -16,10 +16,29 @@ export const FACINGS = [
   { deg: 315, short: "NW", name: "North-west", malay: "Barat laut" },
 ] as const;
 
-export const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 const MID_MONTH_DAY = [15, 46, 74, 105, 135, 166, 196, 227, 258, 288, 319, 349];
 
-export type SunInput = { lat: number; lng: number; month: number; time: number; facing: number };
+export type SunInput = {
+  lat: number;
+  lng: number;
+  month: number;
+  time: number;
+  facing: number;
+};
 
 export type Sun = {
   up: boolean;
@@ -40,15 +59,20 @@ export function sunAt({ lat, lng, month, time, facing }: SunInput): Sun {
   const day = MID_MONTH_DAY[month - 1];
   const decl = 23.44 * rad * Math.sin((2 * Math.PI * (284 + day)) / 365);
   const b = (2 * Math.PI * (day - 81)) / 364;
-  const eotMin = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+  const eotMin =
+    9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
   // Malaysia runs on UTC+8 (meridian 120°E), so solar noon lands around 1:10 pm.
   const solarNoon = 12 + (120 - lng) / 15 - eotMin / 60;
   const hour = 15 * (time - solarNoon) * rad;
   const phi = lat * rad;
 
   const east = -Math.cos(decl) * Math.sin(hour);
-  const north = Math.cos(phi) * Math.sin(decl) - Math.sin(phi) * Math.cos(decl) * Math.cos(hour);
-  const upZ = Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.cos(hour);
+  const north =
+    Math.cos(phi) * Math.sin(decl) -
+    Math.sin(phi) * Math.cos(decl) * Math.cos(hour);
+  const upZ =
+    Math.sin(phi) * Math.sin(decl) +
+    Math.cos(phi) * Math.cos(decl) * Math.cos(hour);
 
   // Plan "up" points at compass bearing `facing`; plan "right" is 90° clockwise of it.
   const f = facing * rad;
@@ -64,13 +88,20 @@ export function sunAt({ lat, lng, month, time, facing }: SunInput): Sun {
 export type Patch = { room: string; poly: Pt[] };
 
 /** Where direct sun lands on the floor: each window's sill-to-head band projected through it. */
-export function sunPatches(floor: Floor, sun: Sun, curtains: ReadonlySet<string>): Patch[] {
+export function sunPatches(
+  floor: Floor,
+  sun: Sun,
+  curtains: ReadonlySet<string>,
+): Patch[] {
   if (!sun.up) return [];
   const out: Patch[] = [];
   for (const w of floor.windows) {
     if (curtains.has(w.room)) continue;
     if (sun.sx * w.n[0] + sun.sy * w.n[1] <= 0) continue;
-    const shift = (h: number): Pt => [(-sun.sx * h) / sun.sz, (-sun.sy * h) / sun.sz];
+    const shift = (h: number): Pt => [
+      (-sun.sx * h) / sun.sz,
+      (-sun.sy * h) / sun.sz,
+    ];
     const a = shift(w.sill);
     const b = shift(w.head);
     out.push({
@@ -91,7 +122,8 @@ function inPoly(x: number, y: number, poly: Pt[]) {
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const [ax, ay] = poly[i];
     const [bx, by] = poly[j];
-    if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax) inside = !inside;
+    if (ay > y !== by > y && x < ((bx - ax) * (y - ay)) / (by - ay) + ax)
+      inside = !inside;
   }
   return inside;
 }
@@ -120,13 +152,21 @@ export const heatOf = (share: number): Heat => ({
 });
 
 /** Sun share of one room at every half hour from 7 am to 7 pm, for the day strip. */
-export function dayStrip(floor: Floor, roomId: string, base: Omit<SunInput, "time">, curtains: ReadonlySet<string>) {
+export function dayStrip(
+  floor: Floor,
+  roomId: string,
+  base: Omit<SunInput, "time">,
+  curtains: ReadonlySet<string>,
+) {
   const room = floor.rooms.find((r) => r.id === roomId);
   if (!room) return [];
   const out: { time: number; share: number }[] = [];
   for (let t = 7; t < 19; t += 0.5) {
     const s = sunAt({ ...base, time: t + 0.25 });
-    out.push({ time: t, share: sunShare(room, sunPatches(floor, s, curtains)) });
+    out.push({
+      time: t,
+      share: sunShare(room, sunPatches(floor, s, curtains)),
+    });
   }
   return out;
 }

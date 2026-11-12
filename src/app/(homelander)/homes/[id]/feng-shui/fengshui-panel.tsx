@@ -1,6 +1,11 @@
 "use client";
 
-import { PixButton, PixMeter, PixPanel, PixTag } from "@/components/homelander/pixel";
+import {
+  PixButton,
+  PixMeter,
+  PixPanel,
+  PixTag,
+} from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import { ongVerdict, type Note, type Tone } from "./fengshui";
 
@@ -15,13 +20,24 @@ type Props = {
   onPick: (note: Note) => void;
 };
 
-const toneTag: Record<Tone, { tone: "raya" | "kaya" | "pandan"; word: string }> = {
+const toneTag: Record<
+  Tone,
+  { tone: "raya" | "kaya" | "pandan"; word: string }
+> = {
   fix: { tone: "raya", word: "Fix" },
   watch: { tone: "kaya", word: "Watch" },
   good: { tone: "pandan", word: "Good" },
 };
 
-export function FengShuiPanel({ notes, score, floorLabel, currentFloor, showBagua, onToggleBagua, onPick }: Props) {
+export function FengShuiPanel({
+  notes,
+  score,
+  floorLabel,
+  currentFloor,
+  showBagua,
+  onToggleBagua,
+  onPick,
+}: Props) {
   const verdict = ongVerdict(score);
   const problems = notes.filter((n) => n.tone !== "good").length;
 
@@ -31,11 +47,17 @@ export function FengShuiPanel({ notes, score, floorLabel, currentFloor, showBagu
         <div className="flex items-baseline justify-between gap-2">
           <h2 className="font-pixel text-lg font-bold">Ong meter</h2>
           <div className="flex items-center gap-2" aria-live="polite">
-            <span className="font-pixel text-2xl font-bold tabular-nums">{score}</span>
+            <span className="font-pixel text-2xl font-bold tabular-nums">
+              {score}
+            </span>
             <PixTag tone={verdict.tone}>{verdict.word}</PixTag>
           </div>
         </div>
-        <PixMeter value={score} tone={verdict.tone} label={`Ong meter ${score} out of 100`} />
+        <PixMeter
+          value={score}
+          tone={verdict.tone}
+          label={`Ong meter ${score} out of 100`}
+        />
         <p className="text-xs text-ink-soft">
           {problems === 0
             ? "Nothing to fix. Move things around and watch the score."
@@ -43,7 +65,12 @@ export function FengShuiPanel({ notes, score, floorLabel, currentFloor, showBagu
         </p>
       </div>
 
-      <PixButton size="sm" tone={showBagua ? "ink" : "white"} aria-pressed={showBagua} onClick={onToggleBagua}>
+      <PixButton
+        size="sm"
+        tone={showBagua ? "ink" : "white"}
+        aria-pressed={showBagua}
+        onClick={onToggleBagua}
+      >
         {showBagua ? "Hide bagua map" : "Show bagua map"}
       </PixButton>
 
@@ -63,7 +90,11 @@ export function FengShuiPanel({ notes, score, floorLabel, currentFloor, showBagu
               >
                 <span className="flex flex-wrap items-center gap-2">
                   <PixTag tone={t.tone}>{t.word}</PixTag>
-                  {otherFloor ? <span className="text-xs text-ink-soft">{floorLabel(n.floor)}</span> : null}
+                  {otherFloor ? (
+                    <span className="text-xs text-ink-soft">
+                      {floorLabel(n.floor)}
+                    </span>
+                  ) : null}
                 </span>
                 <span className="text-sm font-semibold">{n.title}</span>
                 <span className="text-xs text-ink-soft">{n.detail}</span>

@@ -46,12 +46,25 @@ export const CATALOG: Record<Kind, CatalogEntry> = {
   stove: { label: "Stove", w: 1.8, d: 0.6, fixed: true, prefer: ["kitchen"] },
   sink: { label: "Sink", w: 1.2, d: 0.6, fixed: true, prefer: ["kitchen"] },
   altar: { label: "Altar", w: 1.0, d: 0.5, prefer: ["living", "dining"] },
-  mirror: { label: "Mirror", w: 0.8, d: 0.1, prefer: ["bedroom", "hall", "living"] },
-  plant: { label: "Plant", w: 0.5, d: 0.5, round: true, prefer: ["living", "hall", "dining"] },
+  mirror: {
+    label: "Mirror",
+    w: 0.8,
+    d: 0.1,
+    prefer: ["bedroom", "hall", "living"],
+  },
+  plant: {
+    label: "Plant",
+    w: 0.5,
+    d: 0.5,
+    round: true,
+    prefer: ["living", "hall", "dining"],
+  },
 };
 
 /** Kinds the buyer can add from the panel (the fixed kitchen pieces come with the plan). */
-export const ADDABLE: Kind[] = (Object.keys(CATALOG) as Kind[]).filter((k) => !CATALOG[k].fixed);
+export const ADDABLE: Kind[] = (Object.keys(CATALOG) as Kind[]).filter(
+  (k) => !CATALOG[k].fixed,
+);
 
 export type Rot = 0 | 1 | 2 | 3;
 
@@ -66,7 +79,14 @@ export type Item = {
   rot: Rot;
 };
 
-type Seed = [kind: Kind, floor: string, room: string, cx: number, cy: number, rot: Rot];
+type Seed = [
+  kind: Kind,
+  floor: string,
+  room: string,
+  cx: number,
+  cy: number,
+  rot: Rot,
+];
 
 const seeds: Record<Plan["id"], Seed[]> = {
   terrace: [

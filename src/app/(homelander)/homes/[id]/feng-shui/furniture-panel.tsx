@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, RotateCw, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  RotateCw,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
@@ -22,10 +29,21 @@ type Props = {
 
 const STEP = 0.1;
 
-export function FurniturePanel({ floor, items, selected, onSelect, onAdd, onNudge, onRotate, onRemove, onReset }: Props) {
+export function FurniturePanel({
+  floor,
+  items,
+  selected,
+  onSelect,
+  onAdd,
+  onNudge,
+  onRotate,
+  onRemove,
+  onReset,
+}: Props) {
   const [room, setRoom] = useState("");
   const rooms = floor.rooms.filter((r) => r.kind !== "stairs");
-  const roomLabel = (id: string) => floor.rooms.find((r) => r.id === id)?.label ?? id;
+  const roomLabel = (id: string) =>
+    floor.rooms.find((r) => r.id === id)?.label ?? id;
   // A room picked on another floor doesn't exist here; fall back to "best spot".
   const target = rooms.some((r) => r.id === room) ? room : "";
 
@@ -45,25 +63,53 @@ export function FurniturePanel({ floor, items, selected, onSelect, onAdd, onNudg
       </div>
 
       {selected ? (
-        <div className="grid gap-3 border-2 border-ink bg-cloud p-3" aria-live="polite">
+        <div
+          className="grid gap-3 border-2 border-ink bg-cloud p-3"
+          aria-live="polite"
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="font-semibold">
               {CATALOG[selected.kind].label}
-              <span className="font-normal text-ink-soft"> · {roomLabel(selected.room)}</span>
+              <span className="font-normal text-ink-soft">
+                {" "}
+                · {roomLabel(selected.room)}
+              </span>
             </p>
             {fixed ? <PixTag tone="kaya">Built in</PixTag> : null}
           </div>
           {fixed ? (
-            <p className="text-sm text-ink-soft">The stove and sink come with the kitchen, so they stay put.</p>
+            <p className="text-sm text-ink-soft">
+              The stove and sink come with the kitchen, so they stay put.
+            </p>
           ) : (
             <div className="flex flex-wrap items-center gap-3">
-              <div className="grid grid-cols-3 gap-1" role="group" aria-label="Move 10 cm">
+              <div
+                className="grid grid-cols-3 gap-1"
+                role="group"
+                aria-label="Move 10 cm"
+              >
                 <span />
-                <NudgeButton label="Move up" onClick={() => onNudge(0, -STEP)} icon={<ArrowUp className="size-4" />} />
+                <NudgeButton
+                  label="Move up"
+                  onClick={() => onNudge(0, -STEP)}
+                  icon={<ArrowUp className="size-4" />}
+                />
                 <span />
-                <NudgeButton label="Move left" onClick={() => onNudge(-STEP, 0)} icon={<ArrowLeft className="size-4" />} />
-                <NudgeButton label="Move down" onClick={() => onNudge(0, STEP)} icon={<ArrowDown className="size-4" />} />
-                <NudgeButton label="Move right" onClick={() => onNudge(STEP, 0)} icon={<ArrowRight className="size-4" />} />
+                <NudgeButton
+                  label="Move left"
+                  onClick={() => onNudge(-STEP, 0)}
+                  icon={<ArrowLeft className="size-4" />}
+                />
+                <NudgeButton
+                  label="Move down"
+                  onClick={() => onNudge(0, STEP)}
+                  icon={<ArrowDown className="size-4" />}
+                />
+                <NudgeButton
+                  label="Move right"
+                  onClick={() => onNudge(STEP, 0)}
+                  icon={<ArrowRight className="size-4" />}
+                />
               </div>
               <div className="grid gap-2">
                 <PixButton size="sm" onClick={onRotate}>
@@ -85,8 +131,8 @@ export function FurniturePanel({ floor, items, selected, onSelect, onAdd, onNudg
         </div>
       ) : (
         <p className="text-sm text-ink-soft">
-          Tap a piece on the plan to pick it up, then drag it or use the arrows. Keyboard: arrows move, R turns,
-          Delete removes.
+          Tap a piece on the plan to pick it up, then drag it or use the arrows.
+          Keyboard: arrows move, R turns, Delete removes.
         </p>
       )}
 
@@ -125,17 +171,23 @@ export function FurniturePanel({ floor, items, selected, onSelect, onAdd, onNudg
 
       {items.length > 0 && (
         <div className="grid gap-2">
-          <span className="text-sm font-semibold">On the {floor.label.toLowerCase()}</span>
+          <span className="text-sm font-semibold">
+            On the {floor.label.toLowerCase()}
+          </span>
           <ul className="flex flex-wrap gap-1.5">
             {items.map((it) => (
               <li key={it.uid}>
                 <button
                   type="button"
                   aria-pressed={selected?.uid === it.uid}
-                  onClick={() => onSelect(selected?.uid === it.uid ? null : it.uid)}
+                  onClick={() =>
+                    onSelect(selected?.uid === it.uid ? null : it.uid)
+                  }
                   className={cn(
                     "border-2 border-ink px-2 py-0.5 text-xs font-semibold",
-                    selected?.uid === it.uid ? "bg-ink text-white" : "bg-white hover:bg-cloud",
+                    selected?.uid === it.uid
+                      ? "bg-ink text-white"
+                      : "bg-white hover:bg-cloud",
                   )}
                 >
                   {CATALOG[it.kind].label}
@@ -150,7 +202,15 @@ export function FurniturePanel({ floor, items, selected, onSelect, onAdd, onNudg
   );
 }
 
-function NudgeButton({ label, onClick, icon }: { label: string; onClick: () => void; icon: React.ReactNode }) {
+function NudgeButton({
+  label,
+  onClick,
+  icon,
+}: {
+  label: string;
+  onClick: () => void;
+  icon: React.ReactNode;
+}) {
   return (
     <button
       type="button"

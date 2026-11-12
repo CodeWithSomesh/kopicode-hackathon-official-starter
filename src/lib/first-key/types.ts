@@ -21,7 +21,7 @@ export type Unit = {
   buildingId: string;
   floor: number;
   unit: string; // "12-03"
-  type: "2R1B" | "3R2B" | "4R3B";
+  type: "Studio" | "1R1B" | "2R2B" | "3R2B" | "Dual-key" | "3+1 Corner" | "Penthouse";
   sizeSqft: number;
   price: number; // RM
   monthly: number; // RM, see monthlyInstalment()
@@ -29,6 +29,7 @@ export type Unit = {
   lat: number;
   lng: number;
   rooms: Room[];
+  /** The front door: a gap in `room`'s corridor wall starting at local x = at[0]. Dual-key suites have a second door in room "dapur_2". */
   door: { room: string; faces: Compass; at: XY };
 };
 
@@ -38,6 +39,18 @@ export type Building = {
   footprint: LngLat[]; // closed-ring polygon (first point repeated at the end)
   floors: number;
   heightM: number;
+  /** Rows of flats round the corridor on a unit floor (1 for a long thin block, else 2). */
+  rows: 1 | 2;
+  /** "serviced" = Maya Bay-style serviced-apartment tower with shops in the podium; "residence" = North Woods-style tower. */
+  style: "serviced" | "residence";
+  /** Floors with no flats besides floor 1 (lobby) and floor 2 (car park): facilities decks with pool, gym and function room. */
+  decks: number[];
+  /** Floors of podium (lobby, car park) when not the default for the height. Set on spawned site towers. */
+  podium?: number;
+  /** Spawned site towers only: the variant key (tower/variants.ts draws the same tower on the map) and the model's turn, degrees clockwise (0 = long side east-west). */
+  variant?: string;
+  rot?: number;
+  /** Flats: none on floor 1 (lobby), floor 2 (car park) or a deck floor. */
   units: Unit[];
 };
 

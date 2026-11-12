@@ -6,6 +6,9 @@ import { gsap } from "gsap";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { township } from "@/lib/first-key/township";
+import { groupById, groupOfHouse } from "@/lib/first-key/landed";
+import { siteOf, siteTower } from "@/lib/first-key/site-interiors";
+import { useT } from "@/lib/homelander/i18n/client";
 import type { Unit } from "@/lib/first-key/types";
 import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
 import { anchorOptions } from "@/lib/homelander/data";
@@ -33,6 +36,10 @@ const DEV_ALIAS: Record<string, string> = {
   "jade-hills": "jade",
   twentyfive7: "tf7",
 };
+const LandedBurst = dynamic(
+  () => import("@/components/first-key/burst/landed-burst").then((m) => m.LandedBurst),
+  { ssr: false },
+);
 const BuildingBurst = dynamic(
   () => import("@/components/first-key/burst/building-burst").then((m) => m.BuildingBurst),
   { ssr: false },
@@ -45,14 +52,17 @@ export function FindClient(props: Props) {
 }
 
 function Find({ initialBuilding, initialUnit, initialDev }: Props) {
-  const valid = township.buildings.some((b) => b.id === initialBuilding);
+  // a building is a tower, or a landed enclave group (terrace row, pair, bungalow) whose house is the `unit`
+  // A spawned tower or landed building at another site is "sb<n>" (site-interiors.ts, landed.ts): it opens like the Cove ones, in its own township.
+  const valid = township.buildings.some((b) => b.id === initialBuilding) || !!(initialBuilding && (groupById(initialBuilding) || siteTower(initialBuilding)));
   const [selectedId, setSelectedId] = useState<string | undefined>(valid ? initialBuilding : undefined);
   const [unitId, setUnitId] = useState<string | undefined>(valid ? initialUnit : undefined);
-  // A building always belongs to Gamuda Cove; otherwise ?dev= picks the township.
+  // A building belongs to Gamuda Cove unless it is a spawned one (its own site); otherwise ?dev= picks the township.
   const wanted = initialDev && (DEV_ALIAS[initialDev] ?? initialDev);
-  const [devId, setDevId] = useState<string | undefined>(valid ? COVE_ID : wanted && townInfoById[wanted] ? wanted : undefined);
+  const [devId, setDevId] = useState<string | undefined>(valid ? (initialBuilding && siteOf(initialBuilding)) || COVE_ID : wanted && townInfoById[wanted] ? wanted : undefined);
   const [map, setMap] = useState<ControlMap | null>(null);
   const hl = useHomeLander();
+  const t = useT();
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const [burstOpen, setBurstOpen] = useState(false);
   const [burstMounted, setBurstMounted] = useState(false); // keep the 3D scene once built; it idles on demand
@@ -61,7 +71,9 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   const overlay = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
 
-  const building = township.buildings.find((b) => b.id === selectedId);
+  const building = township.buildings.find((b) => b.id === selectedId) ?? (selectedId ? siteTower(selectedId) : undefined);
+  const spawned = !!selectedId && !!siteOf(selectedId);
+  const group = selectedId ? groupById(selectedId) : undefined;
 
   // Keep the URL shareable: /?building=c&unit=12-03 or /?dev=cove
   useEffect(() => {
@@ -92,6 +104,17 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // the 3D shot is back on the map's pose: crossfade out while the map is still paused, then let it fly out
+  const onClosed = () =>
+    gsap.to(overlay.current, {
+      autoAlpha: 0,
+      duration: reduced ? 0 : 0.35,
+      onComplete: () => {
+        setLeaving(false);
+        setBurstOpen(false);
+      },
+    });
+
   const open = () => {
     captureView();
     setLeaving(false);
@@ -104,10 +127,12 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
       <div inert={burstOpen} className="contents">
       <NeighbourhoodMap
         selectedId={selectedId}
+        houseId={group ? unitId : undefined}
         onSelect={(id) => {
-          setSelectedId(id);
-          setUnitId(undefined);
-          if (id) setDevId(COVE_ID);
+          const g = id ? groupOfHouse(id) : undefined; // a click on a landed house opens its group with that house picked
+          setSelectedId(g ? g.id : id);
+          setUnitId(g ? id : undefined);
+          if (id) setDevId(siteOf(id) ?? COVE_ID);
         }}
         devId={devId}
         onMapReady={setMap}
@@ -122,7 +147,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
       />
       </div>
 
-      <h1 className="sr-only lg:hidden">Gamuda Land map</h1>
+      <h1 className="sr-only lg:hidden">{t("Gamuda Land map")}</h1>
 
       {/* The tower view covers all of this: keep it out of the Tab order and the accessibility tree while it is open */}
       <div inert={burstOpen}>
@@ -140,7 +165,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
             setDevId(undefined);
           }}
         />
-        <MapControls map={map} panelOpen={!!info && !burstOpen} />
+        <MapControls map={map} panelOpen={!!info && !burstOpen} cycleLight={HAS_MAPBOX} />
         {info && !burstOpen && (
           <TownPanel
             key={info.t.id}
@@ -188,12 +213,24 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
       >
         <div className="absolute inset-x-0 top-[76px] z-10 flex items-center justify-between border-b bg-card/90 px-4 py-2 text-card-foreground backdrop-blur">
           <h1 className="text-base font-semibold">
-            {building ? `Block ${building.block}: ${building.floors} floors, ${building.units.length} units` : "Building"}
+            {building
+              ? t("Block {block}: {floors} floors, {n} units", { block: building.block, floors: building.floors, n: building.units.length })
+              : group
+                ? t(group.houses.length === 1 ? "{kind}: {n} landed home" : "{kind}: {n} landed homes", {
+                    kind: group.houses.length === 1 ? t("Bungalow") : group.houses.length === 2 ? t("Semi-D pair") : t("Terrace row"),
+                    n: group.houses.length,
+                  })
+                : t("Building")}
           </h1>
-          <Button variant="ghost" size="icon" aria-label="Back to the map" onClick={() => setLeaving(true)}>
+          <Button variant="ghost" size="icon" aria-label={t("Back to the map")} onClick={() => setLeaving(true)}>
             <X />
           </Button>
         </div>
+        {selectedId && (
+          <p className="absolute top-[126px] left-4 z-10 rounded-full bg-card/90 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+            {t("Illustrative, made-up units and prices")}
+          </p>
+        )}
         <div className="absolute inset-0">
           {building && burstMounted && (
             <BuildingBurst
@@ -204,17 +241,19 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
               active={burstOpen}
               open={burstOpen && !leaving}
               view={view}
-              onClosed={() =>
-                // the 3D shot is back on the map's pose: crossfade out while the map is still paused, then let it fly out
-                gsap.to(overlay.current, {
-                  autoAlpha: 0,
-                  duration: reduced ? 0 : 0.35,
-                  onComplete: () => {
-                    setLeaving(false);
-                    setBurstOpen(false);
-                  },
-                })
-              }
+              onClosed={onClosed}
+            />
+          )}
+          {group && burstMounted && (
+            <LandedBurst
+              key={group.id}
+              group={group}
+              selectedHouseId={unitId}
+              onSelectHouse={(h) => setUnitId(h.id)}
+              active={burstOpen}
+              open={burstOpen && !leaving}
+              view={view}
+              onClosed={onClosed}
             />
           )}
         </div>

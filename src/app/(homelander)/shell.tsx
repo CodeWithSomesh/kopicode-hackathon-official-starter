@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PixPanel } from "@/components/homelander/pixel";
+import { ThemeSwitcher } from "@/components/homelander/theme-switcher";
 import { Sprite, defineSprite, sprites, type SpriteArt, type SpriteName } from "@/components/homelander/sprite";
 import { useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
@@ -56,7 +57,7 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
             full ? "pointer-events-none fixed inset-x-0 top-0" : "relative",
           )}
         >
-          <div className="mx-auto flex max-w-6xl items-center gap-3 lg:gap-6">
+          <div className="mx-auto flex max-w-6xl items-center gap-1.5 sm:gap-3 lg:gap-6">
             <Link
               href="/"
               className="pointer-events-auto"
@@ -97,7 +98,8 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
               </PixPanel>
             </nav>
 
-            <div className="pointer-events-auto ml-auto flex items-center gap-3">
+            <div className="pointer-events-auto ml-auto flex items-center gap-1 sm:gap-3">
+              <ThemeSwitcher />
               <PixPanel
                 flat
                 className="flex items-center gap-1.5 px-2.5 py-1.5 max-sm:hidden lg:max-xl:hidden"

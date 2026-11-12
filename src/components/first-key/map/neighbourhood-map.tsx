@@ -2,21 +2,27 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Map, { Marker, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
+import Map, { Layer, Marker, Source, type LayerProps, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
 import { addProtocol, setWorkerUrl, type ExpressionSpecification, type LayerSpecification, type Map as MLMap, type StyleSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { gsap } from "gsap";
 import { layers as basemapLayers, namedFlavor } from "@protomaps/basemaps";
 import { township } from "@/lib/first-key/township";
 import { centroid } from "@/lib/first-key/geo";
+import { useT } from "@/lib/homelander/i18n/client";
 import { Pin, POI_ICONS, poiDetail, poiHidden, poiRank, TrainFront, useNamedPois } from "./poi-pin";
 import { anchorOptions, townshipById } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
 import { pillLean, pillLeanPhone, pillNudgePhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import { useMapColors } from "../use-map-colors";
+import { siteIndexOf, siteLayout } from "@/lib/first-key/site-layout";
+import { ZONE, groupById, groups } from "@/lib/first-key/landed";
+import { EnclaveSwitch } from "./enclave-switch";
+import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
 import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
+import { SITE_MIN_ZOOM, SiteChip, siteFootprints, siteLabels, typeFill, useZoomGate } from "./site-shared";
 
 // Turbopack can't resolve MapLibre's module worker next to the bundle, so it is served from /public (a copy of
 // node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs; re-copy it if MapLibre is upgraded). The only worker setup in the app.
@@ -82,7 +88,20 @@ const devView = (id: string) => {
   return { center: [t.pos.lng, t.pos.lat] as [number, number], zoom: 14.6, pitch: 50, bearing: 0, padding: cameraPadding(true) };
 };
 
-const centres = Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)]));
+// the landed enclave's terrace rows, pairs and bungalows are selectable by their group id too
+// The landed enclave (260 m wide) in the free part of the screen, the township panel open.
+const enclaveView = () => {
+  const padding = cameraPadding(true);
+  const free = Math.max(200, window.innerWidth - padding.left - padding.right);
+  return { center: ZONE.centre as [number, number], zoom: Math.log2((free * 0.9 * M_PER_PX_Z0) / 300), pitch: 52, bearing: 0, padding };
+};
+const centres: Record<string, [number, number]> = { ...Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)])), ...Object.fromEntries(groups.map((g) => [g.id, [g.lng, g.lat]])) };
+// a spawned site building ("sb<n>") is not in `centres`: use its own spot from site-layout
+const centresOf = (id: string): [number, number] | undefined => {
+  const i = siteIndexOf(id);
+  const b = i === undefined ? undefined : siteLayout.buildings[i];
+  return centres[id] ?? (b ? [b.lng, b.lat] : undefined);
+};
 const buildingsGeoJson = {
   type: "FeatureCollection" as const,
   features: township.buildings.map((b) => ({
@@ -99,6 +118,8 @@ const railGeoJson = {
 
 type Props = {
   selectedId?: string;
+  /** The picked house (a landed enclave group is `selectedId`). */
+  houseId?: string;
   onSelect: (buildingId: string | undefined) => void;
   /** The 3D building is showing over the map: stop the opening shot and any camera motion. */
   paused: boolean;
@@ -113,8 +134,9 @@ type Props = {
   onMapReady?: (map: MLMap) => void;
 };
 
-export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
+export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
   const hl = useHomeLander();
+  const tr = useT();
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const mapRef = useRef<MapRef>(null);
   const [loaded, setLoaded] = useState(false);
@@ -255,6 +277,20 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         },
       },
       {
+        // The spawned site buildings (illustrative, site-layout.json) as plain footprints, flat colour by typology; the click target too.
+        id: "site-boxes",
+        type: "fill-extrusion",
+        source: "site-footprints",
+        minzoom: SITE_MIN_ZOOM,
+        paint: {
+          "fill-extrusion-height": ["get", "h"],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 0.95,
+          "fill-extrusion-vertical-gradient": true,
+          "fill-extrusion-color": typeFill(colors) as ExpressionSpecification,
+        },
+      },
+      {
         id: "township-selected",
         type: "fill-extrusion",
         source: "buildings",
@@ -270,6 +306,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     ];
     const ours = {
       buildings: { type: "geojson" as const, data: buildingsGeoJson },
+      "site-footprints": { type: "geojson" as const, data: siteFootprints },
       rail: { type: "geojson" as const, data: railGeoJson },
       "homelander-rail": { type: "geojson" as const, data: railGeoJSON },
       "homelander-stations": { type: "geojson" as const, data: stationGeoJSON },
@@ -350,7 +387,9 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   const flyTo = (id: string, then?: () => void) => {
     const map = mapRef.current?.getMap();
     if (!map) return;
-    const [lng, lat] = centres[id];
+    const c = centresOf(id);
+    if (!c) return;
+    const [lng, lat] = c;
     const target = { center: [lng, lat] as [number, number], zoom: 18.2, pitch: 60, bearing: map.getBearing() };
     if (reduced) {
       map.jumpTo(target);
@@ -369,7 +408,9 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     first.current = false;
     if (!selectedId) return;
     if (isFirst && startAtSelected) {
-      const [lng, lat] = centres[selectedId];
+      const c = centresOf(selectedId);
+      if (!c) return;
+      const [lng, lat] = c;
       mapRef.current?.getMap().jumpTo({ center: [lng, lat], zoom: 18.2, pitch: 60 });
       onArrived();
       return;
@@ -384,11 +425,21 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (wasPaused.current && !paused && map) {
-      if (reduced) map.jumpTo(townshipView());
-      else map.flyTo({ ...townshipView(), bearing: map.getBearing(), duration: 1200 });
+      const back = selectedId && groupById(selectedId) ? enclaveView() : townshipView(); // out of a house: back to the enclave
+      if (reduced) map.jumpTo(back);
+      else map.flyTo({ ...back, bearing: map.getBearing(), duration: 1200 });
     }
     wasPaused.current = paused;
+    // only the burst closing flies back; the selection is read when it does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused, reduced]);
+
+  const flyView = (v: ReturnType<typeof enclaveView>) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    if (reduced) map.jumpTo(v);
+    else map.flyTo({ ...v, bearing: map.getBearing(), duration: 1800 });
+  };
 
   // Fly to the focused development, or back out to the Klang Valley. The first run is skipped: initialView is already there.
   const firstDev = useRef(true);
@@ -406,13 +457,14 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   }, [devId, loaded]);
 
   const onClick = (e: MapLayerMouseEvent) => {
-    const id = e.features?.[0]?.properties?.id;
-    if (id) onSelect(id);
+    const p = e.features?.[0]?.properties;
+    if (p?.id) onSelect(p.id);
+    else if (p?.site) onSelectDev(p.site); // a spawned site building: open that township
   };
   const showTownship = devId === COVE_ID || !!selectedId;
+  const siteChips = useZoomGate(() => mapRef.current?.getMap(), loaded);
 
-
-  const from = selectedId ? centres[selectedId] : undefined;
+  const from = selectedId ? centresOf(selectedId) : undefined;
   const poiFit = useNamedPois(() => mapRef.current?.getMap(), loaded && showTownship, from);
 
   return (
@@ -427,7 +479,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         maxPitch={70}
         minZoom={8.5}
         maxBounds={withBasemap ? PMTILES_BOUNDS : undefined}
-        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected"]}
+        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected", ...LANDED_PICK_LAYERS, "site-boxes"]}
         cursor="auto"
         onError={(e) => {
           // Only a request that was really aborted (the view moved on) is quiet. Everything else stays loud, most of
@@ -444,6 +496,20 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         attributionControl={false}
         style={{ width: "100%", height: "100%" }}
       >
+        {showTownship &&
+          landedSources(colors, dark, houseId ?? "", false).map((s) => (
+            <Source key={s.id} id={s.id} type="geojson" data={s.data}>
+              {s.layers.map((l) => (
+                <Layer key={l.id} {...(l as unknown as LayerProps)} />
+              ))}
+            </Source>
+          ))}
+        {siteChips &&
+          siteLabels.map((l) => (
+            <Marker key={l.site} longitude={l.lng} latitude={l.lat} anchor="bottom" offset={[0, -8]} style={{ pointerEvents: "none", zIndex: 0 }}>
+              <SiteChip />
+            </Marker>
+          ))}
         {!selectedId &&
           towns.map((x) => {
             const phone = !window.matchMedia("(min-width: 1024px)").matches; // ponytail: read at render, no resize listener
@@ -469,17 +535,18 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         {showTownship &&
           township.rail.stations.map((s) => (
             <Marker key={s.id} longitude={s.lng} latitude={s.lat} anchor="bottom">
-              <Pin id={s.id} d={poiRank(from, s.lng, s.lat)} label={s.name} detail={poiDetail(from, s.lng, s.lat)} Icon={TrainFront} tone="station" named={poiFit.named.has(s.id)} hidden={poiHidden(poiFit, s.id)} />
+              <Pin id={s.id} d={poiRank(from, s.lng, s.lat)} label={s.name} detail={poiDetail(from, s.lng, s.lat, tr)} Icon={TrainFront} tone="station" named={poiFit.named.has(s.id)} hidden={poiHidden(poiFit, s.id)} />
             </Marker>
           ))}
         {showTownship &&
           township.places.map((p) => (
             <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
-              <Pin id={p.id} d={poiRank(from, p.lng, p.lat)} label={p.name} detail={poiDetail(from, p.lng, p.lat)} Icon={POI_ICONS[p.kind]} named={poiFit.named.has(p.id)} hidden={poiHidden(poiFit, p.id)} />
+              <Pin id={p.id} d={poiRank(from, p.lng, p.lat)} label={p.name} detail={poiDetail(from, p.lng, p.lat, tr)} Icon={POI_ICONS[p.kind]} named={poiFit.named.has(p.id)} hidden={poiHidden(poiFit, p.id)} />
             </Marker>
           ))}
       </Map>
       )}
+      {showTownship && !selectedId && <EnclaveSwitch onTowers={() => flyView(townshipView())} onEnclave={() => flyView(enclaveView())} />}
     </div>
   );
 }

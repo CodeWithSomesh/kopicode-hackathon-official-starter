@@ -1,5 +1,6 @@
 import { centroid } from "./geo";
-import type { Building, Compass, LngLat, Place, Room, Township, Unit } from "./types";
+import type { Building, Compass, LngLat, Place, Township, Unit } from "./types";
+import { SPECS as TYPE_SPECS, doorX, roomsFor, widthOf, type UnitType } from "./unit-plans";
 
 // ILLUSTRATIVE ONLY. "Seri Kopi Heights" is an invented township; all prices, plans and places are made up.
 // Sited on open ground near Dengkil, Selangor (about 2.86 N, 101.68 E) so the made-up footprints do not
@@ -35,91 +36,129 @@ const rect = (e: number, n: number, w: number, d: number): LngLat[] => {
 };
 
 // ---- unit generation (deterministic) ----
-const TEMPLATES = {
-  "2R1B": { sqft: 650, w: 6.0, d: 9.0 },
-  "3R2B": { sqft: 861, w: 7.2, d: 11.1 },
-  "4R3B": { sqft: 1100, w: 8.4, d: 12.2 },
-} as const;
-type UnitType = keyof typeof TEMPLATES;
+/** Towers of 15+ floors stand on a 2-storey podium: lobby, then car park. Keep in step with podiumFloors in tower/tower-model.ts. */
+const podiumFloors = (floors: number) => (floors >= 15 ? 2 : 0);
+export type FloorKind = "lobby" | "carpark" | "deck" | "units";
+/** Floor 1 is the lobby (shops too on a serviced tower), floor 2 the car park, deck floors the pool and gym; none hold flats. */
+export const floorKind = (b: Pick<Building, "floors" | "decks" | "podium">, floor: number): FloorKind =>
+  floor === 1 ? "lobby" : floor <= (b.podium ?? podiumFloors(b.floors)) ? "carpark" : b.decks.includes(floor) ? "deck" : "units";
+export const floorLabel = (b: Pick<Building, "floors" | "decks" | "style">, floor: number) =>
+  ({ lobby: b.style === "serviced" ? "Lobby and shops" : "Lobby", carpark: "Car park", deck: "Facilities deck", units: "" })[floorKind(b, floor)];
 
-const box = (x: number, y: number, w: number, h: number): Room["polygon"] => [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+const rng = (seed: number) => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
 
-/** Rooms in unit-local metres: living/dining at the front (y small), bedrooms behind. */
-function roomsFor(type: UnitType, facing: Compass): Room[] {
-  const { w, d } = TEMPLATES[type];
-  const beds = type === "2R1B" ? 1 : type === "3R2B" ? 2 : 3;
-  const front = d * 0.45;
-  const rooms: Room[] = [
-    { id: "ruang_tamu", name: "Living", polygon: box(0, 0, w, front * 0.6), windows: [facing] },
-    { id: "makan", name: "Dining", polygon: box(0, front * 0.6, w, front * 0.4), windows: [] },
-    { id: "dapur", name: "Kitchen", polygon: box(w * 0.55, front, w * 0.45, 2.6), windows: [] },
-  ];
-  const bw = w / (beds + 1);
-  for (let i = 0; i < beds; i++) {
-    rooms.push({
-      id: i === 0 ? "bilik_utama" : `bilik_${i + 1}`,
-      name: i === 0 ? "Master bedroom" : `Bedroom ${i + 1}`,
-      polygon: box(i * bw, front + 2.6, bw, d - front - 2.6),
-      windows: [facing],
-    });
-  }
-  return rooms;
-}
+/** Mix of unit types by height share t (0 = lowest flat floor, 1 = top): small flats low, bigger ones high. */
+const MIX: [number, [UnitType, number][]][] = [
+  [0.25, [["Studio", 4], ["1R1B", 4], ["2R2B", 2]]],
+  [0.55, [["1R1B", 2], ["2R2B", 5], ["3R2B", 2], ["Dual-key", 1]]],
+  [0.85, [["2R2B", 2], ["3R2B", 5], ["Dual-key", 2]]],
+  [1.01, [["3R2B", 4], ["Dual-key", 3]]],
+];
+
+/** Serviced towers sell 550-977 sqft (Maya Bay: 550-968): no studios, and the corner suites are dual-key. */
+const pickType = (r: () => number, t: number, serviced: boolean): UnitType => {
+  const opts = MIX.find(([max]) => t < max)![1];
+  let x = r() * opts.reduce((s, [, w]) => s + w, 0);
+  let pick = opts[0][0];
+  for (const [ty, w] of opts) if ((x -= w) < 0) { pick = ty; break; }
+  return serviced && pick === "Studio" ? "1R1B" : pick;
+};
 
 const OPPOSITE: Record<Compass, Compass> = { N: "S", NE: "SW", E: "W", SE: "NW", S: "N", SW: "NE", W: "E", NW: "SE" };
 
-function makeUnits(buildingId: string, block: string, floors: number, perFloor: number, centre: LngLat, seed: number): Unit[] {
-  const types: UnitType[] = ["3R2B", "2R1B", "3R2B", "4R3B", "2R1B", "3R2B", "4R3B", "3R2B"];
-  const facings: Compass[] = ["E", "W", "N", "S"];
+/** One row of flats for a floor: corner types at both ends, the rest drawn by height, until the row's width is used up. */
+function fillRow(r: () => number, t: number, top: boolean, target: number, pentCount: number, serviced: boolean): UnitType[] {
+  if (top) return Array<UnitType>(pentCount).fill("Penthouse");
+  // Upper floors: the row ends are L-shaped 3+1 corners about half the time, so floors differ rather than repeat.
+  const end = (): UnitType => (t >= 0.4 && r() < 0.55 ? (serviced ? "Dual-key" : "3+1 Corner") : pickType(r, t, serviced));
+  const seq: UnitType[] = [end()];
+  let acc = widthOf(seq[0]);
+  const endW = widthOf(serviced ? "Dual-key" : "3+1 Corner");
+  for (;;) {
+    const ty = pickType(r, t, serviced);
+    if (acc + endW + widthOf(ty) / 2 > target) break;
+    seq.push(ty);
+    acc += widthOf(ty);
+  }
+  seq.push(end());
+  return seq;
+}
+
+const rowsOf = (w: number, d: number): 1 | 2 => (w / d > 2.3 ? 1 : 2);
+
+/** What a spawned site tower changes: its project name, podium floors (default by height), and `priceK`, a multiplier on RM per sqft and on the price limits (1 = the Cove block's prices). */
+export type UnitOpts = { project?: string; podium?: number; priceK?: number };
+export function makeUnits(buildingId: string, block: string, floors: number, perFloor: number, rows: 1 | 2, serviced: boolean, decks: number[], centre: LngLat, seed: number, opts: UnitOpts = {}): Unit[] {
   const units: Unit[] = [];
-  for (let f = 1; f <= floors; f++) {
-    for (let u = 0; u < perFloor; u++) {
-      const type = types[(u + seed) % types.length];
-      const facing = facings[(u + seed) % facings.length];
-      const { sqft } = TEMPLATES[type];
-      // RM/sqft rises ~6 per floor, plus a small deterministic wobble per unit; clamped to RM350k-RM900k.
-      const rate = 520 + f * 6 + ((f * 7 + u * 13 + seed * 5) % 40);
-      const price = Math.min(900_000, Math.max(350_000, Math.round((sqft * rate) / 5000) * 5000));
-      units.push({
-        project: PROJECT,
-        block,
-        buildingId,
-        floor: f,
-        unit: `${f}-${String(u + 1).padStart(2, "0")}`,
-        type,
-        sizeSqft: sqft,
-        price,
-        monthly: monthlyInstalment(price),
-        facing,
-        lat: centre[1],
-        lng: centre[0],
-        rooms: roomsFor(type, facing),
-        door: { room: "ruang_tamu", faces: OPPOSITE[facing], at: [0, 1.9] },
+  const pod = opts.podium ?? podiumFloors(floors);
+  const k = opts.priceK ?? 1;
+  const first = pod + (pod ? 1 : 2); // floors 1-2 podium (or floor 1 alone) hold no flats
+  const tower = pod > 0;
+  const view: Compass = seed % 2 ? "N" : "S"; // the side of the block with the better outlook (park or lake)
+  const target = (perFloor / rows) * 8;
+  const pentPerRow = Math.ceil(perFloor / rows / 3);
+  for (let f = first; f <= floors; f++) {
+    if (decks.includes(f)) continue;
+    const r = rng(seed * 1009 + f * 31 + 7);
+    const t = floors === first ? 1 : (f - first) / (floors - first);
+    const top = f === floors;
+    let n = 0;
+    for (let row = 0; row < rows; row++) {
+      const seq = fillRow(r, t, top, target, pentPerRow, serviced);
+      seq.forEach((type, i) => {
+        const end = i === 0 || i === seq.length - 1;
+        const left = i === 0;
+        const facing: Compass = end ? (row === 0 ? (left ? "SW" : "SE") : left ? "NW" : "NE") : row === 0 ? "S" : "N";
+        const sp = TYPE_SPECS[type];
+        // RM per sqft: base plus a rise per floor, times the type factor; corners +4%, the outlook side +3%.
+        const base = tower ? 600 + f * 7 : 480 + f * 6;
+        const premium = 1 + (end ? 0.04 : 0) + (facing.includes(view) ? 0.03 : 0) + (((f * 7 + n * 13 + seed * 5) % 5) - 2) * 0.004;
+        const raw = sp.sqft * base * sp.psf * premium * k;
+        const price = Math.round(Math.min((type === "Penthouse" ? 1_500_000 : 1_200_000) * k, Math.max(350_000 * k, Math.round(raw / 5000) * 5000)) / 5000) * 5000;
+        n++;
+        const mirror = left;
+        units.push({
+          project: opts.project ?? PROJECT,
+          block,
+          buildingId,
+          floor: f,
+          unit: `${f}-${String(n).padStart(2, "0")}`,
+          type,
+          sizeSqft: sp.sqft,
+          price,
+          monthly: monthlyInstalment(price),
+          facing,
+          lat: centre[1],
+          lng: centre[0],
+          rooms: roomsFor(type, facing, mirror),
+          door: { room: sp.door, faces: OPPOSITE[facing], at: [doorX(type, mirror), 0] },
+        });
       });
     }
   }
   return units;
 }
 
-// id, block, east m, north m, width m, depth m, floors, units per floor
-const SPECS: [string, string, number, number, number, number, number, number][] = [
-  ["a", "A", -180, 120, 34, 22, 28, 8],
-  ["b", "B", -110, 150, 30, 20, 24, 6],
-  ["c", "C", -40, 130, 30, 20, 30, 8],
-  ["d", "D", 30, 160, 28, 18, 20, 6],
-  ["e", "E", 100, 120, 28, 18, 18, 6],
-  ["f", "F", 170, 150, 26, 18, 15, 6],
-  ["g", "G", -150, -20, 40, 14, 5, 4],
-  ["h", "H", -80, -40, 40, 14, 6, 4],
-  ["j", "J", -10, -20, 36, 14, 5, 4],
-  ["k", "K", 60, -50, 36, 14, 4, 4],
-  ["l", "L", 130, -20, 30, 14, 6, 4],
-  ["m", "M", 190, -60, 24, 14, 4, 4],
+// Gamuda Cove has five real towers (3 Maya Bay serviced-apartment towers, 2 North Woods blocks, A1 and A2); the landed
+// homes get their own zone elsewhere. These five stand in the north row. Block names and plans are made up.
+// id, block, east m, north m, width m, depth m, floors, flats per floor (target), style, deck floors
+const SPECS: [string, string, number, number, number, number, number, number, Building["style"], number[]][] = [
+  ["a", "A", -190, 130, 46, 24, 28, 10.5, "serviced", [6]],
+  ["b", "B", -115, 150, 44, 24, 26, 11.5, "serviced", [6]],
+  ["c", "C", -35, 130, 46, 24, 30, 10, "serviced", [6]],
+  ["d", "D", 50, 155, 46, 24, 32, 10, "residence", [6, 30]],
+  ["e", "E", 125, 125, 34, 22, 32, 5, "residence", [6, 30]],
 ];
 
-const buildings: Building[] = SPECS.map(([id, block, e, n, w, d, floors, per], i) => {
+const buildings: Building[] = SPECS.map(([id, block, e, n, w, d, floors, per, style, decks], i) => {
   const footprint = rect(e, n, w, d);
-  return { id, block, footprint, floors, heightM: floors * 3.1, units: makeUnits(id, block, floors, per, centroid(footprint), i) };
+  const rows = rowsOf(w, d);
+  return { id, block, footprint, floors, heightM: floors * 3.1, rows, style, decks, units: makeUnits(id, block, floors, per, rows, style === "serviced", decks, centroid(footprint), i) };
 });
 
 const stations = [

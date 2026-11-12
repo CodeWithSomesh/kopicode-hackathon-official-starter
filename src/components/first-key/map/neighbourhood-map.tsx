@@ -13,7 +13,7 @@ import { bearingDeg, centroid, compassOf, distanceM, walkingMinutes } from "@/li
 import type { PlaceKind } from "@/lib/first-key/types";
 import { anchorOptions, townshipById } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
-import { pillLean, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
+import { pillLean, pillLeanPhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import { useThemeColors } from "../use-theme-colors";
 import { drawGlassTexture } from "./glass-texture";
@@ -124,9 +124,8 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   // Dark = the theme's background is dark: works for any theme (Kopi O, Teh Susu...) and for a class flip.
   const dark = (colors.background.match(/\d+/g) ?? ["255"]).slice(0, 3).reduce((t, v) => t + Number(v), 0) / 3 < 128;
   // Without our PMTiles file, fetch OpenFreeMap's Liberty style once ("failed" = offline: plain background, never blank).
-  const [liberty, setLiberty] = useState<StyleSpecification | "loading" | "failed">(PMTILES_URL ? "failed" : "loading");
+  const [liberty, setLiberty] = useState<StyleSpecification | "loading" | "failed">("loading");
   useEffect(() => {
-    if (PMTILES_URL) return;
     const ctl = new AbortController();
     fetch(LIBERTY_URL, { signal: ctl.signal })
       .then((r) => r.json())
@@ -135,8 +134,11 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     return () => ctl.abort();
   }, []);
   // Mount the map once its basemap style is known: one style set at load.
-  const ready = PMTILES_URL ? protocolReady : liberty !== "loading";
+  const ready = protocolReady && liberty !== "loading";
   const libertyStyle = !withBasemap && typeof liberty === "object" ? liberty : undefined;
+  // With our PMTiles file the file only covers the Klang Valley, and a wide screen shows past its edge. Underneath it we paint
+  // Liberty's flat layers (land, water, roads: no labels, icons or 3D, so no sprite is needed); the file's own opaque earth covers them inside.
+  const underlay = withBasemap && typeof liberty === "object" ? liberty : undefined;
 
   // Night reveal: when the theme flips light to dark while open, `lit` runs 0..NIGHT_STEPS and the windows come on.
   const [lit, setLit] = useState(NIGHT_STEPS);
@@ -243,6 +245,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
       glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
       sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${dark ? "dark" : "light"}`,
       sources: {
+        ...underlay?.sources,
         ...(withBasemap && {
           protomaps: {
             type: "vector" as const,
@@ -252,9 +255,14 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         }),
         ...ours,
       },
-      layers: [{ id: "bg", type: "background", paint: { "background-color": colors.background } }, ...(withBasemap ? basemap : []), ...overlays],
+      layers: [
+        { id: "bg", type: "background", paint: { "background-color": colors.background } },
+        ...(underlay?.layers.filter((l) => l.type !== "symbol" && l.type !== "fill-extrusion" && l.type !== "background" && !JSON.stringify(l.paint ?? {}).includes("pattern")).map((l) => ({ ...l, id: `ol-${l.id}` })) ?? []),
+        ...(withBasemap ? basemap : []),
+        ...overlays,
+      ],
     };
-  }, [colors, dark, selectedId, glassId, withBasemap, basemap, libertyStyle]);
+  }, [colors, dark, selectedId, glassId, withBasemap, basemap, libertyStyle, underlay]);
 
   // Draw the window texture for the current theme. MapLibre may ask before or after this runs, so register it now,
   // on every style change, and when the style asks for it by name. In dark all night-reveal frames are drawn up
@@ -394,17 +402,18 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
       >
         {!selectedId &&
           towns.map((x) => {
-            const lean = pillLean[x.t.id] ?? "center";
+            const phone = !window.matchMedia("(min-width: 1024px)").matches; // ponytail: read at render, no resize listener
+            const lean = (phone ? pillLeanPhone : pillLean)[x.t.id] ?? "center";
             return (
               <Marker
                 key={x.t.id}
                 longitude={x.t.pos.lng}
                 latitude={x.t.pos.lat}
-                anchor={lean === "left" ? "bottom-right" : lean === "right" ? "bottom-left" : "bottom"}
-                offset={lean === "left" ? [8, 0] : lean === "right" ? [-8, 0] : [0, 0]}
+                anchor={lean === "left" ? "bottom-right" : lean === "right" ? "bottom-left" : lean === "below" ? "top-left" : "bottom"}
+                offset={lean === "left" ? [8, 0] : lean === "right" || lean === "below" ? [-8, 0] : [0, 0]}
                 style={{ zIndex: devId === x.t.id ? 3 : 1 }}
               >
-                <TownPill info={x} selected={devId === x.t.id} onPick={() => onSelectDev(x.t.id)} />
+                <TownPill info={x} lean={lean} selected={devId === x.t.id} onPick={() => onSelectDev(x.t.id)} />
               </Marker>
             );
           })}

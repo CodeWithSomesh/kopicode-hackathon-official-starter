@@ -3,13 +3,22 @@
 import { Sprite } from "@/components/homelander/sprite";
 import { rmShort } from "@/lib/homelander/data";
 import { cn } from "@/lib/utils";
-import { mapSprites, pillLean, type TownInfo } from "./map-data";
+import { mapSprites, type TownInfo } from "./map-data";
 
 /** The township pill on the map: house sprite, name, "From RM...", units left. */
-export function TownPill({ info, selected, onPick }: { info: TownInfo; selected: boolean; onPick: () => void }) {
-  const lean = pillLean[info.t.id] ?? "center";
+export function TownPill({
+  info,
+  lean,
+  selected,
+  onPick,
+}: {
+  info: TownInfo;
+  lean: "left" | "right" | "center" | "below";
+  selected: boolean;
+  onPick: () => void;
+}) {
   return (
-    <div className="flex flex-col">
+    <div className={cn("flex", lean === "below" ? "flex-col-reverse" : "flex-col")}>
       <button
         type="button"
         onClick={(e) => {
@@ -18,7 +27,7 @@ export function TownPill({ info, selected, onPick }: { info: TownInfo; selected:
         }}
         aria-pressed={selected}
         aria-label={`${info.t.name}, from ${rmShort(info.from)}, ${info.left} units left`}
-        className="pix-frame flex cursor-pointer items-center gap-2 px-2 py-1.5 whitespace-nowrap text-ink"
+        className="pix-frame flex cursor-pointer items-center gap-2 px-2 py-1.5 whitespace-nowrap text-ink max-lg:gap-1 max-lg:px-1.5 max-lg:py-1"
         style={
           {
             "--pix-fill": selected ? "var(--color-kaya)" : "var(--j-surface, #ffffff)",
@@ -26,11 +35,11 @@ export function TownPill({ info, selected, onPick }: { info: TownInfo; selected:
           } as React.CSSProperties
         }
       >
-        <Sprite art="house" scale={2} className={info.left ? "text-pandan-deep" : "text-ink-soft"} />
+        <Sprite art="house" scale={2} className={cn("max-lg:hidden", info.left ? "text-pandan-deep" : "text-ink-soft")} />
         <span className="grid gap-1 text-left">
-          <span className="font-pixel text-sm leading-none font-bold">{info.t.name}</span>
+          <span className="font-pixel text-sm leading-none font-bold max-lg:text-xs">{info.t.name}</span>
           <span className="flex items-center gap-1.5">
-            <span className="font-pixel text-xs leading-none tabular-nums">From {rmShort(info.from)}</span>
+            <span className="font-pixel text-xs leading-none tabular-nums max-lg:hidden">From {rmShort(info.from)}</span>
             <span
               className={cn(
                 "px-1 py-px font-pixel-label text-[9px] leading-none uppercase",
@@ -45,7 +54,7 @@ export function TownPill({ info, selected, onPick }: { info: TownInfo; selected:
       <Sprite
         art={mapSprites.tail}
         scale={2}
-        className={cn("mt-[3px] text-ink", lean === "left" ? "self-end" : lean === "right" ? "self-start" : "self-center")}
+        className={cn(lean === "below" ? "mb-[3px] rotate-180" : "mt-[3px]", "text-ink", lean === "left" ? "self-end" : lean === "right" || lean === "below" ? "self-start" : "self-center")}
       />
     </div>
   );

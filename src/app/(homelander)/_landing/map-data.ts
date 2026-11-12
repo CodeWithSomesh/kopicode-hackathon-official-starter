@@ -32,6 +32,14 @@ export const pillLean: Record<string, "left" | "right" | "center"> = {
   robertson: "right",
 };
 
+/** Phone: the pills are narrower, and Kundang/Gardens sit almost on one spot, so Kundang drops below its pin. */
+export const pillLeanPhone: Record<string, "left" | "right" | "center" | "below"> = {
+  kundang: "below",
+  gardens: "right",
+  highpark: "left",
+  robertson: "right",
+};
+
 export const railColors: Record<string, string> = {
   "mrt-kajang": "#23863e",
   "mrt-putrajaya": "#ffcf3f",

@@ -115,7 +115,7 @@ export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, 
           {lead ? (
             <p className="flex min-w-0 flex-1 items-start gap-2 text-sm leading-snug text-white/90">
               <Sprite art="sparkle" scale={2} className="mt-0.5 shrink-0 text-kaya" />
-              <span className="line-clamp-2 min-w-0">{lead}</span>
+              <span className="line-clamp-2 min-w-0">{tr(lead)}</span>
             </p>
           ) : (
             <span />

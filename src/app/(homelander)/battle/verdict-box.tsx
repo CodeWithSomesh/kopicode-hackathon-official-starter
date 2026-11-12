@@ -277,7 +277,7 @@ function ChecksTable({ battle }: { battle: Battle }) {
                     <td
                       key={f.unit.id}
                       className="px-1.5 py-1.5 align-top"
-                      title={r.why}
+                      title={t(r.why)}
                     >
                       <span className="flex items-start gap-1">
                         <Sprite
@@ -286,7 +286,7 @@ function ChecksTable({ battle }: { battle: Battle }) {
                           className={cn("mt-0.5 shrink-0", ic.cls)}
                           label={t(ic.label)}
                         />
-                        <span className="text-ink-soft">{r.why}</span>
+                        <span className="text-ink-soft">{t(r.why)}</span>
                       </span>
                     </td>
                   );

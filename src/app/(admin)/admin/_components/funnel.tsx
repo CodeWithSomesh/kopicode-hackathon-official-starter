@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/homelander/i18n/client";
 import { ArrowDownIcon } from "lucide-react";
 import { num, pct, type funnel } from "@/lib/homelander/admin-metrics";
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ const advice: Record<string, string> = {
 };
 
 export function Funnel({ data }: { data: ReturnType<typeof funnel> }) {
+  const t = useT();
   const { rows, worst, overall } = data;
   return (
     <Section
@@ -36,9 +38,9 @@ export function Funnel({ data }: { data: ReturnType<typeof funnel> }) {
             <div className="grid leading-tight">
               <span className="text-sm font-medium">
                 <span className="mr-1.5 text-muted-foreground tabular-nums">{i + 1}.</span>
-                {r.label}
+                {t(r.label)}
               </span>
-              <span className="text-xs text-muted-foreground">{r.hint}</span>
+              <span className="text-xs text-muted-foreground">{t(r.hint)}</span>
             </div>
             <div className="col-span-2 row-start-2 h-8 overflow-hidden rounded-md bg-muted md:col-span-1 md:row-start-1 md:col-start-2" aria-hidden>
               <div

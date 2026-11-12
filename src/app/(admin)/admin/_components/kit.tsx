@@ -164,6 +164,9 @@ export function ChartFigure({
   className?: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
+  label = t(label);
+  columns = columns.map((c) => t(c));
   return (
     <figure className={cn("relative", className)} aria-label={label}>
       <div aria-hidden className="h-full w-full">

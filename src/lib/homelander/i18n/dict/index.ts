@@ -4,6 +4,7 @@ import { admin } from "./admin";
 import { auth } from "./auth";
 import { bank } from "./bank";
 import { battle } from "./battle";
+import { engine } from "./engine";
 import { fengshui } from "./fengshui";
 import { landing } from "./landing";
 import { map } from "./map";
@@ -20,5 +21,5 @@ import { swipe } from "./swipe";
  */
 export const dict: Dict = {
   ...shared, ...shell, ...landing, ...map, ...swipe, ...battle, ...bank,
-  ...onboarding, ...profile, ...admin, ...about, ...auth, ...fengshui, ...misc,
+  ...onboarding, ...profile, ...admin, ...about, ...auth, ...fengshui, ...misc, ...engine,
 };

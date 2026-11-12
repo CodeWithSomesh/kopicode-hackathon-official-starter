@@ -1,3 +1,4 @@
+import { LanguageToggle } from "@/components/homelander/language-toggle";
 import Link from "next/link";
 import { ArrowUpRightIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/app/theme-toggle";
@@ -64,6 +65,7 @@ export async function AdminShell({ children }: { children: React.ReactNode }) {
                 <ArrowUpRightIcon aria-hidden />
               </Link>
             </Button>
+            <LanguageToggle />
             <ThemeToggle />
           </div>
         </header>

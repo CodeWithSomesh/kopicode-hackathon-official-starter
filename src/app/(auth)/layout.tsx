@@ -1,3 +1,4 @@
+import { LanguageToggle } from "@/components/homelander/language-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MochiBot } from "@/components/homelander/mochi-bot";
@@ -39,12 +40,15 @@ export default async function AuthLayout({ children }: LayoutProps<"/">) {
       <div className="relative z-10 mx-auto flex min-h-svh w-full max-w-6xl flex-col px-4 pt-4 pb-[20vh] lg:px-8 lg:pt-6">
         <header className="flex items-center justify-between gap-3">
           <Wordmark label={t("HomeLander, back to the map")} />
+          <div className="flex items-center gap-2">
+            <LanguageToggle />
           <PixPanel asChild flat>
             <Link href="/" aria-label={t("Back to the map")} className="px-3 py-2 text-sm font-semibold whitespace-nowrap">
               <span className="max-[374px]:hidden">{t("Back to the map")}</span>
               <span className="min-[375px]:hidden">{t("Map")}</span>
             </Link>
           </PixPanel>
+          </div>
         </header>
 
         <main className="grid flex-1 grid-cols-[minmax(0,1fr)] items-center gap-6 pt-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)] lg:gap-12 lg:pt-10">

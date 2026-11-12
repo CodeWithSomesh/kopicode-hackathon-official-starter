@@ -602,7 +602,7 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
                   }
                 />
                 <Fig label="Rate tiers" value={r.product.tiers.map((x) => ratePct(x.rate)).join(", ")} />
-                <Fig label="Loan range" value={loanRange(r)} />
+                <Fig label="Loan range" value={loanRange(r, tr)} />
               </dl>
               {r.product.notes.length ? <p className="text-xs text-ink-soft">{r.product.notes.map((x) => tr(x)).join(". ")}.</p> : null}
 
@@ -659,11 +659,11 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
   );
 }
 
-function loanRange(r: ProductResult) {
+function loanRange(r: ProductResult, tr: (en: string, v?: Record<string, string | number>) => string) {
   const lo = Math.min(...r.product.tiers.map((x) => x.minLoanRM));
   const his = r.product.tiers.map((x) => x.maxLoanRM);
   const hi = his.includes(null) ? null : Math.max(...(his as number[]));
-  return hi === null ? `From ${rm(lo)}` : `${rm(lo)} to ${rm(hi)}`;
+  return hi === null ? tr("From {lo}", { lo: rm(lo) }) : tr("{a} to {b}", { a: rm(lo), b: rm(hi) });
 }
 
 function Fig({ label, value, strong, warn }: { label: string; value: string; strong?: boolean; warn?: boolean }) {

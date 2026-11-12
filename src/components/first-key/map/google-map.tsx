@@ -9,6 +9,7 @@ import { railColors, railGeoJSON, towns } from "@/app/(homelander)/_landing/map-
 import type { ControlMap } from "@/app/(homelander)/_landing/map-controls";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 import { setMapNight } from "../use-map-colors";
+import { readThemeColors } from "../use-theme-colors";
 
 // Google Maps Platform photorealistic 3D (Map3DElement, Maps JavaScript API, `v=beta` channel, `maps3d` + `marker` libraries).
 // Used when NEXT_PUBLIC_GOOGLE_MAPS_KEY is set; find-client.tsx then mounts no other map (Google's terms: no Google content
@@ -77,6 +78,8 @@ const devCam = (id: string, heading: number): Cam => {
 // Kundang, Gardens and Gardens Park sit 2-3 km apart: at the overview their labels would stack, so their pins stand at
 // different heights (metres above ground; about 25 px apart on screen at 86 km range). ponytail: hand-tuned like pillLean.
 const PIN_ALT: Record<string, number> = { kundang: 140, gardens: 1600, "gardens-park": 3100 };
+// glTF is +Y up; how Google maps the model's axes onto the globe (heading, tilt, roll in degrees). Tuned by measurement.
+const MODEL_ORIENTATION = { heading: 0, tilt: 0, roll: 0 };
 const centres = Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)]));
 const buildingCam = (id: string, heading: number): Cam => {
   const [lng, lat] = centres[id];
@@ -264,14 +267,16 @@ export default function GoogleMap({ selectedId, onSelect, paused, onArrived, sta
     const isFirst = firstSel.current;
     firstSel.current = false;
     if (!selectedId || (isFirst && startAtSelected)) return;
+    before.current = cam(map);
     flight(buildingCam(selectedId, map.heading), 1800, () => props.current.onArrived());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, map]);
 
-  // Burst closed: back out to the block.
+  // Burst closed: back to the camera the tower was picked from (a deep link has none: the block view).
+  const before = useRef<Cam>(undefined);
   const wasPaused = useRef(false);
   useEffect(() => {
-    if (wasPaused.current && !paused && map) flight(coveCam(map.heading), 1400);
+    if (wasPaused.current && !paused && map) flight(before.current ?? coveCam(map.heading), 1400);
     wasPaused.current = paused;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused, map]);
@@ -340,38 +345,102 @@ export default function GoogleMap({ selectedId, onSelect, paused, onArrived, sta
     return () => made.forEach((m) => m.remove());
   }, [map, lib, devId, selectedId, workAnchor]);
 
-  // Our illustrative block at Gamuda Cove: extruded, clickable footprints (made-up towers on the real photoreal ground).
+  // Our 12 illustrative towers as .glb models: the burst's own procedural shell, built once in the browser.
+  const [glbs, setGlbs] = useState<Record<string, string> | "failed">();
   useEffect(() => {
-    if (!map || !lib || !host.current) return;
-    const { Polygon3DInteractiveElement, Marker3DElement, PinElement } = lib;
+    if (!lib) return;
+    let dead = false;
+    const colors = readThemeColors();
+    // three.js + GLTFExporter load only here, after the map is up (the burst chunk shares them)
+    import("./tower-glb")
+      .then(({ towerGlb }) => Promise.all(township.buildings.map(async (b) => [b.id, await towerGlb(b, colors)] as const)))
+      .then((pairs) => {
+        if (!dead) setGlbs(Object.fromEntries(pairs));
+      })
+      .catch((e) => {
+        console.warn(e);
+        if (!dead) setGlbs("failed");
+      });
+    return () => {
+      dead = true;
+    };
+  }, [lib]);
+
+  // The picked block in the primary colour, as the other maps draw it: the burst's first frame starts in that colour.
+  const [tinted, setTinted] = useState<{ id: string; src: string }>();
+  useEffect(() => {
+    if (!selectedId || glbs === "failed" || !glbs) return;
+    let dead = false;
+    const colors = readThemeColors();
+    const b = township.buildings.find((x) => x.id === selectedId);
+    if (b) void import("./tower-glb").then(({ towerGlb }) => towerGlb(b, colors, colors.primary)).then((src) => !dead && setTinted({ id: b.id, src }));
+    return () => {
+      dead = true;
+    };
+  }, [selectedId, glbs]);
+
+  // Our illustrative block at Gamuda Cove on the real photoreal ground: clickable glTF towers (Model3DInteractiveElement);
+  // if the models could not be built, extruded clickable footprints (Polygon3DInteractiveElement) instead. Built once:
+  // a pick only swaps one model's src (below), so the towers don't blink while the camera flies in.
+  const towers = useRef<Record<string, HTMLElement & { src?: string; fillColor?: string }>>({});
+  useEffect(() => {
+    if (!map || !lib || !host.current || !glbs) return;
+    const { Model3DInteractiveElement, Polygon3DInteractiveElement } = lib;
     const root = host.current;
     const made = township.buildings.map((b) => {
-      const p = new Polygon3DInteractiveElement({
-        path: b.footprint.map(([lng, lat]) => ({ lat, lng, altitude: b.heightM })),
-        altitudeMode: "RELATIVE_TO_GROUND",
-        extruded: true,
-        fillColor: css(root, selectedId === b.id ? "--color-kaya" : "--color-cloud"),
-        strokeColor: css(root, "--color-ink"),
-        strokeWidth: 1,
-        title: `Block ${b.block}: illustrative block, made-up units and prices`,
-      });
-      p.addEventListener("gmp-click", () => props.current.onSelect(b.id));
-      return p;
+      const title = `Block ${b.block}: illustrative block, made-up units and prices`;
+      const [lng, lat] = centres[b.id];
+      const el =
+        glbs !== "failed"
+          ? new Model3DInteractiveElement({ src: glbs[b.id], position: { lat, lng, altitude: 0 }, altitudeMode: "CLAMP_TO_GROUND", orientation: MODEL_ORIENTATION })
+          : new Polygon3DInteractiveElement({
+              path: b.footprint.map(([lng, lat]) => ({ lat, lng, altitude: b.heightM })),
+              altitudeMode: "RELATIVE_TO_GROUND",
+              extruded: true,
+              fillColor: css(root, "--color-cloud"),
+              strokeColor: css(root, "--color-ink"),
+              strokeWidth: 1,
+            });
+      el.title = title;
+      el.addEventListener("gmp-click", () => props.current.onSelect(b.id));
+      towers.current[b.id] = el;
+      return el;
     });
-    // Close to Cove, a label says what the block is, on the map itself.
-    if (devId === COVE_ID || selectedId) {
-      const label = new Marker3DElement({
-        position: { lat: CLAT, lng: CLNG, altitude: Math.max(...township.buildings.map((b) => b.heightM)) + 25 },
-        altitudeMode: "RELATIVE_TO_GROUND",
-        label: "Illustrative block, made-up units and prices",
-        collisionBehavior: "REQUIRED",
-      });
-      label.append(new PinElement({ background: css(root, "--color-kaya"), borderColor: css(root, "--color-ink"), glyphColor: css(root, "--color-ink"), scale: 0.7 }));
-      made.push(label);
-    }
     map.append(...made);
-    return () => made.forEach((m) => m.remove());
-  }, [map, lib, selectedId, devId]);
+    return () => {
+      made.forEach((m) => m.remove());
+      towers.current = {};
+    };
+  }, [map, lib, glbs]);
+
+  // The picked tower in the primary colour; the others back to glass.
+  useEffect(() => {
+    if (!glbs) return;
+    for (const [id, el] of Object.entries(towers.current)) {
+      const want = id === selectedId;
+      if (glbs === "failed") el.fillColor = want ? readThemeColors().primary : css(host.current ?? document.body, "--color-cloud");
+      else {
+        const src = want && tinted?.id === id ? tinted.src : glbs[id];
+        if (el.src !== src) el.src = src;
+      }
+    }
+  }, [selectedId, tinted, glbs]);
+
+  // Close to Cove, a label says what the block is, on the map itself.
+  useEffect(() => {
+    if (!map || !lib || !host.current || (devId !== COVE_ID && !selectedId)) return;
+    const { Marker3DElement, PinElement } = lib;
+    const c = (n: string) => css(host.current!, n);
+    const label = new Marker3DElement({
+      position: { lat: CLAT, lng: CLNG, altitude: Math.max(...township.buildings.map((b) => b.heightM)) + 25 },
+      altitudeMode: "RELATIVE_TO_GROUND",
+      label: "Illustrative block, made-up units and prices",
+      collisionBehavior: "REQUIRED",
+    });
+    label.append(new PinElement({ background: c("--color-kaya"), borderColor: c("--color-ink"), glyphColor: c("--color-ink"), scale: 0.7 }));
+    map.append(label);
+    return () => label.remove();
+  }, [map, lib, devId, selectedId]);
 
   return (
     // Phones: the map ends above the tab bar so Google's logo and attribution (bottom of the canvas) stay visible.

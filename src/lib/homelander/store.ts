@@ -27,7 +27,7 @@ export type Lead = {
   reasons: string[];
 };
 
-/** What the bank check worked out; read by Compare and Uncle. Null until the buyer runs the bank check. */
+/** What the bank check worked out; read by Compare and Mochi. Null until the buyer runs the bank check. */
 export type Budget = {
   grossRM: number;
   netRM: number;
@@ -49,7 +49,7 @@ export type HomeLanderState = {
   budget: Budget | null;
   /** Unit ids picked for Battle (2 to 5). */
   compare: string[];
-  /** What Uncle learned in onboarding (and the buyer corrected). */
+  /** What Mochi learned in onboarding (and the buyer corrected). */
   profile: Profile;
   /** Set when the buyer finishes onboarding. */
   onboardedAt: string | null;

@@ -16,7 +16,7 @@ export type WeightMode = PresetId | "custom";
 export function Priorities({
   mode,
   weights,
-  uncleWhy,
+  mochiWhy,
   hasProfile,
   skipped,
   onPreset,
@@ -24,7 +24,7 @@ export function Priorities({
 }: {
   mode: WeightMode;
   weights: Weights;
-  uncleWhy: string[];
+  mochiWhy: string[];
   hasProfile: boolean;
   /** Categories that can't be judged yet (missing inputs): slider disabled, with the reason. */
   skipped: Partial<Record<StatKey, string>>;
@@ -32,8 +32,8 @@ export function Priorities({
   onWeight: (k: StatKey, v: number) => void;
 }) {
   const options: { id: PresetId; label: string }[] = [
-    { id: "uncle", label: hasProfile ? "Uncle's mix for you" : "Balanced" },
-    ...(Object.keys(PRESETS) as Exclude<PresetId, "uncle">[]).map((id) => ({
+    { id: "mochi", label: hasProfile ? "Mochi's mix for you" : "Balanced" },
+    ...(Object.keys(PRESETS) as Exclude<PresetId, "mochi">[]).map((id) => ({
       id,
       label: PRESETS[id].label,
     })),
@@ -41,10 +41,10 @@ export function Priorities({
   const blurb =
     mode === "custom"
       ? "Your own mix. Pick a preset to reset."
-      : mode === "uncle"
-        ? hasProfile && uncleWhy.length
-          ? `Weighted from what you told Uncle: ${uncleWhy.join(", ")}.`
-          : "An even mix. Sit with Uncle and it bends to your life."
+      : mode === "mochi"
+        ? hasProfile && mochiWhy.length
+          ? `Weighted from what you told Mochi: ${mochiWhy.join(", ")}.`
+          : "An even mix. Chat with Mochi and it bends to your life."
         : PRESETS[mode].blurb;
 
   return (

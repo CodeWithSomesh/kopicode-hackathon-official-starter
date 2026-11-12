@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useSyncExternalStore } from "react";
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
+import { MochiBot } from "@/components/homelander/mochi-bot";
 import { Sprite } from "@/components/homelander/sprite";
 import { MIN_TENURE, checkAllBanks, type BankCheckInput } from "@/lib/homelander/bank";
 import { unitById, type Unit } from "@/lib/homelander/data";
@@ -15,7 +16,7 @@ import { BankList, HowItWorks, NeedAnswers, NextSteps, ResultCard, TargetPicker 
 
 const noopSubscribe = () => () => {};
 const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
-/** Onboarded and Uncle actually heard something: the bank works from real answers only. */
+/** Onboarded and Mochi actually heard something: the bank works from real answers only. */
 const knowsBuyer = (s: HomeLanderState) => !!s.onboardedAt && Object.values(s.profile).some(filled);
 
 export function BankView() {
@@ -23,7 +24,7 @@ export function BankView() {
   const s = useHomeLander();
   const prefs = useBankPrefs();
   if (!mounted) return <Header />;
-  if (!knowsBuyer(s)) return <UncleGate />;
+  if (!knowsBuyer(s)) return <MochiGate />;
   return <Bank s={s} prefs={prefs} />;
 }
 
@@ -36,29 +37,29 @@ function Header() {
       <div className="grid gap-1">
         <h1 className="font-pixel text-3xl leading-none lg:text-4xl">The Bank</h1>
         <p className="text-sm text-ink lg:text-base">
-          What 23 Malaysian banks are likely to lend you, worked out from what you told Uncle.
+          What 23 Malaysian banks are likely to lend you, worked out from what you told Mochi.
         </p>
       </div>
     </header>
   );
 }
 
-function UncleGate() {
+function MochiGate() {
   return (
     <div className="grid gap-8">
       <Header />
       <PixPanel className="mx-auto grid w-full max-w-xl justify-items-center gap-4 p-6 text-center sm:p-10">
-        <Sprite art="uncle" scale={6} label="Uncle" />
-        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Uncle needs to know you first</h2>
+        <MochiBot size={132} />
+        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Mochi needs to get to know you first</h2>
         <p className="max-w-md text-[15px] text-ink">
-          The bank check runs on your real pay, loans and age, the ones you tell Uncle. No answers, no guesses, so
+          The bank check runs on your real pay, loans and age, the ones you tell Mochi. No answers, no guesses, so
           there&apos;s nothing to check yet.
         </p>
         <div className="p-1 pb-2">
           <PixButton asChild tone="pandan" size="lg">
             <Link href="/onboarding">
-              <Sprite art="uncle" scale={2} />
-              Sit with Uncle
+              <Sprite art="mochi" scale={2} />
+              Chat with Mochi
             </Link>
           </PixButton>
         </div>

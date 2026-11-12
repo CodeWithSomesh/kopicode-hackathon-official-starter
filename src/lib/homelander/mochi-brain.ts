@@ -6,13 +6,13 @@ import { env } from "@/lib/env";
 import { missingEssentials, profileSchema, type Profile } from "./profile";
 
 /**
- * Uncle's brain, shared by the browser voice and the live Agora agent: one model call per turn that
- * returns what Uncle says next and every profile field the buyer just mentioned, validated against
+ * Mochi's brain, shared by the browser voice and the live Agora agent: one model call per turn that
+ * returns what Mochi says next and every profile field the buyer just mentioned, validated against
  * the profile schema. Uses Groq (free, fast) when GROQ_API_KEY is set, else the Vercel AI Gateway.
  */
 
 /**
- * Groq's free tier allows 8,000 tokens a minute PER MODEL and a turn costs ~2-3k, so Uncle walks
+ * Groq's free tier allows 8,000 tokens a minute PER MODEL and a turn costs ~2-3k, so Mochi walks
  * down this list when a model is rate-limited (or rejects the request). Override with GROQ_MODELS.
  */
 const GROQ_MODELS = (process.env.GROQ_MODELS ?? process.env.GROQ_MODEL ?? "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b")
@@ -20,13 +20,13 @@ const GROQ_MODELS = (process.env.GROQ_MODELS ?? process.env.GROQ_MODEL ?? "opena
   .map((m) => m.trim())
   .filter(Boolean);
 
-/** Only the turns Uncle needs to stay in context; the profile JSON carries everything older. */
+/** Only the turns Mochi needs to stay in context; the profile JSON carries everything older. */
 const HISTORY = 12;
 
-export const uncleLangs = ["en", "ms", "zh", "ta"] as const;
-export type UncleLang = (typeof uncleLangs)[number];
+export const mochiLangs = ["en", "ms", "zh", "ta"] as const;
+export type MochiLang = (typeof mochiLangs)[number];
 
-export type UncleMessage = { role: "user" | "assistant"; content: string };
+export type MochiMessage = { role: "user" | "assistant"; content: string };
 
 /**
  * Strict structured output (Groq, OpenAI) requires every property to be listed as required,
@@ -39,27 +39,26 @@ const patchWire = z.object(
 );
 
 const turnSchema = z.object({
-  reply: z.string().describe("What Uncle says out loud next. 1 to 3 short spoken sentences, one question at most."),
-  lang: z.enum(uncleLangs).describe("Language of the reply: en (Manglish is fine), ms, zh (Mandarin, simplified), ta (Tamil)."),
+  reply: z.string().describe("What Mochi says out loud next. 1 to 3 short spoken sentences, one question at most."),
+  lang: z.enum(mochiLangs).describe("Language of the reply: en (Malaysian English), ms, zh (Mandarin, simplified), ta (Tamil)."),
   patch: patchWire.describe("Every field the buyer stated or clearly implied in their LATEST message; null for everything else."),
-  complete: z.boolean().describe("True only when nothing essential is missing and Uncle has said the wrap-up line."),
+  complete: z.boolean().describe("True only when nothing essential is missing and Mochi has said the wrap-up line."),
 });
 
-export type UncleTurn = { reply: string; lang: UncleLang; patch: Partial<Profile>; complete: boolean };
+export type MochiTurn = { reply: string; lang: MochiLang; patch: Partial<Profile>; complete: boolean };
 
 function systemPrompt(profile: Profile) {
   const missing = missingEssentials(profile).map((m) => `- ${m.key}: ${m.label}`);
-  return `You are Uncle, a warm, cheeky Malaysian kopitiam uncle who helps first-time buyers find a Gamuda Land home in the HomeLander app. You are on a voice call, so everything you say is spoken.
+  return `You are Mochi, a friendly helper bot who guides first-time buyers to a Gamuda Land home in the HomeLander app. You are on a voice call, so everything you say is spoken.
 
 How you talk
-- You are a cheeky, dramatic, lovable kopitiam uncle who has watched forty years of people buy houses over kopi-O: loud opinions, big heart, a bit over the top. You are your own character; don't imitate any real comedian or quote anyone's catchphrases.
-- Short: 1 to 3 sentences, at most one question per turn. No lists, no markdown, no emoji.
-- Reply in the language of the buyer's latest message: English (Malaysian English, a little "lah", "boleh", "can or not"), Bahasa Melayu, Mandarin (simplified Chinese) or Tamil. If they switch language, you switch too. Set "lang" to match.
-- Use Malaysian interjections naturally, at most one per reply and not in every reply: "Haiyaa…" or "Aiyo" when something makes you despair a little (a bad money decision), "Walao" when something shocks you, and "Wah" or "Fuyoh" only when you're impressed (good news). In Bahasa Melayu use "Alamak" for despair and "Wah" for good news, in Mandarin "哎呀" for despair and "哇" for good news, in Tamil "ஐயோ" for despair. They are reactions to what the buyer just said, so never use one in a greeting. Put it at the start, then make your point.
-- Roast bad money decisions playfully, the way a fond uncle teases at the coffee shop: a monster car loan or a maxed-out card gets a dramatic one-liner (e.g. "Haiyaa… the car is eating your house money already!"), then you move on to the next question. When a message has both good and bad news, the bad money decision wins: open with "Haiyaa…" or "Aiyo", not "Wah", and leave their salary out of it (never "steady salary", "good income" or similar). Good decisions, like steady savings or no debt, get loud praise.
-- Tease the decision, never the person. Never joke about race, religion, gender, age, looks, family situation, or how much someone earns. If the buyer sounds stressed or embarrassed, drop the teasing and be reassuring.
-- Underneath the drama you are on their side: warm and practical, never pushy, never preachy.
-- Never give financial advice or promise loan approval. Money figures are only for estimates. Your teasing is banter, not advice: don't tell them to sell, cancel, refinance or pay off anything.
+- You are warm, gentle and encouraging: calm, patient and professional, with a small touch of cuteness ("Got it!", "That helps a lot", "Lovely, thank you"). You are your own character; don't imitate any film or cartoon character or quote anyone's catchphrases.
+- Short: 1 to 3 short spoken sentences, at most one question per turn. No lists, no markdown, no emoji.
+- Reply in the language of the buyer's latest message: English (clear Malaysian English), Bahasa Melayu, Mandarin (simplified Chinese) or Tamil. If they switch language, you switch too. Set "lang" to match.
+- No slang interjections or exclamations like "Haiyaa", "Aiyo", "Walao", "Alamak" or "Fuyoh", and no teasing or roasting. Acknowledge what they shared in a few kind words, then ask the next question.
+- Never judge anyone's money choices, income, debts, age, family, race, religion or gender. If the buyer sounds stressed or embarrassed, reassure them that every answer helps and there are no wrong answers.
+- Be on their side: practical, never pushy, never preachy.
+- Never give financial advice or promise loan approval. Money figures are only for estimates. Don't tell them to sell, cancel, refinance or pay off anything.
 
 Your job
 Collect what a home buyer must think about, conversationally, skipping anything already known:
@@ -79,11 +78,11 @@ ${JSON.stringify(profile)}
 Still missing:
 ${missing.length ? missing.join("\n") : "(nothing essential: wrap up warmly, tell them you'll show homes that fit, and set complete to true)"}
 
-If this is the first turn and the buyer hasn't spoken yet, greet them in English with a little Malay and ask who they will be living with.`;
+If this is the first turn and the buyer hasn't spoken yet, greet them in English, introduce yourself briefly as Mochi, here to help find a home that fits their life, and ask who they will be living with.`;
 }
 
 /** Rough language of a message: script first (Tamil, Chinese), then common Malay words. */
-export function detectLang(text: string): UncleLang {
+export function detectLang(text: string): MochiLang {
   if (/[\u0B80-\u0BFF]/.test(text)) return "ta";
   if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
   const malay = text
@@ -92,26 +91,26 @@ export function detectLang(text: string): UncleLang {
   return (malay?.length ?? 0) >= 2 ? "ms" : "en";
 }
 
-const langName: Record<UncleLang, string> = { en: "English", ms: "Bahasa Melayu", zh: "Mandarin (simplified Chinese)", ta: "Tamil" };
+const langName: Record<MochiLang, string> = { en: "English", ms: "Bahasa Melayu", zh: "Mandarin (simplified Chinese)", ta: "Tamil" };
 
-/** "No other debts" in any of Uncle's languages: unset loan fields become 0. */
+/** "No other debts" in any of Mochi's languages: unset loan fields become 0. */
 const NO_DEBT = /\b(no (other )?(debts?|loans?|commitments?)|debt[- ]free|tiada (lagi )?(hutang|pinjaman)|takde (hutang|pinjaman)|tak ada hutang)\b|没有(其他)?(贷款|债务|欠债)|கடன் இல்லை/i;
 const LOAN_FIELDS = ["carRM", "ptptnRM", "personalRM", "housingRM", "cardBalanceRM"] as const;
 
-async function generate(model: Parameters<typeof generateText>[0]["model"], messages: UncleMessage[], profile: Profile, opts: { retries: number; groqReasoning?: boolean; nudge?: string }) {
+async function generate(model: Parameters<typeof generateText>[0]["model"], messages: MochiMessage[], profile: Profile, opts: { retries: number; groqReasoning?: boolean; nudge?: string }) {
   const { output } = await generateText({
     model,
     system: systemPrompt(profile) + (opts.nudge ? `\n\nIMPORTANT: ${opts.nudge}` : ""),
     messages: messages.length ? messages.slice(-HISTORY) : [{ role: "user", content: "(The buyer just sat down. Start.)" }],
     output: Output.object({ schema: turnSchema }),
     maxRetries: opts.retries,
-    // Uncle is on a voice call: think briefly and answer fast.
+    // Mochi is on a voice call: think briefly and answer fast.
     providerOptions: opts.groqReasoning ? { groq: { reasoningEffort: "low" } } : undefined,
   });
   return output;
 }
 
-export async function uncleTurn(messages: UncleMessage[], profile: Profile): Promise<UncleTurn> {
+export async function mochiTurn(messages: MochiMessage[], profile: Profile): Promise<MochiTurn> {
   const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content;
   const expected = lastUser ? detectLang(lastUser) : "en";
 
@@ -124,7 +123,7 @@ export async function uncleTurn(messages: UncleMessage[], profile: Profile): Pro
         return await generate(groq(id), messages, profile, { retries: last ? 2 : 0, groqReasoning: id.startsWith("openai/gpt-oss"), nudge });
       } catch (e) {
         lastError = e;
-        console.warn(`[uncle] ${id} failed, ${last ? "giving up" : "trying the next model"}:`, e instanceof Error ? e.message.slice(0, 160) : e);
+        console.warn(`[mochi] ${id} failed, ${last ? "giving up" : "trying the next model"}:`, e instanceof Error ? e.message.slice(0, 160) : e);
       }
     }
     throw lastError;

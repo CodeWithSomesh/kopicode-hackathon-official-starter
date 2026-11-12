@@ -3,7 +3,7 @@ import "server-only";
 import { RtcRole, RtcTokenBuilder } from "agora-token";
 
 /**
- * Server side of Uncle's live voice: Agora Conversational AI Engine (REST v2).
+ * Server side of Mochi's live voice: Agora Conversational AI Engine (REST v2).
  * Docs: https://docs.agora.io/en/api-reference/api-ref/conversational-ai/join
  *       https://docs.agora.io/en/api-reference/api-ref/conversational-ai/leave
  *
@@ -13,7 +13,7 @@ import { RtcRole, RtcTokenBuilder } from "agora-token";
 
 const API = "https://api.agora.io/api/conversational-ai-agent/v2/projects";
 
-/** Fixed uid for Uncle in every channel; the buyer gets a random one. */
+/** Fixed uid for Mochi in every channel; the buyer gets a random one. */
 export const AGENT_UID = 8888;
 /** RTC tokens live for an hour; a Regret Test takes two minutes. */
 const TOKEN_TTL_S = 3600;
@@ -105,7 +105,7 @@ function asrConfig() {
   return {
     vendor: "ares",
     language: c.asrLanguage,
-    keywords: ["Gamuda", "HomeLander", "Uncle", "LRT", "MRT", "KTM"],
+    keywords: ["Gamuda", "HomeLander", "Mochi", "LRT", "MRT", "KTM"],
   };
 }
 
@@ -125,11 +125,11 @@ export class AgoraError extends Error {
   }
 }
 
-/** Starts Uncle in the channel. Returns the agent id needed to stop him. */
+/** Starts Mochi in the channel. Returns the agent id needed to stop it. */
 export async function joinAgent({ channel, userUid, systemPrompt, greeting }: JoinInput) {
   const c = read();
   const body = {
-    name: `uncle-${channel}`,
+    name: `mochi-${channel}`,
     properties: {
       channel,
       token: rtcToken(channel, AGENT_UID),
@@ -144,7 +144,7 @@ export async function joinAgent({ channel, userUid, systemPrompt, greeting }: Jo
         api_key: c.llmApiKey,
         system_messages: [{ role: "system", content: systemPrompt }],
         greeting_message: greeting,
-        failure_message: "Aiyo, sorry ah, Uncle blur sekejap. Can you say again?",
+        failure_message: "Sorry, Mochi missed that. Could you say it again?",
         max_history: 24,
         params: { model: c.llmModel, max_tokens: 160, temperature: 0.7 },
       },

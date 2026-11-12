@@ -1,0 +1,70 @@
+/*
+ * Gamuda admin (/admin): a neutral analytics look, scoped to .admin-root so the buyer app's
+ * Kopitiam theme is untouched. Same shadcn token names as globals.css; only the values differ.
+ */
+.admin-root {
+  --background: oklch(0.985 0.002 260);
+  --foreground: oklch(0.21 0.01 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.01 265);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.01 265);
+  --primary: oklch(0.24 0.012 265);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.96 0.004 265);
+  --secondary-foreground: oklch(0.24 0.012 265);
+  --muted: oklch(0.965 0.004 265);
+  --muted-foreground: oklch(0.53 0.015 265);
+  --accent: oklch(0.955 0.006 265);
+  --accent-foreground: oklch(0.24 0.012 265);
+  --border: oklch(0.92 0.005 265);
+  --input: oklch(0.9 0.006 265);
+  --ring: oklch(0.6 0.12 265);
+
+  /* Chart palette: one blue for "ours/demand", then distinct hues; checked in both modes. */
+  --chart-1: oklch(0.55 0.19 262);
+  --chart-2: oklch(0.7 0.13 185);
+  --chart-3: oklch(0.76 0.15 75);
+  --chart-4: oklch(0.63 0.2 20);
+  --chart-5: oklch(0.6 0.03 265);
+  --chart-grid: oklch(0.92 0.005 265);
+  --good: oklch(0.58 0.15 155);
+  --warn: oklch(0.7 0.15 70);
+  --bad: oklch(0.6 0.2 25);
+  --live: oklch(0.62 0.19 150);
+}
+
+.dark .admin-root {
+  --background: oklch(0.155 0.006 265);
+  --foreground: oklch(0.96 0.003 265);
+  --card: oklch(0.19 0.007 265);
+  --card-foreground: oklch(0.96 0.003 265);
+  --popover: oklch(0.22 0.008 265);
+  --popover-foreground: oklch(0.96 0.003 265);
+  --primary: oklch(0.94 0.004 265);
+  --primary-foreground: oklch(0.2 0.01 265);
+  --secondary: oklch(0.25 0.008 265);
+  --secondary-foreground: oklch(0.96 0.003 265);
+  --muted: oklch(0.235 0.008 265);
+  --muted-foreground: oklch(0.7 0.012 265);
+  --accent: oklch(0.26 0.01 265);
+  --accent-foreground: oklch(0.96 0.003 265);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+
+  --chart-1: oklch(0.68 0.16 262);
+  --chart-2: oklch(0.75 0.12 185);
+  --chart-3: oklch(0.8 0.14 80);
+  --chart-4: oklch(0.7 0.17 20);
+  --chart-5: oklch(0.62 0.025 265);
+  --chart-grid: oklch(1 0 0 / 8%);
+  --good: oklch(0.72 0.15 155);
+  --warn: oklch(0.8 0.14 75);
+  --bad: oklch(0.7 0.18 25);
+  --live: oklch(0.74 0.17 150);
+}
+
+.admin-root .recharts-surface:focus,
+.admin-root .recharts-wrapper:focus {
+  outline: none;
+}

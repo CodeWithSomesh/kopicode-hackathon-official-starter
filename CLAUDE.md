@@ -6,7 +6,7 @@ This file is loaded by Claude Code for **everyone** who works in this repo. It i
 
 ## HomeLander (our project): read `docs/homelander-spec.md` first
 
-- The app is **HomeLander**. Its routes live in `src/app/(homelander)/`: `/` landing map, `/onboarding` Uncle, `/swipe`, `/battle`, `/bank`, `/profile`, `/admin`, `/homes/[id]/feng-shui`.
+- The app is **HomeLander**. Its routes live in `src/app/(homelander)/`: `/` landing map, `/onboarding` Mochi, `/swipe`, `/battle`, `/bank`, `/profile`, `/admin`, `/homes/[id]/feng-shui`.
 - Owners: landing = teammate A (`src/app/(homelander)/_landing/CLAUDE.md`); Feng Shui = teammate B (`src/app/(homelander)/homes/[id]/feng-shui/CLAUDE.md`); everything else and all shared code = Somesh.
 - **Kopitiam theme only** until every feature works. Use the shared pieces in `src/components/homelander/` and the theme colour classes. Don't touch the locked themes or `LOCKED_THEME`.
 - Every screen needs a desktop web layout and a phone layout.

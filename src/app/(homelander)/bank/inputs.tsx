@@ -54,7 +54,7 @@ const fmt = (n: number | undefined) => (n === undefined ? "" : n.toLocaleString(
 
 /**
  * A money field bound to the buyer's profile. Valid edits write straight back to the store,
- * so Swipe, Battle and Uncle see the same numbers. Blank clears the answer.
+ * so Swipe, Battle and Mochi see the same numbers. Blank clears the answer.
  */
 function ProfileMoney({
   k,
@@ -138,7 +138,7 @@ function ProfileAge({ profile }: { profile: Profile }) {
   );
 }
 
-/** The three things a bank asks that Uncle doesn't, plus anything Uncle missed that the check can't run without. */
+/** The three things a bank asks that Mochi doesn't, plus anything Mochi missed that the check can't run without. */
 export function BankQuestions({ profile, prefs }: { profile: Profile; prefs: BankPrefs }) {
   const missingCore = profile.grossRM === undefined || profile.age === undefined;
   const open =
@@ -153,7 +153,7 @@ export function BankQuestions({ profile, prefs }: { profile: Profile; prefs: Ban
           </h2>
           <p className="text-sm text-ink-soft">
             {open > 0
-              ? `Uncle didn't cover ${open === 1 ? "this one" : `these ${open}`}. Every bank checks it.`
+              ? `Mochi didn't cover ${open === 1 ? "this one" : `these ${open}`}. Every bank checks it.`
               : "All answered. Change any of them and the banks update."}
           </p>
         </div>
@@ -217,7 +217,7 @@ export function BankQuestions({ profile, prefs }: { profile: Profile; prefs: Ban
   );
 }
 
-/** Everything Uncle heard about money, editable. Edits save to the buyer's profile. */
+/** Everything Mochi heard about money, editable. Edits save to the buyer's profile. */
 export function YourNumbers({ profile }: { profile: Profile }) {
   const card = profile.cardBalanceRM;
   const takeHomeOver =
@@ -228,9 +228,9 @@ export function YourNumbers({ profile }: { profile: Profile }) {
     <PixPanel className="grid gap-5 p-5" aria-labelledby="bank-numbers-title">
       <div className="grid gap-1">
         <h2 id="bank-numbers-title" className="font-pixel text-xl leading-tight">
-          What Uncle heard
+          What Mochi knows
         </h2>
-        <p className="text-sm text-ink-soft">From your chat with Uncle. Fix anything here; it saves to your profile.</p>
+        <p className="text-sm text-ink-soft">From your chat with Mochi. Fix anything here; it saves to your profile.</p>
       </div>
 
       <fieldset className="grid gap-4">

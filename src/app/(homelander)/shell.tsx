@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const tabs: { href: string; label: string; icon: SpriteName }[] = [
   { href: "/", label: "Map", icon: "pin" },
-  { href: "/onboarding", label: "Uncle", icon: "uncle" },
+  { href: "/onboarding", label: "Mochi", icon: "mochi" },
   { href: "/swipe", label: "Swipe", icon: "house" },
   { href: "/battle", label: "Battle", icon: "bars" },
   { href: "/bank", label: "Bank", icon: "bank" },

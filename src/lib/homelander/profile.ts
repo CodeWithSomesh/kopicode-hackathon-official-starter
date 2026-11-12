@@ -2,8 +2,8 @@ import { z } from "zod";
 import type { IncomeInput } from "./bank";
 
 /**
- * What Uncle learns about a buyer during onboarding. Every field is optional: Uncle fills
- * them in as he hears answers, and the buyer can correct any of them in the side panel.
+ * What Mochi learns about a buyer during onboarding. Every field is optional: Mochi fills
+ * them in as it hears answers, and the buyer can correct any of them in the side panel.
  * Money is per month in RM. The money fields map 1:1 onto the bank check's IncomeInput.
  */
 
@@ -56,7 +56,7 @@ export const profileSchema = z.object({
 export type Profile = z.infer<typeof profileSchema>;
 export type ProfileKey = keyof Profile;
 
-/** What Uncle must have before the buyer can move on to swiping, with a plain label for each. */
+/** What Mochi must have before the buyer can move on to swiping, with a plain label for each. */
 export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) => boolean }[] = [
   { key: "livingWith", label: "Who you live with" },
   { key: "kidsPlanned", label: "Kids in the next few years" },
@@ -80,7 +80,7 @@ export function missingEssentials(p: Profile) {
   return essentials.filter((e) => (e.when ? e.when(p) : true) && !filled(p[e.key]));
 }
 
-/** Merge a patch from Uncle; undefined values never wipe what the buyer already gave. */
+/** Merge a patch from Mochi; undefined values never wipe what the buyer already gave. */
 export function mergeProfile(p: Profile, patch: Partial<Profile>): Profile {
   const next: Profile = { ...p };
   for (const [k, v] of Object.entries(patch)) if (filled(v) || v === false || v === 0) (next as Record<string, unknown>)[k] = v;
@@ -93,7 +93,7 @@ export function filledKeys(patch: Partial<Profile>) {
     .map(([k]) => k as ProfileKey);
 }
 
-/** The bank check's input, from what Uncle collected. Null until salary and age are known. */
+/** The bank check's input, from what Mochi collected. Null until salary and age are known. */
 export function toIncomeInput(p: Profile): IncomeInput | null {
   if (p.grossRM === undefined || p.age === undefined) return null;
   return {

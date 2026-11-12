@@ -143,7 +143,7 @@ export function ProfilePanel({
   onDone,
 }: {
   profile: Profile;
-  /** Keys Uncle filled on his latest turn, highlighted for a moment. */
+  /** Keys Mochi filled on its latest turn, highlighted for a moment. */
   fresh: Set<ProfileKey>;
   onDone: () => void;
 }) {
@@ -155,7 +155,7 @@ export function ProfilePanel({
     <PixPanel className="flex flex-col lg:max-h-[calc(100svh-7.5rem)]">
       <div className="grid gap-2 border-b-2 border-ink/10 p-4">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-pixel text-xl font-bold">What Uncle knows</h2>
+          <h2 className="font-pixel text-xl font-bold">What Mochi knows</h2>
           <span className="text-sm text-ink-soft tabular-nums">
             {done} of {needed.length}
           </span>
@@ -163,7 +163,7 @@ export function ProfilePanel({
         <div className="h-2.5 overflow-hidden rounded-full bg-cloud" aria-hidden>
           <div className="h-full bg-pandan transition-[width] duration-500" style={{ width: `${(done / needed.length) * 100}%` }} />
         </div>
-        <p className="text-xs text-ink-soft">Uncle fills this in as you talk. Tap any answer to fix it.</p>
+        <p className="text-xs text-ink-soft">Mochi fills this in as you talk. Tap any answer to fix it.</p>
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-4">
@@ -183,11 +183,11 @@ export function ProfilePanel({
       <div className="grid gap-2 border-t-2 border-ink/10 p-4">
         {missing.length ? (
           <p className="text-xs text-ink-soft">
-            Uncle still needs {missing.length}: {missing.slice(0, 3).map((m) => m.label.toLowerCase()).join(", ")}
+            Mochi still needs {missing.length}: {missing.slice(0, 3).map((m) => m.label.toLowerCase()).join(", ")}
             {missing.length > 3 ? "…" : "."}
           </p>
         ) : (
-          <p className="text-sm font-medium text-pandan-deep">Uncle has everything. Shiok!</p>
+          <p className="text-sm font-medium text-pandan-deep">Mochi has everything it needs. Thank you!</p>
         )}
         <button
           type="button"

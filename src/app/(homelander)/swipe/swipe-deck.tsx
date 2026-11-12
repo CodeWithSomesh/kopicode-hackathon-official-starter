@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
+import { MochiBot } from "@/components/homelander/mochi-bot";
 import { Sprite } from "@/components/homelander/sprite";
 import { availabilityOf, passReasons, rm, townshipById, unitById, type Unit } from "@/lib/homelander/data";
 import { BATTLE_MAX, DECK_LIKE_LIMIT, LIKES_TO_BATTLE, anchorFor, recommend } from "@/lib/homelander/recommend";
@@ -17,24 +18,24 @@ import { Controls, EndOfDeck, Insights, Shortlist, matchesFilter, type StockFilt
 import { swipeSprites } from "./_swipe/sprites";
 
 /**
- * The swipe deck: Uncle's picks, best match first, one home at a time.
+ * The swipe deck: Mochi's picks, best match first, one home at a time.
  * Right = like (confetti!) or "notify me" when sold out; left = pass, then optionally say why.
  * Up (or tap the card) flips to the details worked out for this buyer.
  * Desktop: deck on the left, filters / insights / shortlist on the right. Phones: one column.
- * Real data only: until the buyer has sat with Uncle there is no deck, just a way to start.
+ * Real data only: until the buyer has sat with Mochi there is no deck, just a way to start.
  */
 export function SwipeDeck() {
   const s = useHomeLander();
   // The store lives in localStorage, so the server render can't know who this is: wait a tick.
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   if (!mounted) return <Frame />;
-  if (!knowsBuyer(s)) return <UncleGate />;
+  if (!knowsBuyer(s)) return <MochiGate />;
   return <Deck s={s} />;
 }
 
 const noopSubscribe = () => () => {};
 const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
-/** Onboarded and Uncle actually heard something: the deck is built from answers, never assumptions. */
+/** Onboarded and Mochi actually heard something: the deck is built from answers, never assumptions. */
 const knowsBuyer = (s: HomeLanderState) => !!s.onboardedAt && Object.values(s.profile).some(filled);
 
 /**
@@ -60,23 +61,23 @@ function Frame({ aside, sub, children }: { aside?: React.ReactNode; sub?: React.
   );
 }
 
-/** No profile yet: say so plainly and send them to Uncle. */
-function UncleGate() {
+/** No profile yet: say so plainly and send them to Mochi. */
+function MochiGate() {
   return (
     <Frame>
       <PixPanel className="mx-auto grid w-full max-w-xl justify-items-center gap-4 p-6 text-center sm:p-10">
-        <Sprite art="uncle" scale={6} label="Uncle" />
-        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Uncle needs to know you first</h2>
+        <MochiBot size={132} />
+        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Mochi needs to get to know you first</h2>
         <p className="max-w-md text-[15px] text-ink">
           Every home in the deck is picked and ranked from your own answers: your budget, where you work, who lives
           with you and what you need. No answers, no guesses, so there&apos;s no deck yet.
         </p>
-        <p className="max-w-md text-sm text-ink-soft">About ten questions with Uncle. Talk or type, lah.</p>
+        <p className="max-w-md text-sm text-ink-soft">About ten easy questions with Mochi. Talk or type, whichever suits you.</p>
         <div className="p-1 pb-2">
           <PixButton asChild tone="pandan" size="lg">
             <Link href="/onboarding">
-              <Sprite art="uncle" scale={2} />
-              Sit with Uncle
+              <Sprite art="mochi" scale={2} />
+              Chat with Mochi
             </Link>
           </PixButton>
         </div>
@@ -97,9 +98,9 @@ function Deck({ s }: { s: HomeLanderState }) {
 
   useEffect(preloadConfetti, []);
 
-  // Only the workplace the buyer told Uncle: no default office.
+  // Only the workplace the buyer told Mochi: no default office.
   const anchor = useMemo(() => anchorFor(s.profile.workArea), [s.profile.workArea]);
-  // Uncle's order: best match for this buyer first.
+  // Mochi's order: best match for this buyer first.
   const picks = useMemo(() => recommend(s.profile, s.budget, anchor), [s.profile, s.budget, anchor]);
   const pickById = useMemo(() => new Map(picks.map((p) => [p.unit.id, p])), [picks]);
   const basis = useMemo(() => moneyBasis(s.profile, s.budget), [s.profile, s.budget]);
@@ -233,7 +234,7 @@ function Deck({ s }: { s: HomeLanderState }) {
     <Frame
       sub={
         <p className="max-w-xl text-[15px] text-ink">
-          Uncle&apos;s picks for you, best match first. Like up to {DECK_LIKE_LIMIT}, then make them battle.
+          Mochi&apos;s picks for you, best match first. Like up to {DECK_LIKE_LIMIT}, then make them battle.
         </p>
       }
       aside={

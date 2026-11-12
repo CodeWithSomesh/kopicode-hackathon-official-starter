@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
+import { MochiBot } from "@/components/homelander/mochi-bot";
 import { Sprite } from "@/components/homelander/sprite";
 import {
   analyseHome,
   PRESETS,
-  uncleWeights,
+  mochiWeights,
   type StatKey,
   type Weights,
 } from "@/lib/homelander/analysis";
@@ -73,7 +74,7 @@ const useHydrated = () =>
 /**
  * Battle of the homes. Page order: title + lineup and settings, then the head-to-head table
  * (no winner shown), then the fight, and only after the fight the verdict. Runs only on what the
- * buyer really told Uncle: no sample payslip, default office or default office days.
+ * buyer really told Mochi: no sample payslip, default office or default office days.
  */
 export function BattleView() {
   const s = useHomeLander();
@@ -83,7 +84,7 @@ export function BattleView() {
   const [workId, setWorkId] = useState<string | null>(null);
   const [officeDays, setOfficeDays] = useState<number | null>(null);
   const [mode, setMode] = useState<CommuteMode | null>(null);
-  const [weightMode, setWeightMode] = useState<WeightMode>("uncle");
+  const [weightMode, setWeightMode] = useState<WeightMode>("mochi");
   const [custom, setCustom] = useState<Weights | null>(null);
   const [fight, setFight] = useState<{
     key: string;
@@ -103,12 +104,12 @@ export function BattleView() {
   );
   const list = ids.map((id) => unitById[id]).filter(Boolean) as Unit[];
 
-  const uncle = uncleWeights(ctx, list[0] ? analyseHome(list[0], ctx) : null);
+  const mochi = mochiWeights(ctx, list[0] ? analyseHome(list[0], ctx) : null);
   const weights: Weights =
     weightMode === "custom" && custom
       ? custom
-      : weightMode === "uncle" || weightMode === "custom"
-        ? uncle.weights
+      : weightMode === "mochi" || weightMode === "custom"
+        ? mochi.weights
         : PRESETS[weightMode].weights;
 
   const result =
@@ -222,7 +223,7 @@ export function BattleView() {
           <Priorities
             mode={weightMode}
             weights={weights}
-            uncleWhy={uncle.why}
+            mochiWhy={mochi.why}
             hasProfile={ctx.hasProfile}
             skipped={result.skipped}
             onPreset={(p) => setWeightMode(p)}
@@ -309,21 +310,21 @@ function Gate() {
       tone="kaya"
       className="grid gap-4 p-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-6 sm:p-6"
     >
-      <Sprite art="uncle" scale={6} className="text-ink" />
+      <MochiBot size={120} className="justify-self-center" />
       <div className="grid gap-3">
         <h2 className="font-pixel text-2xl leading-tight lg:text-3xl">
-          Uncle needs to know you first
+          Mochi needs to get to know you first
         </h2>
         <p className="max-w-2xl">
-          A battle on guesses is no battle. Sit with Uncle for ten minutes:
+          A battle on guesses is no battle. Chat with Mochi for ten minutes:
           where you work, who you live with, what you earn and what you&apos;ve
           saved. Then every row and every round uses your life, not a sample.
         </p>
         <div className="flex flex-wrap gap-3">
           <PixButton asChild tone="white" size="lg">
             <Link href="/onboarding">
-              <Sprite art="uncle" scale={2} />
-              Sit with Uncle
+              <Sprite art="mochi" scale={2} />
+              Chat with Mochi
             </Link>
           </PixButton>
         </div>
@@ -339,10 +340,10 @@ function Missing({ ctx }: { ctx: BattleContext }) {
       flat
       className="grid gap-3 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-5"
     >
-      <Sprite art="uncle" scale={4} className="hidden text-ink sm:block" />
+      <MochiBot size={72} label="" className="hidden sm:block" />
       <div className="grid gap-1">
         <p className="font-pixel text-lg leading-tight">
-          Uncle doesn&apos;t know everything yet
+          Mochi doesn&apos;t know everything yet
         </p>
         <p className="text-sm">
           Still missing: {ctx.missing.join(", ")}. We don&apos;t guess these:
@@ -351,8 +352,8 @@ function Missing({ ctx }: { ctx: BattleContext }) {
       </div>
       <PixButton asChild tone="white">
         <Link href="/onboarding">
-          <Sprite art="uncle" scale={2} />
-          Tell Uncle
+          <Sprite art="mochi" scale={2} />
+          Tell Mochi
         </Link>
       </PixButton>
     </PixPanel>
@@ -387,8 +388,8 @@ function SetupBar({
     m.source === "bank"
       ? `Your bank check: up to about ${kRM(m.maxPriceRM)}`
       : m.source === "profile"
-        ? `From what you told Uncle: up to about ${kRM(m.maxPriceRM)}`
-        : "Uncle doesn't know your salary yet, so budget isn't judged";
+        ? `From what you told Mochi: up to about ${kRM(m.maxPriceRM)}`
+        : "Mochi doesn't know your salary yet, so budget isn't judged";
   return (
     <PixPanel
       flat
@@ -415,12 +416,12 @@ function SetupBar({
         </select>
         <span className="text-xs text-ink-soft">
           {ctx.workSource === "profile"
-            ? `You told Uncle "${ctx.workLabel}"`
+            ? `You told Mochi "${ctx.workLabel}"`
             : ctx.workSource === "picked"
               ? "Picked here"
               : ctx.workUnmapped
                 ? `"${ctx.workUnmapped}" isn't on our map: pick the closest`
-                : "Not told Uncle yet: no commute rows until you pick"}
+                : "Not told Mochi yet: no commute rows until you pick"}
           {ctx.partner ? `. Partner: ${ctx.partner.name}` : ""}
         </span>
       </label>
@@ -470,10 +471,10 @@ function SetupBar({
         </div>
         <span className="text-xs text-ink-soft">
           {ctx.modeSource === "profile"
-            ? "As you told Uncle"
+            ? "As you told Mochi"
             : ctx.modeSource === "picked"
               ? "Picked here"
-              : "Not told Uncle yet"}
+              : "Not told Mochi yet"}
         </span>
       </div>
 

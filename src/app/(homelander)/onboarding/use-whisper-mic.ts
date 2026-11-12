@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * Tap to record, tap again to send: the clip goes to /api/uncle/transcribe (Groq Whisper), which
+ * Tap to record, tap again to send: the clip goes to /api/mochi/transcribe (Groq Whisper), which
  * auto-detects English, Malay, Mandarin or Tamil, mixed mid-sentence included.
  * Calls onUnavailable when the server has no Groq key, so the page can fall back to browser listening.
  */
@@ -61,7 +61,7 @@ export function useWhisperMic({
           : "webm";
       const form = new FormData();
       form.append("audio", blob, `speech.${ext}`);
-      const res = await fetch("/api/uncle/transcribe", {
+      const res = await fetch("/api/mochi/transcribe", {
         method: "POST",
         body: form,
       });
@@ -69,15 +69,15 @@ export function useWhisperMic({
       const data = (await res.json()) as { text?: string; error?: string };
       if (!res.ok)
         return onError(
-          data.error ?? "Uncle couldn't hear that. Try again, or type.",
+          data.error ?? "Mochi couldn't hear that. Try again, or type.",
         );
       if (!data.text)
         return onError(
-          "Uncle didn't catch anything. Try again a bit closer to the mic.",
+          "Mochi didn't catch anything. Try again a bit closer to the mic.",
         );
       onText(data.text);
     } catch {
-      onError("Uncle couldn't hear that. Check your connection, or type.");
+      onError("Mochi couldn't hear that. Check your connection, or type.");
     } finally {
       setState("idle");
     }
@@ -96,7 +96,7 @@ export function useWhisperMic({
       });
     } catch {
       return onError(
-        "Mic is blocked. Allow it in the browser, or type to Uncle.",
+        "Mic is blocked. Allow it in the browser, or type to Mochi.",
       );
     }
     const mime = pickMime();

@@ -19,7 +19,7 @@ import type { Budget } from "@/lib/homelander/store";
 
 /**
  * Everything the "More details" side of a card says, worked out for THIS buyer: their income
- * (from Uncle, else their bank check), their workplace and office days, their household and
+ * (from Mochi, else their bank check), their workplace and office days, their household and
  * school limits. Real data only: when a figure can't be worked out from what the buyer told us
  * (no salary, no workplace), it is null and the card asks for it instead of inventing one.
  * Pure functions, so the card stays a view.
@@ -31,11 +31,11 @@ export type MoneyBasis = {
   tenureYears: number;
   rate: number;
   savingsRM?: number;
-  source: "uncle" | "bank";
+  source: "mochi" | "bank";
   note: string;
 };
 
-/** Null when the buyer hasn't told Uncle their salary and hasn't run the bank check. */
+/** Null when the buyer hasn't told Mochi their salary and hasn't run the bank check. */
 export function moneyBasis(profile: Profile, budget: Budget | null): MoneyBasis | null {
   const input = toIncomeInput(profile);
   if (input) {
@@ -47,8 +47,8 @@ export function moneyBasis(profile: Profile, budget: Budget | null): MoneyBasis 
       tenureYears: tenure,
       rate: e.rate,
       savingsRM: profile.savingsRM,
-      source: "uncle",
-      note: `From what you told Uncle: ${rm(e.netRM)} take-home${e.takeHomeEstimated ? " (estimated)" : ""}, ${tenure}-year loan.`,
+      source: "mochi",
+      note: `From what you told Mochi: ${rm(e.netRM)} take-home${e.takeHomeEstimated ? " (estimated)" : ""}, ${tenure}-year loan.`,
     };
   }
   if (budget) {

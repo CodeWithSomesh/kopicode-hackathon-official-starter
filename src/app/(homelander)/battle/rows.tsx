@@ -66,13 +66,13 @@ export const fitTone: Record<Fit, "pandan" | "kaya" | "raya" | "white"> = {
   unknown: "white",
 };
 
-/** The cell for a commute we can't compare: missing input (ask Uncle) or too far to commute. */
+/** The cell for a commute we can't compare: missing input (ask Mochi) or too far to commute. */
 const nc = (f: Fighter): Cell =>
   f.you.missing
     ? { main: f.you.missing, sub: "Then this row fills in", tone: "warn" }
     : { main: "Not compared", sub: "Not a daily commute", tone: "muted" };
 const NO_INCOME: Cell = {
-  main: "Tell Uncle your salary",
+  main: "Tell Mochi your salary",
   sub: "We don't guess your pay",
   tone: "warn",
 };

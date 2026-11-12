@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { toast } from "sonner";
+import { MochiBot, type MochiState } from "@/components/homelander/mochi-bot";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite, defineSprite } from "@/components/homelander/sprite";
 import { eligibility } from "@/lib/homelander/bank";
@@ -31,7 +32,6 @@ import {
 } from "./browser-voice";
 import { ProfilePanel } from "./profile-panel";
 import { Typewriter } from "./typewriter";
-import { UnclePortrait, moodOf } from "./uncle-portrait";
 import { useWhisperMic } from "./use-whisper-mic";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -50,7 +50,7 @@ const langs: { id: VoiceLang; label: string; name: string }[] = [
 ];
 
 /**
- * The speech bubble's pixel tail, pointing left at Uncle ("#" is the bubble fill, "k" its outline).
+ * The speech bubble's pixel tail, pointing left at Mochi ("#" is the bubble fill, "k" its outline).
  * Rotated a quarter turn it points up, for the stacked phone layout.
  */
 const bubbleTail = defineSprite(
@@ -58,10 +58,13 @@ const bubbleTail = defineSprite(
   { k: "#2b1d3f" },
 );
 
-const moodTag = {
-  haiyaa: { tone: "raya", text: "Haiyaa" },
-  happy: { tone: "pandan", text: "Steady lah" },
-} as const;
+const stateTag: Record<MochiState, { tone?: "pandan" | "kaya" | "lilac"; text: string }> = {
+  idle: { text: "Ready" },
+  listening: { tone: "lilac", text: "Listening" },
+  thinking: { tone: "kaya", text: "Thinking" },
+  speaking: { tone: "pandan", text: "Talking" },
+  happy: { tone: "pandan", text: "Got it" },
+};
 
 export function OnboardingView() {
   const router = useRouter();
@@ -81,8 +84,7 @@ export function OnboardingView() {
   const [whisper, setWhisper] = useState(true);
   const started = useRef(false);
   const logRef = useRef<HTMLOListElement>(null);
-  /** Uncle's face follows his latest line: "Haiyaa…" gets the facepalm, "Wah" the grin. */
-  const mood = line ? moodOf(line.text) : "neutral";
+  const [complete, setComplete] = useState(false);
   const canListen = useSyncExternalStore(
     () => () => {},
     () => recognitionCtor() !== null,
@@ -94,7 +96,7 @@ export function OnboardingView() {
       setBusy(true);
       setError(null);
       try {
-        const res = await fetch("/api/uncle/turn", {
+        const res = await fetch("/api/mochi/turn", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -105,10 +107,11 @@ export function OnboardingView() {
         const data = (await res.json()) as Turn & { error?: string };
         if (!res.ok || data.error)
           throw new Error(
-            data.error ?? "Uncle lost his train of thought. Try that again.",
+            data.error ?? "Mochi lost its train of thought. Please try that again.",
           );
 
         homelander.patchProfile(data.patch);
+        if (data.complete) setComplete(true);
         const keys = filledKeys(data.patch);
         if (keys.length) {
           setFresh(new Set(keys));
@@ -126,7 +129,7 @@ export function OnboardingView() {
         setError(
           e instanceof Error
             ? e.message
-            : "Uncle lost his train of thought. Try that again.",
+            : "Mochi lost its train of thought. Please try that again.",
         );
       } finally {
         setBusy(false);
@@ -135,7 +138,7 @@ export function OnboardingView() {
     [soundOn],
   );
 
-  // Uncle opens the conversation.
+  // Mochi opens the conversation.
   useEffect(() => {
     if (started.current) return;
     started.current = true;
@@ -161,7 +164,7 @@ export function OnboardingView() {
     setSpeaking(false);
     setDraft("");
     const history: Msg[] = [...messages, { role: "user", content: t }];
-    setMessages(history); // show it right away; Uncle's reply is appended when it arrives
+    setMessages(history); // show it right away; Mochi's reply is appended when it arrives
     void ask(history);
   }
 
@@ -169,12 +172,23 @@ export function OnboardingView() {
     onText: (t) => send(t),
     onUnavailable: () => {
       setWhisper(false);
-      toast("Uncle's using the browser's own ears for now.", {
+      toast("Mochi is using the browser's own ears for now.", {
         description: "Add GROQ_API_KEY to use Whisper.",
       });
     },
     onError: (m) => toast.error(m),
   });
+
+  /** Mochi's face: talking > listening > thinking > pleased (just saved answers, or done) > idle. */
+  const mochiState: MochiState = speaking
+    ? "speaking"
+    : listening || mic.state !== "idle"
+      ? "listening"
+      : busy
+        ? "thinking"
+        : complete || fresh.size
+          ? "happy"
+          : "idle";
 
   function talk() {
     if (!whisper) return listen();
@@ -200,7 +214,7 @@ export function OnboardingView() {
     rec.onerror = (e) => {
       if (e.error === "not-allowed")
         toast.error(
-          "Mic is blocked. Allow it in the browser, or type to Uncle.",
+          "Mic is blocked. Allow it in the browser, or type to Mochi.",
         );
     };
     rec.onend = () => setListening(false);
@@ -233,10 +247,10 @@ export function OnboardingView() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid gap-1">
             <h1 className="font-pixel text-3xl leading-tight font-bold sm:text-4xl">
-              Sit with Uncle
+              Chat with Mochi
             </h1>
             <p className="text-ink-soft">
-              A few minutes of kopi talk about your life, so we only show homes
+              A few minutes about your life, so we only show homes
               that fit. Speak or type, in any language.
             </p>
           </div>
@@ -246,15 +260,11 @@ export function OnboardingView() {
         <PixPanel className="grid gap-7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-8 sm:p-5">
           <div className="grid justify-items-center gap-2">
             <div className="rounded-xl bg-cloud p-3">
-              <UnclePortrait speaking={speaking} mood={mood} scale={6} />
+              <MochiBot state={mochiState} size={168} />
             </div>
             <div className="flex items-center gap-1.5">
-              <PixTag tone="ink">Uncle</PixTag>
-              {mood !== "neutral" ? (
-                <PixTag tone={moodTag[mood].tone}>{moodTag[mood].text}</PixTag>
-              ) : (
-                <PixTag>{speaking ? "Talking" : busy ? "Thinking" : "Listening"}</PixTag>
-              )}
+              <PixTag tone="ink">Mochi</PixTag>
+              <PixTag tone={stateTag[mochiState].tone}>{stateTag[mochiState].text}</PixTag>
             </div>
           </div>
           <div
@@ -274,7 +284,7 @@ export function OnboardingView() {
                 <Typewriter key={line.n} text={line.text} />
               ) : busy ? (
                 <span className="text-ink-soft">
-                  Uncle is pulling up a chair…
+                  Mochi is saying hello…
                 </span>
               ) : null}
             </p>
@@ -308,16 +318,16 @@ export function OnboardingView() {
               {mic.state === "recording"
                 ? "Recording… tap to send"
                 : mic.state === "transcribing"
-                  ? "Uncle is listening…"
+                  ? "Mochi is listening…"
                   : listening
                     ? "Listening… tap to stop"
                     : busy
-                      ? "Uncle is thinking"
-                      : "Talk to Uncle"}
+                      ? "Mochi is thinking"
+                      : "Talk to Mochi"}
             </PixButton>
             {whisper ? (
               <p className="text-sm text-ink-soft">
-                Speak any mix of English, BM, 中文 or தமிழ். Uncle follows.
+                Speak any mix of English, BM, 中文 or தமிழ். Mochi follows along.
               </p>
             ) : (
               <div
@@ -359,7 +369,7 @@ export function OnboardingView() {
           </div>
           {whisper || canListen ? null : (
             <p className="text-sm text-ink-soft">
-              This browser can&apos;t listen. Type to Uncle instead; Chrome or
+              This browser can&apos;t listen. Type to Mochi instead; Chrome or
               Edge can listen.
             </p>
           )}
@@ -371,7 +381,7 @@ export function OnboardingView() {
             }}
           >
             <label htmlFor="say" className="sr-only">
-              Type to Uncle
+              Type to Mochi
             </label>
             <input
               id="say"
@@ -408,7 +418,7 @@ export function OnboardingView() {
                   )}
                 >
                   <span className="sr-only">
-                    {m.role === "assistant" ? "Uncle: " : "You: "}
+                    {m.role === "assistant" ? "Mochi: " : "You: "}
                   </span>
                   {m.content}
                 </li>

@@ -53,7 +53,7 @@ export type CommuteLeg = {
   label: string;
   /** False for homes too far to commute daily (Johor, Sabah vs a KL office), or when an input is missing. */
   compared: boolean;
-  /** What the buyer still has to tell Uncle before this commute can be compared; null when nothing. */
+  /** What the buyer still has to tell Mochi before this commute can be compared; null when nothing. */
   missing: string | null;
   notComparedWhy: string | null;
   cost: CommuteCost | null;
@@ -203,7 +203,7 @@ export function maintenanceOf(unit: Unit): {
   };
 }
 
-/** A leg we can't compare because the buyer hasn't told Uncle something yet. */
+/** A leg we can't compare because the buyer hasn't told Mochi something yet. */
 function missingLeg(
   who: "you" | "partner",
   anchor: Anchor | null,
@@ -235,7 +235,7 @@ function commuteLeg(
     return missingLeg(
       who,
       anchor,
-      ctx.commuteMissing ?? "Tell Uncle how you commute",
+      ctx.commuteMissing ?? "Tell Mochi how you commute",
     );
   const officeDays = ctx.officeDays;
   const ctxMode = ctx.mode;
@@ -317,7 +317,7 @@ export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
     : missingLeg(
         "you",
         null,
-        ctx.commuteMissing ?? "Tell Uncle where you work",
+        ctx.commuteMissing ?? "Tell Mochi where you work",
       );
   const partner = ctx.partner
     ? commuteLeg(
@@ -535,10 +535,10 @@ export function statsOf(a: HomeAnalysis, ctx: BattleContext): Stats {
 
 export type Weights = Record<StatKey, number>;
 
-export type PresetId = "uncle" | "monthly" | "commute" | "family" | "value";
+export type PresetId = "mochi" | "monthly" | "commute" | "family" | "value";
 
 export const PRESETS: Record<
-  Exclude<PresetId, "uncle">,
+  Exclude<PresetId, "mochi">,
   { label: string; blurb: string; weights: Weights }
 > = {
   monthly: {
@@ -595,8 +595,8 @@ export const PRESETS: Record<
   },
 };
 
-/** Uncle's mix: weights read off the profile, so the default verdict fits this buyer. */
-export function uncleWeights(
+/** Mochi's mix: weights read off the profile, so the default verdict fits this buyer. */
+export function mochiWeights(
   ctx: BattleContext,
   sample: HomeAnalysis | null,
 ): { weights: Weights; why: string[] } {
@@ -657,10 +657,10 @@ export function unjudged(ctx: BattleContext): Partial<Record<StatKey, string>> {
   const out: Partial<Record<StatKey, string>> = {};
   if (ctx.money.source === "missing")
     out.monthly =
-      "Uncle doesn't know your salary yet, so money left each month can't be judged";
+      "Mochi doesn't know your salary yet, so money left each month can't be judged";
   if (ctx.money.savingsRM === null)
     out.cash =
-      "Uncle doesn't know your savings, so cash upfront can't be judged";
+      "Mochi doesn't know your savings, so cash upfront can't be judged";
   if (ctx.commuteMissing) out.commute = ctx.commuteMissing;
   return out;
 }

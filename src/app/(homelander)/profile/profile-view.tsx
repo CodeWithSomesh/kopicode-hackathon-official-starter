@@ -9,18 +9,21 @@ import { homelander, useHomeLander } from "@/lib/homelander/store";
 export function ProfileView() {
   const s = useHomeLander();
   const router = useRouter();
+  // What Mochi heard in onboarding, falling back to the older quick-answers card.
+  const officeDays = s.profile.officeDays ?? s.answers?.officeDays;
+  const mode = s.profile.commuteMode ?? s.answers?.mode;
   const rows: [string, string][] = [
     ["Homes liked", String(s.liked.length)],
     ["Bank estimate", s.budget ? `Up to ${rm(s.budget.maxPriceRM)}` : "Not checked yet"],
-    ["Office days", s.answers ? `${s.answers.officeDays} a week` : "Ask Uncle"],
-    ["Gets to work by", s.answers ? (s.answers.mode === "train" ? "Train" : "Car") : "Ask Uncle"],
+    ["Office days", officeDays !== undefined ? `${officeDays} a week` : "Ask Mochi"],
+    ["Gets to work by", mode ? (mode === "train" ? "Train" : mode === "mixed" ? "Car + train" : "Car") : "Ask Mochi"],
   ];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
       <div className="grid gap-2 lg:col-span-2">
         <h1 className="font-pixel text-3xl font-bold">Your profile</h1>
-        <p className="text-ink-soft">What Uncle knows about you. Change it any time by chatting with him again.</p>
+        <p className="text-ink-soft">What Mochi knows about you. Change it any time by chatting with Mochi again.</p>
       </div>
       <PixPanel className="grid gap-3 p-5">
         <h2 className="font-pixel text-xl font-bold">Your answers</h2>
@@ -34,12 +37,12 @@ export function ProfileView() {
         </dl>
         <div className="flex flex-wrap gap-3">
           <PixButton asChild tone="pandan" size="sm">
-            <Link href="/onboarding">Chat with Uncle again</Link>
+            <Link href="/onboarding">Chat with Mochi again</Link>
           </PixButton>
           <PixButton
             size="sm"
             onClick={() => {
-              if (!window.confirm("Clear your answers, likes and bank estimate, and start fresh with Uncle?")) return;
+              if (!window.confirm("Clear your answers, likes and bank estimate, and start fresh with Mochi?")) return;
               homelander.reset();
               router.push("/onboarding");
             }}

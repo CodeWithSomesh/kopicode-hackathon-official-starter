@@ -50,7 +50,7 @@ export function Controls({
   filter: StockFilter;
   onFilter: (f: StockFilter) => void;
   counts: Record<StockFilter, number>;
-  /** The workplace Uncle heard in onboarding, matched to one of our commute anchors. */
+  /** The workplace Mochi heard in onboarding, matched to one of our commute anchors. */
   work: { anchor: Anchor; said: string } | null;
   /** What the buyer said, even when we couldn't place it. */
   workSaid?: string;
@@ -91,7 +91,7 @@ export function Controls({
           <>
             <p className="font-pixel text-lg leading-none">You work near {work.anchor.name}</p>
             <p className="text-xs text-ink-soft">
-              Uncle heard &ldquo;{work.said}&rdquo;. Every commute is worked out from there.{" "}
+              Mochi heard &ldquo;{work.said}&rdquo;. Every commute is worked out from there.{" "}
               <Link href="/profile" className="font-semibold text-pandan-deep underline underline-offset-2">
                 Change
               </Link>
@@ -99,14 +99,14 @@ export function Controls({
           </>
         ) : (
           <>
-            <p className="font-pixel text-lg leading-none">Tell Uncle where you work</p>
+            <p className="font-pixel text-lg leading-none">Tell Mochi where you work</p>
             <p className="text-xs text-ink-soft">
               {workSaid
-                ? <>Uncle heard &ldquo;{workSaid}&rdquo; but can&apos;t place it on the map yet. </>
+                ? <>Mochi heard &ldquo;{workSaid}&rdquo; but can&apos;t place it on the map yet. </>
                 : null}
-              Commute times and costs show up once Uncle knows your workplace. We don&apos;t guess one.{" "}
+              Commute times and costs show up once Mochi knows your workplace. We don&apos;t guess one.{" "}
               <Link href="/onboarding" className="font-semibold text-pandan-deep underline underline-offset-2">
-                Tell Uncle
+                Tell Mochi
               </Link>
             </p>
           </>
@@ -344,7 +344,7 @@ export function EndOfDeck({
       </h2>
       {full ? (
         <p className="max-w-sm text-[15px]">
-          {DECK_LIKE_LIMIT} is the sweet spot: a short list gives Uncle a sharper read. Battle them, or remove{" "}
+          {DECK_LIKE_LIMIT} is the sweet spot: a short list gives Mochi a sharper read. Battle them, or remove{" "}
           {over > 1 ? `${over} from your shortlist` : "one"} to keep swiping.
         </p>
       ) : (

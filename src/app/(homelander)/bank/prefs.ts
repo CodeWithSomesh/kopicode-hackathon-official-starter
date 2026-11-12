@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import type { Citizenship, Employment, JobTenure } from "@/lib/homelander/bank";
 
 /**
- * Answers only the bank page asks for (Uncle doesn't collect them): employment type, time in
+ * Answers only the bank page asks for (Mochi doesn't collect them): employment type, time in
  * the job, citizenship, loan tenure and the home to check. Kept in this browser only.
  */
 

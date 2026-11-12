@@ -163,18 +163,18 @@ export function VerdictBox({
             </PixButton>
             <PixButton asChild>
               <Link href="/onboarding">
-                <Sprite art="uncle" scale={2} />
-                Ask Uncle
+                <Sprite art="mochi" scale={2} />
+                Ask Mochi
               </Link>
             </PixButton>
           </div>
           <p className="text-xs text-ink-soft">
             Estimates from{" "}
             {ctx.money.source === "missing"
-              ? "what you told Uncle (salary not known yet)"
+              ? "what you told Mochi (salary not known yet)"
               : ctx.money.source === "bank"
                 ? "your bank check"
-                : "what you told Uncle"}
+                : "what you told Mochi"}
             , modelled commute times and estimated tolls. Not a loan offer or a
             price quote.
           </p>

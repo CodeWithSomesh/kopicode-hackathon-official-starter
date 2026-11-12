@@ -3,9 +3,9 @@
 import type { IAgoraRTCClient, IAgoraRTCRemoteUser, IMicrophoneAudioTrack } from "agora-rtc-sdk-ng";
 
 /**
- * Browser side of Uncle's live voice. Loads agora-rtc-sdk-ng on demand (it touches `window`
+ * Browser side of Mochi's live voice. Loads agora-rtc-sdk-ng on demand (it touches `window`
  * at import time, so it must never be imported on the server), joins the channel the server
- * made, publishes the mic and plays Uncle's audio. Secrets never reach this file.
+ * made, publishes the mic and plays Mochi's audio. Secrets never reach this file.
  */
 
 export type AgoraSession = {
@@ -14,16 +14,16 @@ export type AgoraSession = {
   uid: number;
   token: string;
   agentId: string;
-  /** Uncle's uid in the channel. */
+  /** Mochi's uid in the channel. */
   agentUid: number;
 };
 
 export type LiveTranscript = { who: "agent" | "you"; text: string; final: boolean; turn: number };
 
 export type LiveHandlers = {
-  /** Uncle's audio level crossed the speaking threshold (or dropped below it). */
+  /** Mochi's audio level crossed the speaking threshold (or dropped below it). */
   onAgentSpeaking?: (speaking: boolean) => void;
-  /** Uncle joined (true) or left (false) the channel. */
+  /** Mochi joined (true) or left (false) the channel. */
   onAgentPresent?: (present: boolean) => void;
   /** Captions the engine sends over the RTC data stream, when it sends them. */
   onTranscript?: (t: LiveTranscript) => void;
@@ -49,7 +49,7 @@ export async function startAgoraSession(ids: string[], anchorId: string): Promis
   });
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(err.error ?? "Couldn't start Uncle's live voice");
+    throw new Error(err.error ?? "Couldn't start Mochi's live voice");
   }
   return (await res.json()) as AgoraSession;
 }
@@ -69,7 +69,7 @@ export type LiveCall = {
   leave: () => Promise<void>;
 };
 
-/** Joins the RTC channel, publishes the mic and wires Uncle's audio, level and captions. */
+/** Joins the RTC channel, publishes the mic and wires Mochi's audio, level and captions. */
 export async function joinLiveCall(session: AgoraSession, handlers: LiveHandlers): Promise<LiveCall> {
   const agentUid = session.agentUid;
   const { default: AgoraRTC } = await import("agora-rtc-sdk-ng");

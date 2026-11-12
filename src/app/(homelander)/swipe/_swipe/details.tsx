@@ -15,7 +15,7 @@ const n = (v: number) => v.toLocaleString("en-MY");
 
 /**
  * The back of the card: every number that matters, worked out for this buyer.
- * Money, commute, family, the home itself, then Uncle's full take.
+ * Money, commute, family, the home itself, then Mochi's full take.
  */
 export function CardDetails({
   unit,
@@ -63,7 +63,7 @@ export function CardDetails({
             {money.instalmentRM !== null && basis ? (
               <Big label="Monthly instalment" value={rm(money.instalmentRM)} hint={`${basis.tenureYears} yrs at ${(basis.rate * 100).toFixed(1)}%`} />
             ) : (
-              <Big label="Monthly instalment" value="Ask Uncle" hint="Needs your salary" muted />
+              <Big label="Monthly instalment" value="Ask Mochi" hint="Needs your salary" muted />
             )}
             <Big label="Cash upfront" value={rm(money.upfrontRM)} hint="Deposit, duty, legal" />
           </div>
@@ -94,7 +94,7 @@ export function CardDetails({
                 muted={commute.far}
               />
             ) : (
-              <Row label="Commute" value="Tell Uncle where you work" muted />
+              <Row label="Commute" value="Tell Mochi where you work" muted />
             )}
             {money.totalMonthlyRM !== null ? <Row label="Every month, all in" value={rm(money.totalMonthlyRM)} strong /> : null}
             {money.leftRM !== null ? (
@@ -112,7 +112,7 @@ export function CardDetails({
           </Note>
           {basis ? null : (
             <Link href="/onboarding" className="justify-self-start text-sm font-semibold text-pandan-deep underline underline-offset-4">
-              Tell Uncle your salary for your monthly numbers
+              Tell Mochi your salary for your monthly numbers
             </Link>
           )}
         </Section>
@@ -125,12 +125,12 @@ export function CardDetails({
             <div className="flex gap-2.5 rounded-xl bg-cloud p-3 text-sm">
               <Sprite art={swipeSprites.clock} scale={2} className="mt-0.5 shrink-0 text-ink" />
               <p>
-                <span className="font-semibold">Tell Uncle where you work.</span> Drive and train times, tolls and the monthly
+                <span className="font-semibold">Tell Mochi where you work.</span> Drive and train times, tolls and the monthly
                 cost of getting to work are worked out from your workplace, so we don&apos;t guess one.
               </p>
             </div>
             <Link href="/onboarding" className="justify-self-start text-sm font-semibold text-pandan-deep underline underline-offset-4">
-              Tell Uncle where you work
+              Tell Mochi where you work
             </Link>
           </Section>
         )}
@@ -214,9 +214,9 @@ export function CardDetails({
           ) : null}
         </Section>
 
-        {/* Uncle */}
+        {/* Mochi */}
         {pick ? (
-          <Section art="uncle" title="Uncle's take" tone="text-ink">
+          <Section art="mochi" title="Mochi's take" tone="text-ink">
             <p className="font-pixel text-base">{pick.score}% match</p>
             {pick.reasons.length ? (
               <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">

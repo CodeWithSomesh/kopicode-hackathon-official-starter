@@ -4,7 +4,7 @@ import { HomeLanderShell } from "./shell";
 
 export const metadata: Metadata = {
   title: { default: "HomeLander", template: "%s · HomeLander" },
-  description: "Swipe Gamuda Land homes, battle your favourites, check what the bank will lend and ask Uncle.",
+  description: "Swipe Gamuda Land homes, battle your favourites, check what the bank will lend and ask Mochi.",
 };
 
 export const viewport: Viewport = { themeColor: "#f5f6f8" };

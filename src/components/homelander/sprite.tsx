@@ -79,19 +79,20 @@ export const sprites = {
     "#.#.#.#.#",
     "#########",
   ]),
-  uncle: defineSprite(
+  /** Mochi, the rice-cake helper: leaf sprout, round white body, two eyes, rosy cheeks. */
+  mochi: defineSprite(
     [
-      "..hhhhh..",
-      ".hhhhhhh.",
-      ".sssssss.",
-      ".sksssks.",
-      ".sssssss.",
-      ".smmmmms.",
-      "..sssss..",
-      "..wwwww..",
-      ".wwwwwww.",
+      "....gg...",
+      "....k....",
+      "..kkkkk..",
+      ".kwwwwwk.",
+      "kwwkwkwwk",
+      "kpwwwwwpk",
+      "kwwwkwwwk",
+      "kwwwwwwwk",
+      ".kkkkkkk.",
     ],
-    { h: INK, s: "#e0a77a", k: INK, m: "#5b3a1e", w: WHITE },
+    { k: INK, g: "#1f9d6b", w: WHITE, p: "#f2a7a0" },
   ),
   kopi: defineSprite(
     [

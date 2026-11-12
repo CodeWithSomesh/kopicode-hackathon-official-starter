@@ -5,9 +5,9 @@ import { anchorFor, bedroomsNeeded } from "./recommend";
 import type { Budget } from "./store";
 
 /**
- * Who is buying, for the Battle screen. Everything comes from what Uncle heard (the profile),
+ * Who is buying, for the Battle screen. Everything comes from what Mochi heard (the profile),
  * the bank check, or what the buyer picks on this screen. Nothing is invented: when an input is
- * missing it stays missing (null), and the screen says so ("Tell Uncle where you work") and
+ * missing it stays missing (null), and the screen says so ("Tell Mochi where you work") and
  * leaves that category out of the fight instead of guessing.
  */
 
@@ -33,13 +33,13 @@ export type BuyerMoney = {
 };
 
 export type BattleContext = {
-  /** Uncle has heard at least one answer. */
+  /** Mochi has heard at least one answer. */
   hasProfile: boolean;
   /** The buyer finished onboarding (or at least has a profile we can battle on). */
   onboarded: boolean;
-  /** Plain labels for every input Uncle doesn't have yet, shown on screen. */
+  /** Plain labels for every input Mochi doesn't have yet, shown on screen. */
   missing: string[];
-  /** Null until the buyer tells Uncle (or picks here) where they work. */
+  /** Null until the buyer tells Mochi (or picks here) where they work. */
   work: Anchor | null;
   /** What the buyer said ("Mid Valley"), or the anchor name. */
   workLabel: string | null;
@@ -94,7 +94,7 @@ export function battleContext(
   const hasProfile = meaningful(p);
   const missing: string[] = [];
 
-  // Workplace: picked on this screen > what Uncle heard > nothing.
+  // Workplace: picked on this screen > what Mochi heard > nothing.
   const picked = o.workId
     ? anchorOptions.find((a) => a.id === o.workId)
     : undefined;
@@ -129,14 +129,14 @@ export function battleContext(
   const commuteMissing = !work
     ? workUnmapped
       ? `"${workUnmapped}" isn't on our commute map. Pick the closest place you work`
-      : "Tell Uncle where you work"
+      : "Tell Mochi where you work"
     : officeDays === null
-      ? "Tell Uncle your office days"
+      ? "Tell Mochi your office days"
       : mode === null
-        ? "Tell Uncle car or train"
+        ? "Tell Mochi car or train"
         : null;
 
-  // Money: the bank check if run, else Uncle's numbers, else missing (no sample payslip).
+  // Money: the bank check if run, else Mochi's numbers, else missing (no sample payslip).
   const input = toIncomeInput(p);
   const elig = input ? eligibility(input) : null;
   const tenureFromAge = p.age !== undefined;

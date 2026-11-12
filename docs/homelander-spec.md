@@ -10,7 +10,7 @@ HomeLander helps Malaysian home buyers find the Gamuda Land home that fits their
 |---|---|---|
 | `/` | Landing: PayGap City-style 3D map of every Gamuda Land property in Malaysia | Teammate A (brief: `src/app/(homelander)/_landing/CLAUDE.md`) |
 | `/homes/[id]/feng-shui` | Feng Shui (formerly "Tengok Dulu") | Teammate B (brief: `src/app/(homelander)/homes/[id]/feng-shui/CLAUDE.md`) |
-| `/onboarding` | Uncle, the voice onboarding agent | Somesh |
+| `/onboarding` | Mochi, the voice onboarding bot | Somesh |
 | `/swipe` | Swipe deck of recommended homes | Somesh |
 | `/battle` | Compare up to 5 liked homes | Somesh |
 | `/bank` | Bank eligibility | Somesh |
@@ -35,12 +35,14 @@ HomeLander helps Malaysian home buyers find the Gamuda Land home that fits their
    - Supabase Auth with Google sign-in.
    - A new user (no profile) goes to `/onboarding`; a returning user goes to `/swipe`.
    - `/swipe`, `/battle`, `/bank`, `/onboarding` and `/profile` require login.
-3. **Uncle (`/onboarding`):**
-   - **Voice stack:** an Agora voice agent. Agora calls an adapter route in our app, which forwards to Claude through Vercel AI Gateway. The adapter also saves each answer to Supabase as Uncle hears it, using tool calls.
-   - **Mixed languages:** first try Speechmatics `cmn_en_ms_ta` (mixed English, Mandarin, Malay and Tamil). If that isn't smooth, fall back to one language per turn: the user speaks Malay and Uncle answers in Malay; they switch to Chinese and he switches.
-   - **Live side panel:** fills in as Uncle hears answers, and the user can type into it. Money fields offer "type instead".
+3. **Mochi (`/onboarding`):**
+   - **Character:** Mochi, an original cute helper bot (a soft white rice cake with a pandan-leaf sprout, rosy cheeks and stub arms), drawn as animated SVG in `src/components/homelander/mochi-bot.tsx`. Warm, gentle, concise and professional, never jokey.
+   - **Voice out:** CAMB AI text-to-speech with Malaysian locales (`/api/mochi/speak`, `CAMB_*` in `.env.example`); without `CAMB_API_KEY` the browser's own voice speaks. Voice in: Groq Whisper (`/api/mochi/transcribe`).
+   - **Voice stack:** an Agora voice agent. Agora calls an adapter route in our app, which forwards to Claude through Vercel AI Gateway. The adapter also saves each answer to Supabase as Mochi hears it, using tool calls.
+   - **Mixed languages:** first try Speechmatics `cmn_en_ms_ta` (mixed English, Mandarin, Malay and Tamil). If that isn't smooth, fall back to one language per turn: the user speaks Malay and Mochi answers in Malay; they switch to Chinese and Mochi switches.
+   - **Live side panel:** fills in as Mochi hears answers, and the user can type into it. Money fields offer "type instead".
    - **Testing:** voice can only be tested on Vercel preview deployments (or an ngrok tunnel), because Agora's cloud can't reach `localhost`.
-   - **What Uncle collects** (about 10 turns, skipping anything already answered):
+   - **What Mochi collects** (about 10 turns, skipping anything already answered):
      - **Household:** who they live with; kids now or planned; parents moving in; pets.
      - **Schools:** does distance to the kids' school matter? If yes, how far is OK, and how will they get there (drop-off, school bus, walking)? Never which school.
      - **Places:** work location and office days; partner's work; preferred areas; must be near (LRT/MRT, family).
@@ -88,7 +90,7 @@ Full research with links: `docs/research/jodoh-data-sources.md`.
 
 ## Keys Somesh will set up
 
-Agora (App ID, certificate, REST credentials), Speechmatics, Azure Speech (Uncle's voices), Mapbox, Vercel AI Gateway, Supabase, Google OAuth.
+Agora (App ID, certificate, REST credentials), Speechmatics, CAMB AI (Mochi's voice), Azure Speech (live Agora voice), Mapbox, Vercel AI Gateway, Supabase, Google OAuth.
 
 ## Git workflow
 

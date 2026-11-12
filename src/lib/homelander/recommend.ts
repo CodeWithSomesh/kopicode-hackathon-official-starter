@@ -14,7 +14,7 @@ import type { Profile } from "./profile";
 import type { Budget } from "./store";
 
 /**
- * Rule-based recommendations: every home gets a 0-100 match score from what Uncle learned,
+ * Rule-based recommendations: every home gets a 0-100 match score from what Mochi learned,
  * plus the plain reasons behind it. Explainable on purpose: buyers and Gamuda can see why.
  * Over-budget homes are kept (tagged "stretch" or "over") but ranked lower.
  */
@@ -33,7 +33,7 @@ export type Pick = {
 
 const STRETCH = 0.1;
 
-/** Best guess of the buyer's workplace among our commute anchors, from what they told Uncle. */
+/** Best guess of the buyer's workplace among our commute anchors, from what they told Mochi. */
 export function anchorFor(workArea: string | undefined): Anchor | null {
   if (!workArea) return null;
   const w = workArea.toLowerCase();
@@ -166,6 +166,6 @@ export function recommend(p: Profile, budget: Budget | null, work: Anchor | null
 }
 
 export const LIKES_TO_BATTLE = 3;
-/** Likes are capped: five focused picks give Uncle a sharper read than a long list. */
+/** Likes are capped: five focused picks give Mochi a sharper read than a long list. */
 export const DECK_LIKE_LIMIT = 5;
 export const BATTLE_MAX = 5;

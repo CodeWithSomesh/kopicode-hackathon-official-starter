@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const Body = z.object({ agentId: z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/) });
 
-/** Removes Uncle from the channel. Safe to call twice; Agora also drops him after the idle timeout. */
+/** Removes Mochi from the channel. Safe to call twice; Agora also drops it after the idle timeout. */
 export async function POST(req: Request) {
   if (!agoraConfigured()) return Response.json({ ok: true });
 

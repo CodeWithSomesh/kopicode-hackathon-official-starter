@@ -11,14 +11,14 @@ A full-screen 3D map in the style of **PayGap City** (https://paygap.asia/paygap
   - photos, price range, home types, tenure, completion, and units left (sample);
   - nearby rail stations and the nearest school of each type (national, Chinese, Tamil, international) with distance;
   - a link to the official Gamuda Land page;
-  - two buttons: **Start with Uncle**, which goes to `/login` (later `/onboarding`), and **Feng Shui**, which goes to `/homes/<unitId>/feng-shui`.
+  - two buttons: **Start with Mochi**, which goes to `/login` (later `/onboarding`), and **Feng Shui**, which goes to `/homes/<unitId>/feng-shui`.
 - **Copy PayGap's controls:**
   - a search box for projects and places;
   - filters for price, home type and state;
   - a list of states down the left side (Kuala Lumpur, Selangor, Johor, Sabah) that flies the map there;
   - zoom, compass and 2D/3D buttons;
   - a "Check your commute cost" call to action, which goes to `/login`.
-- **A small floating pitch card** saying "Find the Gamuda home that fits your life. Uncle will help.", with **Start with Uncle** as the primary button.
+- **A small floating pitch card** saying "Find the Gamuda home that fits your life. Mochi will help.", with **Start with Mochi** as the primary button.
 - **Login sits at the top right.** The shared header already has it, so don't add a second one.
 
 ## Start from what already works

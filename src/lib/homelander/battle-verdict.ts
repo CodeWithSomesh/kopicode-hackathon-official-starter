@@ -461,10 +461,10 @@ export function caveatsFor(
       );
   }
   if (m.savingsRM === null)
-    out.push("Tell Uncle your savings and we can judge the cash upfront.");
+    out.push("Tell Mochi your savings and we can judge the cash upfront.");
   if (m.source === "missing")
     out.push(
-      "Uncle doesn't know your salary yet, so budget fit and money left each month aren't judged.",
+      "Mochi doesn't know your salary yet, so budget fit and money left each month aren't judged.",
     );
   if (ctx.commuteMissing)
     out.push(`${ctx.commuteMissing} to compare commutes.`);

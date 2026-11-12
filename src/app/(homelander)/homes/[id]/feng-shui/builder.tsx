@@ -478,7 +478,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           id="fs-plan"
           className="grid min-w-0 scroll-mt-4 gap-3 p-3 sm:p-4"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          {plan.floors.length > 1 ? (
             <div
               className="flex flex-wrap gap-2"
               role="tablist"
@@ -500,8 +500,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
                 </PixButton>
               ))}
             </div>
-            <PixTag tone="lilac">{plan.label}</PixTag>
-          </div>
+          ) : null}
 
           <PlanCanvas
             floor={floor}

@@ -286,7 +286,7 @@ export function PlanCanvas({
     for (const d of floor.doors) {
       seg(d.p, d.q, c.surface, wallGap);
       if (d.kind === "open") continue;
-      const color = d.kind === "main" ? c.door : c.soft;
+      const color = d.kind === "main" ? c.ink : c.soft;
       // Short jambs at each end so the doorway reads as a door, not a missing wall.
       const vertical = Math.abs(d.p[0] - d.q[0]) < 1e-6;
       const j = 0.12;
@@ -346,7 +346,7 @@ export function PlanCanvas({
     const main = floor.doors.find((d) => d.kind === "main");
     if (main) {
       ctx.font = font(10, 700);
-      ctx.fillStyle = c.door;
+      ctx.fillStyle = c.ink;
       ctx.textAlign = "center";
       const mx = (main.p[0] + main.q[0]) / 2;
       const my = (main.p[1] + main.q[1]) / 2;

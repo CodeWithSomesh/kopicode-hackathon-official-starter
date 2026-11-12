@@ -87,7 +87,7 @@ const RIGHT: Pt = [1, 0];
 /** Terrace, 22 ft wide: party walls both sides, so light only comes from front and back. */
 const terrace: Plan = {
   id: "terrace",
-  label: "Terrace (sample layout)",
+  label: "Terrace",
   floors: [
     {
       id: "ground",
@@ -219,7 +219,7 @@ const terrace: Plan = {
 /** Semi-D, 40 ft lot: party wall on the left, open side on the right (x = 9.5). */
 const semid: Plan = {
   id: "semid",
-  label: "Semi-D (sample layout)",
+  label: "Semi-D",
   floors: [
     {
       id: "ground",
@@ -424,7 +424,7 @@ const semid: Plan = {
 /** Corner apartment, one floor: balcony at the front, front door at the back from the lift lobby. */
 const apartment: Plan = {
   id: "apartment",
-  label: "Apartment (sample layout)",
+  label: "Apartment",
   floors: [
     {
       id: "unit",
@@ -535,6 +535,10 @@ const apartment: Plan = {
 };
 
 export const plans = { terrace, semid, apartment } as const;
+
+/** The plan type as a noun mid-sentence: "terrace", "apartment", but "Semi-D" keeps its caps. */
+export const planNoun = (plan: Plan) =>
+  plan.id === "semid" ? plan.label : plan.label.toLowerCase();
 
 export function planFor(type: HomeType): Plan {
   if (type === "Semi-D" || type === "Bungalow") return semid;

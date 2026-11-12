@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { PixTag } from "@/components/homelander/pixel";
 import { townshipById, unitById } from "@/lib/homelander/data";
 import { FengShuiBuilder } from "./builder";
-import { planFor } from "./plans";
+import { planFor, planNoun } from "./plans";
 
 export const metadata: Metadata = { title: "Feng Shui Builder" };
 
@@ -37,9 +37,7 @@ export default async function FengShuiPage({
           {unit.builtUpSqft.toLocaleString("en-MY")} sq ft
         </p>
         <p className="text-sm text-ink-soft">
-          See where the sun lands before you sign. This is a sample{" "}
-          {plan.label.split(" (")[0].toLowerCase()} layout, not this unit&apos;s
-          actual plan.
+          Sample {planNoun(plan)} plan, not this unit&apos;s actual layout.
         </p>
       </header>
       <FengShuiBuilder

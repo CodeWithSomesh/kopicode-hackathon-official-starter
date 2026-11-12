@@ -203,8 +203,7 @@ export function SpeechToolbar({
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
       <p className="text-white/80">
-        Tap the mic and talk in English, BM, 中文 or தமிழ், even mixed in one
-        sentence.
+        Tap the mic to speak in English, BM, 中文 or தமிழ்.
       </p>
       <button
         type="button"

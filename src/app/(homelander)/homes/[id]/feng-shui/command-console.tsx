@@ -113,8 +113,8 @@ export function CommandConsole({
         {log.length === 0 ? (
           <p className="text-white/70">
             {lang === "mg"
-              ? "Taip apa nak buat, campur BM dan English pun boleh. Contoh: letak pokok kat ruang tamu."
-              : "Type what you want in English, Malay or a mix. For example: put a plant in the living room."}
+              ? "Taip arahan, atau tekan contoh di bawah."
+              : "Type a command, or tap an example below."}
           </p>
         ) : (
           log.map((e) => (

@@ -9,7 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
-import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
+import { PixButton, PixPanel } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import { ADDABLE, CATALOG, type Item, type Kind } from "./furniture";
 import type { Floor } from "./plans";
@@ -75,7 +75,6 @@ export function FurniturePanel({
                 · {roomLabel(selected.room)}
               </span>
             </p>
-            {fixed ? <PixTag tone="kaya">Built in</PixTag> : null}
           </div>
           {fixed ? (
             <p className="text-sm text-ink-soft">

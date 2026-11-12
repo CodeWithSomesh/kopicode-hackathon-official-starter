@@ -7,10 +7,11 @@ import { addProtocol, setWorkerUrl, type LayerSpecification, type StyleSpecifica
 import { Protocol } from "pmtiles";
 import { gsap } from "gsap";
 import { layers as basemapLayers, namedFlavor } from "@protomaps/basemaps";
-import { Coffee, GraduationCap, HeartPulse, Landmark, ShoppingBasket, TrainFront, Trees, type LucideIcon } from "lucide-react";
+import { Building2, Coffee, GraduationCap, HeartPulse, Landmark, ShoppingBasket, TrainFront, Trees, type LucideIcon } from "lucide-react";
 import { township } from "@/lib/first-key/township";
 import { bearingDeg, centroid, compassOf, distanceM, walkingMinutes } from "@/lib/first-key/geo";
-import type { PlaceKind } from "@/lib/first-key/types";
+import { developments, onMap } from "@/lib/first-key/developments";
+import type { Development, PlaceKind } from "@/lib/first-key/types";
 import { useThemeColors } from "../use-theme-colors";
 import { drawGlassTexture } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
@@ -22,12 +23,26 @@ const PMTILES_URL = process.env.NEXT_PUBLIC_PMTILES_URL; // our own basemap file
 let registered = false;
 const NIGHT_STEPS = 5;
 
-// The opening shot fits the 12 buildings to 70% of the screen width (any screen size), not a fixed zoom.
+export const COVE_ID = "gamuda-cove"; // the illustrative block sits inside this development
+const pins = developments.filter(onMap);
+
+// The township view fits the 12 buildings to 70% of the screen width (any screen size), not a fixed zoom.
 const LNGS = township.buildings.flatMap((b) => b.footprint.map((p) => p[0]));
 const SPAN_M = (Math.max(...LNGS) - Math.min(...LNGS)) * 111_320 * Math.cos((township.center[1] * Math.PI) / 180);
 const M_PER_PX_Z0 = 78_271.5 * Math.cos((township.center[1] * Math.PI) / 180); // MapLibre 512px tiles
-const overviewZoom = () => Math.log2((window.innerWidth * 0.7 * M_PER_PX_Z0) / SPAN_M);
-const overview = () => ({ center: township.center as [number, number], zoom: overviewZoom(), pitch: 52, bearing: 0 });
+const townshipView = () => ({
+  center: township.center as [number, number],
+  zoom: Math.log2((window.innerWidth * 0.7 * M_PER_PX_Z0) / SPAN_M),
+  pitch: 52,
+  bearing: 0,
+});
+// Klang Valley overview: all on-map developments (101.51-101.75 E, 2.88-3.30 N) inside the screen, pins and pills included.
+const klangView = () => {
+  const mpp = Math.max(78_000 / (window.innerHeight * 0.8), 40_000 / (window.innerWidth * 0.8)); // metres per pixel
+  return { center: [101.63, 3.09] as [number, number], zoom: Math.log2(M_PER_PX_Z0 / mpp), pitch: 0, bearing: 0 };
+};
+const devView = (d: Development) =>
+  d.id === COVE_ID ? townshipView() : { center: [d.lng!, d.lat!] as [number, number], zoom: 14.6, pitch: 50, bearing: 0 };
 const ICONS: Record<PlaceKind, LucideIcon> = {
   school: GraduationCap,
   clinic: HeartPulse,
@@ -61,28 +76,28 @@ type Props = {
   onArrived: () => void;
   /** Start already at the selected building, no fly-in (a `?building=` link). */
   startAtSelected?: boolean;
+  /** The focused development (a pin was clicked, or a `?dev=` link). Undefined = the Klang Valley overview. */
+  devId?: string;
+  onSelectDev: (id: string) => void;
 };
 
-export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArrived, startAtSelected }: Props) {
+export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev }: Props) {
   const mapRef = useRef<MapRef>(null);
-  const wrap = useRef<HTMLDivElement>(null);
-  const stopped = useRef(false); // user has touched the map: no more auto-rotation
   const [loaded, setLoaded] = useState(false);
   // Cap the device pixel ratio: the demo laptop / projector draws about 600 extrusions.
   const [pixelRatio] = useState(() => Math.min(window.devicePixelRatio, 1.5));
   // The pmtiles:// protocol is registered once per page; the style only points at the file after that.
-  const [protocolReady, setProtocolReady] = useState(false);
-  useEffect(() => {
-    if (!PMTILES_URL) return;
-    if (!registered) {
+  const [protocolReady] = useState(() => {
+    if (PMTILES_URL && !registered) {
       addProtocol("pmtiles", new Protocol().tile);
       registered = true;
     }
-    setProtocolReady(true);
-  }, []);
+    return true;
+  });
   const withBasemap = !!PMTILES_URL && protocolReady;
   const [initialView] = useState(() => {
-    const o = overview();
+    const dev = developments.find((d) => d.id === devId);
+    const o = startAtSelected ? townshipView() : dev && onMap(dev) ? devView(dev) : klangView();
     return { longitude: o.center[0], latitude: o.center[1], zoom: o.zoom, pitch: o.pitch, bearing: o.bearing };
   });
   const reduced = usePrefersReducedMotion();
@@ -102,7 +117,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   // neighbourhood stands up quietly around ours (the township is the only textured thing). Height from the data, else 6 m.
   const basemap = useMemo<LayerSpecification[]>(
     () => [
-      ...basemapLayers("protomaps", namedFlavor(dark ? "dark" : "light"), { lang: "en" }).filter((l) => l.id !== "buildings"),
+      ...basemapLayers("protomaps", namedFlavor(dark ? "dark" : "light"), { lang: "en" }).filter((l) => l.id !== "buildings" && l.id !== "background"), // its grey background would show outside the file
       {
         id: "basemap-buildings",
         type: "fill-extrusion",
@@ -142,6 +157,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         {
           id: "rail",
           type: "line",
+          minzoom: 14,
           source: "rail",
           layout: { "line-cap": "round", "line-join": "round" },
           paint: { "line-color": colors["chart-3"], "line-width": 4 },
@@ -254,46 +270,45 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, loaded]);
 
+  // Back from the 3D view: settle on the township. (A selected building always means Gamuda Cove.)
   const wasPaused = useRef(false);
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (wasPaused.current && !paused && map) {
-      if (reduced) map.jumpTo(overview());
-      else map.flyTo({ ...overview(), bearing: map.getBearing(), duration: 1200 });
+      if (reduced) map.jumpTo(townshipView());
+      else map.flyTo({ ...townshipView(), bearing: map.getBearing(), duration: 1200 });
     }
     wasPaused.current = paused;
   }, [paused, reduced]);
 
-  // Slow opening shot (about 3 degrees a second) until the first user input.
+  // Fly to the focused development, or back out to the Klang Valley. The first run is skipped: initialView is already there.
+  const firstDev = useRef(true);
   useEffect(() => {
-    if (!loaded || reduced || paused || selectedId || startAtSelected || stopped.current) return;
+    if (!loaded) return;
+    const isFirst = firstDev.current;
+    firstDev.current = false;
     const map = mapRef.current?.getMap();
-    if (!map) return;
-    const start = performance.now();
-    const from = map.getBearing();
-    let raf = requestAnimationFrame(function tick(now) {
-      if (stopped.current) return;
-      map.setBearing(from + ((now - start) / 1000) * 3);
-      raf = requestAnimationFrame(tick);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [loaded, reduced, paused, selectedId, startAtSelected]);
+    if (isFirst || !map || selectedId) return;
+    const dev = developments.find((d) => d.id === devId);
+    const target = dev && onMap(dev) ? devView(dev) : klangView();
+    if (reduced) map.jumpTo(target);
+    else map.flyTo({ ...target, duration: 2200, essential: false });
+    // selectedId has its own fly-in above
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devId, loaded]);
 
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el) return;
-    const stop = () => (stopped.current = true);
-    const evts = ["pointerdown", "wheel", "keydown", "touchstart"] as const;
-    evts.forEach((e) => el.addEventListener(e, stop, { passive: true }));
-    return () => evts.forEach((e) => el.removeEventListener(e, stop));
-  }, []);
-
-  const onClick = (e: MapLayerMouseEvent) => onSelect(e.features?.[0]?.properties?.id);
+  const onClick = (e: MapLayerMouseEvent) => {
+    const id = e.features?.[0]?.properties?.id;
+    if (id) onSelect(id);
+  };
+  const showTownship = devId === COVE_ID || !!selectedId;
+  const overviewShot = !devId && !selectedId;
+  const narrow = typeof window !== "undefined" && window.innerWidth < 640; // phone: compact, differently fanned pills
 
   const from = selectedId ? centres[selectedId] : undefined;
 
   return (
-    <div ref={wrap} className="absolute inset-0">
+    <div className="absolute inset-0">
       {ready && (
       <Map
         ref={mapRef}
@@ -314,16 +329,37 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         onLoad={() => setLoaded(true)}
         style={{ width: "100%", height: "100%" }}
       >
-        {township.rail.stations.map((s) => (
-          <Marker key={s.id} longitude={s.lng} latitude={s.lat} anchor="bottom">
-            <Pin label={s.name} detail={detail(from, s.lng, s.lat)} Icon={TrainFront} tone="station" />
+        {overviewShot &&
+          pins.map((d) => (
+            <Marker
+              key={d.id}
+              longitude={d.lng}
+              latitude={d.lat}
+              anchor={(narrow ? PILL_ANCHOR_NARROW : PILL_ANCHOR)[d.id] ?? "bottom"}
+              offset={(narrow ? PILL_OFFSET_NARROW : PILL_OFFSET)[d.id]}
+            >
+              <DevPill dev={d} compact={narrow} onClick={() => onSelectDev(d.id)} />
+            </Marker>
+          ))}
+        {showTownship && !selectedId && (
+          <Marker longitude={township.center[0]} latitude={township.center[1] - 80 / 110_574} anchor="top">
+            <p className="pointer-events-none max-w-[16rem] rounded-lg border-2 border-primary bg-card px-3 py-1.5 text-center text-xs text-card-foreground shadow-md sm:max-w-none">
+              <strong>{township.name}</strong>: an illustrative block at Gamuda Cove; made-up units and prices
+            </p>
           </Marker>
-        ))}
-        {township.places.map((p) => (
-          <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
-            <Pin label={p.name} detail={detail(from, p.lng, p.lat)} Icon={ICONS[p.kind]} />
-          </Marker>
-        ))}
+        )}
+        {showTownship &&
+          township.rail.stations.map((s) => (
+            <Marker key={s.id} longitude={s.lng} latitude={s.lat} anchor="bottom">
+              <Pin label={s.name} detail={detail(from, s.lng, s.lat)} Icon={TrainFront} tone="station" />
+            </Marker>
+          ))}
+        {showTownship &&
+          township.places.map((p) => (
+            <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
+              <Pin label={p.name} detail={detail(from, p.lng, p.lat)} Icon={ICONS[p.kind]} />
+            </Marker>
+          ))}
       </Map>
       )}
     </div>
@@ -334,6 +370,33 @@ function detail(from: [number, number] | undefined, lng: number, lat: number) {
   if (!from) return undefined;
   const m = distanceM(from, [lng, lat]);
   return `${Math.round(m)} m, ${walkingMinutes(m)} min walk, ${compassOf(bearingDeg(from, [lng, lat]))}`;
+}
+
+// The Gardens Park / Gamuda Gardens / Kundang pins sit about 2 km apart (tens of pixels at this zoom): fan the pills out.
+type Anchor = "left" | "right" | "top-right" | "top-left" | "top" | "bottom";
+const PILL_ANCHOR: Record<string, Anchor> = { "gamuda-gardens": "left", "gardens-park": "right", "kundang-estates": "top-right" };
+const PILL_ANCHOR_NARROW: Record<string, Anchor> = { "gamuda-gardens": "left", "gardens-park": "bottom", "kundang-estates": "top-left" };
+const PILL_OFFSET: Record<string, [number, number]> = { "kundang-estates": [0, 22] };
+const PILL_OFFSET_NARROW: Record<string, [number, number]> = { "kundang-estates": [-4, 20] };
+
+function DevPill({ dev, compact, onClick }: { dev: Development; compact: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-full border bg-card p-1 pr-3 text-left text-card-foreground shadow-md transition hover:border-primary focus-visible:outline-2 focus-visible:outline-primary"
+      aria-label={`${dev.name}, ${dev.town}${dev.launch ? `, from RM${dev.launch.fromPrice.toLocaleString()}` : ""}`}
+    >
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+        <Building2 className="size-4" aria-hidden />
+      </span>
+      <span className="flex flex-col text-[11px] leading-tight">
+        <span className="whitespace-nowrap text-xs font-semibold">{dev.name}</span>
+        {!compact && <span className="whitespace-nowrap text-muted-foreground">{dev.town.replace(", Selangor", "").replace(", Johor", "")}</span>}
+        {dev.launch && <span className="whitespace-nowrap font-medium text-primary">From RM{dev.launch.fromPrice.toLocaleString()}</span>}
+      </span>
+    </button>
+  );
 }
 
 // White rounded pill: icon, name and (once a building is picked) the walk from it.

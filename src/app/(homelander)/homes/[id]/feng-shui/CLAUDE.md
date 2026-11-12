@@ -1,6 +1,6 @@
-# Feng Shui (`/homes/[id]/feng-shui`): teammate B's brief
+# Feng Shui Builder (`/homes/[id]/feng-shui`): teammate B's brief
 
-You own this folder: `src/app/(homelander)/homes/[id]/feng-shui/`. Feng Shui is the feature first pitched as **"Tengok Dulu"** (same thing, new name). The original pitch is at https://claude.ai/artifact/5CXz4TaFQJjKjkFUg7scux. Read `docs/homelander-spec.md` for the whole product.
+You own this folder: `src/app/(homelander)/homes/[id]/feng-shui/`. The page is called **Feng Shui Builder**. It was first pitched as **"Tengok Dulu"** (same thing, new name). The original pitch is at https://claude.ai/artifact/5CXz4TaFQJjKjkFUg7scux. Read `docs/homelander-spec.md` for the whole product.
 
 ## What to build
 
@@ -10,14 +10,25 @@ A browser-based "try the home before you buy it" visualizer for one Gamuda unit.
 - **Facing direction:** the user sets which way the living room faces: utara, timur, selatan or barat (north, east, south, west).
 - **Sun check:** the user sets the time and month. Work out the sun's position for Kuala Lumpur (lat 3.14) with a small solar formula or the `suncalc` package. `panas tak?` reports how much of the living room gets direct sun.
 - **Furniture fit:** place furniture at real sizes and report collisions. Commands: `letak` (place), `alih` (move), `pusing` (rotate).
-- **Occasion modes:** `mode biasa|raya|cny`.
-  - Raya checks guest seating.
-  - CNY tests a 10-seat round table.
 - **Manglish control:**
   - Commands can be typed or spoken. Speech can use the browser's built-in speech recognition.
   - The demo uses a small parser.
   - Stretch goal: send free speech to Claude through the existing `/api/chat` pattern (Vercel AI SDK + AI Gateway) to turn it into the command script.
 - **A "For fun, not professional advice" note** must be visible on the page.
+
+## Decisions (grill, 12 Nov)
+
+These override the list above where they differ.
+
+- **No festive modes.** No Raya, CNY, Deepavali or guest seating. It is regular feng shui only.
+- **No weather forecast.**
+- **Eight facings** (N, NE, E, SE, S, SW, W, NW). The sun uses each township's own latitude and longitude.
+- **Three sample plans** (`plans.ts`): Terrace and Semi-D have two floors, Apartment has one. Bungalow uses Semi-D. Every unit is labelled as a sample layout.
+- **Feng shui:** rule-based notes and an Ong meter score that update live, plus a bagua overlay. No Kua number.
+- **Language:** the command box accepts mixed English, Malay and Manglish, and replies in English or Manglish. Voice input and spoken replies also cover Mandarin and Tamil through an AI route (`src/app/api/feng-shui/route.ts`, approved). The page must still work without AI.
+- **3D:** a toggle that renders the same layout state. It is built last and cut first.
+- **Saving:** `localStorage` per unit. No Supabase table.
+- **Build order:** 1 plans and sun, 2 furniture, 3 feng shui rules, 4 parser, 5 AI and voice, 6 3D.
 
 ## How people get here
 

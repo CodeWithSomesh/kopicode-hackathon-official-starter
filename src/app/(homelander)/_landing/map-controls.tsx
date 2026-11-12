@@ -4,6 +4,7 @@ import type { MapLike } from "@/components/first-key/burst/map-view";
 import { useEffect, useState } from "react";
 import { PixButton } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { setMapDusk, setMapNight, useMapDusk, useMapNight } from "@/components/first-key/use-map-colors";
 import { mapSprites } from "./map-data";
@@ -22,12 +23,13 @@ export type ControlMap = MapLike & {
 
 /** Zoom, compass and 2D/3D buttons. They drive the MapLibre map handed up by the map component. */
 export function MapControls({ map, panelOpen, cycleLight }: { map: ControlMap | null; panelOpen: boolean; cycleLight?: boolean }) {
+  const t = useT();
   const [bearing, setBearing] = useState(0);
   const [is3D, setIs3D] = useState(true);
   const night = useMapNight();
   const dusk = useMapDusk() && !night;
   // Mapbox: Day -> Dusk -> Night -> Day. MapLibre has only day and night.
-  const light = night ? "Night" : dusk ? "Dusk" : "Day";
+  const light = night ? t("Night") : dusk ? t("Dusk") : t("Day");
   const nextLight = () => {
     if (!cycleLight) return setMapNight(!night);
     if (night) setMapNight(false);
@@ -54,20 +56,20 @@ export function MapControls({ map, panelOpen, cycleLight }: { map: ControlMap | 
   // phones: two columns, so the stack ends above the township sheet (which starts ~280 px down) and Night / 2D stay tappable
   return (
     <div data-obstacle className={cn("absolute top-[120px] right-4 z-10 grid grid-cols-2 gap-2 lg:top-[92px] lg:grid-cols-1 lg:gap-3", panelOpen ? "lg:right-[436px]" : "lg:right-6")}>
-      <PixButton size="sm" className="size-10 px-0" onClick={() => map.zoomIn({ animate })} aria-label="Zoom in">
+      <PixButton size="sm" className="size-10 px-0" onClick={() => map.zoomIn({ animate })} aria-label={t("Zoom in")}>
         <Sprite art={mapSprites.plus} scale={3} />
       </PixButton>
-      <PixButton size="sm" className="size-10 px-0" onClick={() => map.zoomOut({ animate })} aria-label="Zoom out">
+      <PixButton size="sm" className="size-10 px-0" onClick={() => map.zoomOut({ animate })} aria-label={t("Zoom out")}>
         <Sprite art={mapSprites.minus} scale={3} />
       </PixButton>
-      <PixButton size="sm" className="size-10 px-0" onClick={() => map.resetNorth({ animate })} aria-label="Point the map north">
+      <PixButton size="sm" className="size-10 px-0" onClick={() => map.resetNorth({ animate })} aria-label={t("Point the map north")}>
         <Sprite art={mapSprites.needle} scale={2} style={{ transform: `rotate(${-bearing}deg)` }} />
       </PixButton>
       <PixButton
         size="sm"
         className="size-10 px-0 text-sm"
         onClick={() => map.easeTo({ pitch: is3D ? 0 : 52, duration: animate ? 600 : 0 })}
-        aria-label={is3D ? "Switch to flat 2D view" : "Switch to tilted 3D view"}
+        aria-label={is3D ? t("Switch to flat 2D view") : t("Switch to tilted 3D view")}
       >
         {is3D ? "2D" : "3D"}
       </PixButton>
@@ -77,10 +79,10 @@ export function MapControls({ map, panelOpen, cycleLight }: { map: ControlMap | 
         className="size-10 px-0 font-pixel-label text-[11px] uppercase"
         onClick={nextLight}
         {...(cycleLight
-          ? { "aria-label": `Time of day: ${light.toLowerCase()}. Switch to ${(night ? "day" : dusk ? "night" : "dusk")}` }
-          : { "aria-pressed": night, "aria-label": "Night view of the map and the building" })}
+          ? { "aria-label": t("Time of day: {light}. Switch to {next}", { light: light.toLowerCase(), next: (night ? t("Day") : dusk ? t("Night") : t("Dusk")).toLowerCase() }) }
+          : { "aria-pressed": night, "aria-label": t("Night view of the map and the building") })}
       >
-        {cycleLight ? light : "Night"}
+        {cycleLight ? light : t("Night")}
       </PixButton>
     </div>
   );

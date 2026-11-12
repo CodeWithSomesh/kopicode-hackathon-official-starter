@@ -8,6 +8,7 @@ import { availabilityOf, rm, townshipById, type Anchor, type Unit } from "@/lib/
 import type { Profile } from "@/lib/homelander/profile";
 import type { Pick as Match } from "@/lib/homelander/recommend";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/homelander/i18n/client";
 import { homeDetails, type MoneyBasis } from "./buyer";
 import { CardDetails } from "./details";
 import { statusTone, stockLabel } from "./stock";
@@ -38,6 +39,7 @@ type Props = {
  * bottom, and a "More details" sheet with every number worked out for this buyer.
  */
 export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, basis, anchor, isTop, open, onOpen, onClose }: Props) {
+  const tr = useT();
   const t = townshipById[unit.townshipId]!;
   const a = availabilityOf(unit.id);
   const sold = a.status === "Sold out";
@@ -62,7 +64,7 @@ export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, 
       {/* Top row: stock and match. */}
       <div className="absolute inset-x-3 top-3 flex items-start justify-between gap-2">
         <PixTag tone={statusTone[a.status]} className="shadow-[0_2px_8px_rgb(0_0_0/0.25)]">
-          {stockLabel(a)}
+          {stockLabel(a, tr)}
           {sold ? null : <span className="opacity-70">· sample</span>}
         </PixTag>
         {pick ? (
@@ -79,7 +81,7 @@ export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, 
       {sold ? (
         <div className="absolute inset-x-0 top-[34%] grid place-items-center">
           <span className="-rotate-12 rounded-lg border-4 border-white bg-raya px-4 py-2 font-pixel text-4xl leading-none tracking-wider text-white shadow-[0_6px_0_0_var(--color-ink)]">
-            SOLD OUT
+            {tr("SOLD OUT")}
           </span>
         </div>
       ) : null}
@@ -87,9 +89,9 @@ export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, 
       {/* The essentials, on a scrim so they read over any photo. */}
       <div className="absolute inset-x-0 bottom-0 grid gap-2 bg-linear-to-t from-ink/95 via-ink/70 to-transparent px-4 pt-24 pb-4 sm:px-5">
         <div className="flex flex-wrap items-center gap-1.5">
-          {fit ? <PixTag tone={fit.tone}>{fit.label}</PixTag> : null}
+          {fit ? <PixTag tone={fit.tone}>{tr(fit.label)}</PixTag> : null}
           <PixTag tone="white">{unit.type}</PixTag>
-          {unit.completion > 2026 ? <PixTag tone="lilac">Ready {unit.completion}</PixTag> : null}
+          {unit.completion > 2026 ? <PixTag tone="lilac">{tr("Ready {year}", { year: unit.completion })}</PixTag> : null}
         </div>
         <div className="grid gap-0.5">
           <h2 className="font-pixel text-[1.9rem] leading-[1.05] text-balance sm:text-[2.1rem]">{t.name}</h2>
@@ -121,11 +123,11 @@ export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, 
               type="button"
               onClick={() => onOpen(unit.id)}
               aria-expanded={open}
-              aria-label="More details (up arrow)"
+              aria-label={tr("More details (up arrow)")}
               className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-white px-3.5 py-2 text-sm font-semibold text-ink shadow-[0_2px_0_0_var(--color-ink)] transition-transform hover:-translate-y-px active:translate-y-px"
             >
               <Sprite art={swipeSprites.up} scale={2} />
-              More details
+              {tr("More details")}
             </button>
           ) : null}
         </div>
@@ -135,7 +137,7 @@ export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, 
         <div
           data-no-drag
           role="region"
-          aria-label={`Details for ${t.name}`}
+          aria-label={tr("Details for {name}", { name: t.name })}
           className="absolute inset-0 animate-in overflow-y-auto overscroll-contain bg-white text-ink duration-300 fade-in-0 slide-in-from-bottom-8 motion-reduce:animate-none"
         >
           <CardDetails unit={unit} pick={pick} d={d} basis={basis} onClose={onClose} />

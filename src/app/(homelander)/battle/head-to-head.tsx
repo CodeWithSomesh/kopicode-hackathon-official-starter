@@ -11,6 +11,7 @@ import {
 } from "@/lib/homelander/analysis";
 import type { BattleContext } from "@/lib/homelander/battle-context";
 import type { Fighter } from "@/lib/homelander/battle-verdict";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { caret, gauge, kRM, money, useStepIn } from "./bits";
 import { FighterHead } from "./fighter-head";
@@ -48,7 +49,8 @@ export function HeadToHead({
   onSwap: (slot: number, id: string) => void;
   onRemove: (slot: number) => void;
 }) {
-  const sections = buildSections(fighters, ctx);
+  const t = useT();
+  const sections = buildSections(fighters, ctx, t);
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const toggle = (id: string) => setClosed((c) => ({ ...c, [id]: !c[id] }));
   const n = fighters.length;
@@ -64,23 +66,22 @@ export function HeadToHead({
           id="h2h-title"
           className="font-pixel text-2xl leading-none lg:text-3xl"
         >
-          Head to head
+          {t("Head to head")}
         </h2>
         <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
           <li className="flex items-center gap-1.5">
-            <Sprite art="star" scale={2} className="text-kaya-deep" /> Best in
-            the row
+            <Sprite art="star" scale={2} className="text-kaya-deep" /> {t("Best in the row")}
           </li>
           <li className="flex items-center gap-1.5">
-            <PixTag tone="lilac">You</PixTag> Your way to work
+            <PixTag tone="lilac">You</PixTag> {t("Your way to work")}
           </li>
           <li className="flex items-center gap-1.5">
-            <EstChip /> Estimate, not a quote
+            <EstChip /> {t("Estimate, not a quote")}
           </li>
         </ul>
       </div>
       <p className="text-sm text-ink-soft lg:hidden">
-        Swipe the table sideways to see every home. The left column stays put.
+        {t("Swipe the table sideways to see every home. The left column stays put.")}
       </p>
 
       <PixPanel className="overflow-hidden p-0">
@@ -88,7 +89,7 @@ export function HeadToHead({
           className="snap-x snap-mandatory scroll-pl-[8.5rem] overflow-x-auto overscroll-x-contain lg:snap-none lg:scroll-pl-0"
           tabIndex={0}
           role="region"
-          aria-label="Head-to-head table. Scrolls sideways on small screens."
+          aria-label={t("Head-to-head table. Scrolls sideways on small screens.")}
         >
           <table
             className="w-full min-w-[var(--tw)] table-fixed border-separate border-spacing-0 text-left text-sm tabular-nums lg:min-w-[var(--tw-lg)]"
@@ -100,8 +101,7 @@ export function HeadToHead({
             }
           >
             <caption className="sr-only">
-              Every factor for each home. A star marks the best cell in a row.
-              Figures are estimates.
+              {t("Every factor for each home. A star marks the best cell in a row. Figures are estimates.")}
             </caption>
             <colgroup>
               <col className="w-[8.5rem] lg:w-[12rem]" />
@@ -117,7 +117,7 @@ export function HeadToHead({
                   className={cn(stickyCol, "z-20 px-3 pt-3 pb-3 align-bottom")}
                 >
                   <span className="font-pixel-label text-[11px] uppercase">
-                    {n} of 5 homes
+                    {t("{n} of 5 homes", { n })}
                   </span>
                 </th>
                 {fighters.map((f, i) => (
@@ -165,13 +165,13 @@ export function HeadToHead({
             <SectionBody
               section={{
                 id: "scores",
-                title: "Scores out of 100",
+                title: t("Scores out of 100"),
                 art: gauge,
-                blurb: "What the overall is made of, on the weights you set",
+                blurb: t("What the overall is made of, on the weights you set"),
                 rows: STATS.map((st): Row => ({
                   id: `stat-${st.key}`,
-                  label: `${st.label} (×${weights[st.key]})`,
-                  hint: st.hint,
+                  label: `${t(st.label)} (×${weights[st.key]})`,
+                  hint: t(st.hint),
                   cell: (f) => ({
                     main: (
                       <span className="grid gap-1">
@@ -181,7 +181,7 @@ export function HeadToHead({
                         <PixMeter
                           value={f.stats[st.key]}
                           tone="pandan"
-                          label={`${st.label} ${f.stats[st.key]} of 100`}
+                          label={t("{label} {n} of 100", { label: t(st.label), n: f.stats[st.key] })}
                           className="max-w-[8rem]"
                         />
                       </span>
@@ -222,6 +222,7 @@ function HeadlineRow({
   winnerCol: (f: Fighter) => boolean;
   ctx: BattleContext;
 }) {
+  const t = useT();
   const items: {
     label: string;
     value: (f: Fighter) => number | null;
@@ -229,38 +230,38 @@ function HeadlineRow({
     sub?: (f: Fighter) => ReactNode;
   }[] = [
     {
-      label: "All-in per month",
+      label: t("All-in per month"),
       value: (f) => f.totalMonthlyRM,
       show: (f) => money(f.totalMonthlyRM),
       sub: (f) =>
         f.leftRM < 0 ? (
           <span className="text-raya-deep">
-            {money(-f.leftRM)} short a month
+            {t("{amount} short a month", { amount: money(-f.leftRM) })}
           </span>
         ) : (
-          `${money(f.leftRM)} left`
+          t("{amount} left", { amount: money(f.leftRM) })
         ),
     },
     {
-      label: "Commuting a year",
+      label: t("Commuting a year"),
       value: (f) => (f.you.compared ? f.you.hoursPerYear : null),
       show: (f) => (f.you.compared ? `${f.you.hoursPerYear} h` : "n/a"),
       sub: (f) =>
         f.you.compared
-          ? `${f.you.oneWayMin} min each way`
-          : "Not a daily commute",
+          ? t("{n} min each way", { n: f.you.oneWayMin })
+          : t("Not a daily commute"),
     },
     {
-      label: "Cash upfront",
+      label: t("Cash upfront"),
       value: (f) => f.upfrontRM,
       show: (f) => kRM(f.upfrontRM),
       sub: (f) =>
         f.savingsGapRM === null ? (
-          "Savings unknown"
+          t("Savings unknown")
         ) : f.savingsGapRM < 0 ? (
-          <span className="text-raya-deep">{kRM(-f.savingsGapRM)} short</span>
+          <span className="text-raya-deep">{t("{amount} short", { amount: kRM(-f.savingsGapRM) })}</span>
         ) : (
-          `${kRM(f.savingsGapRM)} to spare`
+          t("{amount} to spare", { amount: kRM(f.savingsGapRM) })
         ),
     },
   ];
@@ -275,11 +276,11 @@ function HeadlineRow({
         )}
       >
         <span className="block font-pixel text-base leading-tight">
-          At a glance
+          {t("At a glance")}
         </span>
         <span className="mt-1 block text-xs font-normal text-ink-soft">
-          {ctx.officeDays} days to {ctx.work.name}
-          {ctx.money.source === "sample" ? ", sample payslip" : ""}
+          {t("{n} days to {work}", { n: ctx.officeDays, work: ctx.work.name })}
+          {ctx.money.source === "sample" ? t(", sample payslip") : ""}
         </span>
       </th>
       {fighters.map((f, i) => (
@@ -303,7 +304,7 @@ function HeadlineRow({
                       art="star"
                       scale={2}
                       className="shrink-0 text-kaya-deep"
-                      label="Best"
+                      label={t("Best")}
                     />
                   ) : null}
                 </dd>
@@ -329,6 +330,7 @@ function OverallRow({
   fighters: Fighter[];
   winnerCol: (f: Fighter) => boolean;
 }) {
+  const t = useT();
   const p = useStepIn();
   const best = bestIndices(
     fighters.map((f) => f.overall),
@@ -344,10 +346,10 @@ function OverallRow({
         )}
       >
         <span className="block font-pixel text-base leading-tight">
-          Overall
+          {t("Overall")}
         </span>
         <span className="block text-xs font-normal text-ink-soft">
-          Weighted by your priorities
+          {t("Weighted by your priorities")}
         </span>
       </th>
       {fighters.map((f, i) => (
@@ -366,19 +368,19 @@ function OverallRow({
                   art="star"
                   scale={2}
                   className="text-kaya-deep"
-                  label="Best"
+                  label={t("Best")}
                 />
               ) : null}
             </span>
             <PixMeter
               value={f.overall * p}
               tone={winnerCol(f) ? "kaya" : "sky"}
-              label={`Overall ${f.overall} of 100`}
+              label={t("Overall {n} of 100", { n: f.overall })}
               className="max-w-[9rem]"
             />
             {f.penalty ? (
               <span className="text-[11px] leading-tight font-semibold text-raya-deep">
-                −{f.penalty} for your deal-breakers / must-haves
+                {t("−{n} for your deal-breakers / must-haves", { n: f.penalty })}
               </span>
             ) : null}
           </div>
@@ -403,6 +405,7 @@ function SectionBody({
   onToggle: () => void;
   winnerCol: (f: Fighter) => boolean;
 }) {
+  const t = useT();
   const bodyId = `sec-${section.id}`;
   return (
     <tbody id={bodyId}>
@@ -442,7 +445,7 @@ function SectionBody({
             ) : null}
             {!open ? (
               <span className="text-xs font-normal text-ink-soft">
-                ({section.rows.length} rows hidden)
+                {t("({n} rows hidden)", { n: section.rows.length })}
               </span>
             ) : null}
           </button>
@@ -471,6 +474,7 @@ function RowView({
   fighters: Fighter[];
   winnerCol: (f: Fighter) => boolean;
 }) {
+  const t = useT();
   const values = row.value ? fighters.map(row.value) : null;
   const best =
     values && row.better ? bestIndices(values, row.better) : new Set<number>();
@@ -524,7 +528,7 @@ function RowView({
                   art="star"
                   scale={2}
                   className="mt-0.5 shrink-0 text-kaya-deep"
-                  label="Best"
+                  label={t("Best")}
                 />
               ) : null}
             </span>

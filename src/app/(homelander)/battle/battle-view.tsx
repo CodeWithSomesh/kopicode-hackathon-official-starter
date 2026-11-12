@@ -25,6 +25,7 @@ import {
 } from "@/lib/homelander/battle-verdict";
 import { anchorOptions, unitById, type Unit } from "@/lib/homelander/data";
 import { recommend } from "@/lib/homelander/recommend";
+import { useT } from "@/lib/homelander/i18n/client";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 import { kRM, swords, UnitSelect } from "./bits";
@@ -62,6 +63,7 @@ const sourceCopy: Record<
 
 export function BattleView() {
   const s = useHomeLander();
+  const t = useT();
 
   const [workId, setWorkId] = useState<string | null>(null);
   const [officeDays, setOfficeDays] = useState<number | null>(null);
@@ -89,7 +91,7 @@ export function BattleView() {
         ? uncle.weights
         : PRESETS[weightMode].weights;
 
-  const result = runBattle(list, ctx, weights, (u) => matchById.get(u.id) ?? 0);
+  const result = runBattle(list, ctx, weights, (u) => matchById.get(u.id) ?? 0, t);
 
   const save = (next: string[]) =>
     homelander.setCompare(next.slice(0, BATTLE_MAX));
@@ -133,23 +135,23 @@ export function BattleView() {
             scale={4}
             className="shrink-0 text-pandan-deep"
           />
-          Battle of the homes
+          {t("Battle of the homes")}
         </h1>
         <p className="max-w-3xl text-ink-soft">
-          Up to {BATTLE_MAX} Gamuda Land homes, side by side on what you&apos;d
-          pay every month, how long you&apos;d spend getting to work, room for
-          the family and the home itself. Every figure is an estimate you can
-          check row by row.
+          {t(
+            "Up to {n} Gamuda Land homes, side by side on what you'd pay every month, how long you'd spend getting to work, room for the family and the home itself. Every figure is an estimate you can check row by row.",
+            { n: BATTLE_MAX },
+          )}
         </p>
         <p className="flex flex-wrap items-center gap-2 text-sm">
-          <PixTag tone={src.tone}>{src.tag}</PixTag>
-          <span className="text-ink-soft">{src.text}</span>
+          <PixTag tone={src.tone}>{t(src.tag)}</PixTag>
+          <span className="text-ink-soft">{t(src.text)}</span>
           {source === "sample" || source === "mixed" ? (
             <Link
               href="/swipe"
               className="font-semibold underline decoration-2 underline-offset-4"
             >
-              Swipe to pick your own
+              {t("Swipe to pick your own")}
             </Link>
           ) : null}
           {canUseLikes ? (
@@ -158,7 +160,7 @@ export function BattleView() {
               onClick={() => save(likedTop)}
               className="font-semibold underline decoration-2 underline-offset-4"
             >
-              Use my top {likedTop.length} likes
+              {t("Use my top {n} likes", { n: likedTop.length })}
             </button>
           ) : null}
         </p>
@@ -209,6 +211,7 @@ export function BattleView() {
 /* ---------------------------------------------------------------- pieces */
 
 function NoProfile({ ctx }: { ctx: BattleContext }) {
+  const t = useT();
   return (
     <PixPanel
       tone="kaya"
@@ -218,17 +221,23 @@ function NoProfile({ ctx }: { ctx: BattleContext }) {
       <Sprite art="uncle" scale={4} className="hidden text-ink sm:block" />
       <div className="grid gap-1">
         <p className="font-pixel text-lg leading-tight">
-          You haven&apos;t sat with Uncle yet
+          {t("You haven't sat with Uncle yet")}
         </p>
         <p className="text-sm">
-          So this battle uses stand-ins: {ctx.defaults.join(", ")}. Ten minutes
-          with Uncle and every row uses your life instead.
+          {t("So this battle uses stand-ins: {list}. Ten minutes with Uncle and every row uses your life instead.", {
+            list: ctx.defaults
+              .map((d) => {
+                const m = d.match(/^Work: "(.*)" is not on our map yet, so KL Sentral$/);
+                return m ? t("Work: “{name}” is not on our map yet, so KL Sentral", { name: m[1]! }) : t(d);
+              })
+              .join(", "),
+          })}
         </p>
       </div>
       <PixButton asChild tone="white">
         <Link href="/onboarding">
           <Sprite art="uncle" scale={2} />
-          Sit with Uncle
+          {t("Sit with Uncle")}
         </Link>
       </PixButton>
     </PixPanel>
@@ -256,15 +265,16 @@ function SetupBar({
   ids: string[];
   onAdd: (id: string) => void;
 }) {
+  const t = useT();
   const select =
     "pix-frame pix-flat block min-h-11 w-full cursor-pointer appearance-none px-3 py-2 text-sm font-semibold";
   const m = ctx.money;
   const moneyText =
     m.source === "bank"
-      ? `Your bank check: up to about ${kRM(m.maxPriceRM)}`
+      ? t("Your bank check: up to about {amount}", { amount: kRM(m.maxPriceRM) })
       : m.source === "profile"
-        ? `From what you told Uncle: up to about ${kRM(m.maxPriceRM)}`
-        : `Sample payslip: up to about ${kRM(m.maxPriceRM)}`;
+        ? t("From what you told Uncle: up to about {amount}", { amount: kRM(m.maxPriceRM) })
+        : t("Sample payslip: up to about {amount}", { amount: kRM(m.maxPriceRM) });
   return (
     <PixPanel
       flat
@@ -272,7 +282,7 @@ function SetupBar({
       className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_8rem_minmax(0,1fr)_minmax(0,1.3fr)]"
     >
       <label className="grid content-start gap-1.5">
-        <span className="font-pixel-label text-[11px] uppercase">Work at</span>
+        <span className="font-pixel-label text-[11px] uppercase">{t("Work at")}</span>
         <select
           className={select}
           value={ctx.work.id}
@@ -286,17 +296,17 @@ function SetupBar({
         </select>
         <span className="text-xs text-ink-soft">
           {ctx.workSource === "profile"
-            ? `You told Uncle "${ctx.workLabel}"`
+            ? t("You told Uncle “{label}”", { label: ctx.workLabel })
             : ctx.workSource === "picked"
-              ? "Picked here"
-              : "Default, until you tell Uncle"}
-          {ctx.partner ? `. Partner: ${ctx.partner.name}` : ""}
+              ? t("Picked here")
+              : t("Default, until you tell Uncle")}
+          {ctx.partner ? t(". Partner: {name}", { name: ctx.partner.name }) : ""}
         </span>
       </label>
 
       <label className="grid content-start gap-1.5">
         <span className="font-pixel-label text-[11px] uppercase">
-          Office days
+          {t("Office days")}
         </span>
         <select
           className={select}
@@ -305,7 +315,7 @@ function SetupBar({
         >
           {[0, 1, 2, 3, 4, 5, 6].map((n) => (
             <option key={n} value={n}>
-              {n} a week
+              {t("{n} a week", { n })}
             </option>
           ))}
         </select>
@@ -316,7 +326,7 @@ function SetupBar({
           id="mode-label"
           className="font-pixel-label text-[11px] uppercase"
         >
-          Getting there
+          {t("Getting there")}
         </span>
         <div className="flex gap-2" role="group" aria-labelledby="mode-label">
           {MODES.map((o) => (
@@ -328,33 +338,33 @@ function SetupBar({
               onClick={() => onMode(o.id)}
               className="min-h-11 flex-1 px-2"
             >
-              {o.label}
+              {t(o.label)}
             </PixButton>
           ))}
         </div>
         <span className="text-xs text-ink-soft">
           {ctx.modeSource === "profile"
-            ? "As you told Uncle"
+            ? t("As you told Uncle")
             : ctx.modeSource === "picked"
-              ? "Picked here"
-              : "Default"}
+              ? t("Picked here")
+              : t("Default")}
         </span>
       </div>
 
       <div className="grid content-start gap-1.5">
         <span className="font-pixel-label text-[11px] uppercase">
-          Add a home ({ids.length} of {BATTLE_MAX})
+          {t("Add a home ({n} of {max})", { n: ids.length, max: BATTLE_MAX })}
         </span>
         {ids.length < BATTLE_MAX ? (
           <UnitSelect
             taken={ids}
             onChange={onAdd}
-            label="Add a home to the battle"
-            placeholder="Pick a home to add"
+            label={t("Add a home to the battle")}
+            placeholder={t("Pick a home to add")}
           />
         ) : (
           <p className="pix-frame pix-flat flex min-h-11 items-center px-3 text-sm text-ink-soft">
-            Ring is full. Remove one to add.
+            {t("Ring is full. Remove one to add.")}
           </p>
         )}
         <span
@@ -371,7 +381,7 @@ function SetupBar({
                 href="/bank"
                 className="underline decoration-2 underline-offset-4"
               >
-                Run the bank check
+                {t("Run the bank check")}
               </Link>
             </>
           ) : null}
@@ -388,28 +398,29 @@ function NeedTwo({
   ids: string[];
   onAdd: (id: string) => void;
 }) {
+  const t = useT();
   return (
     <PixPanel className="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_20rem] sm:items-center">
       <div className="grid gap-1">
         <h2 className="font-pixel text-2xl leading-tight">
-          A battle needs two homes
+          {t("A battle needs two homes")}
         </h2>
         <p className="text-ink-soft">
-          {ids.length === 1 ? "One home is in the ring. " : ""}Add another to
-          see who wins, or go swipe and like a few.
+          {ids.length === 1 ? t("One home is in the ring.") + " " : ""}
+          {t("Add another to see who wins, or go swipe and like a few.")}
         </p>
         <Link
           href="/swipe"
           className="w-fit text-sm font-semibold underline decoration-2 underline-offset-4"
         >
-          Go to the swipe deck
+          {t("Go to the swipe deck")}
         </Link>
       </div>
       <UnitSelect
         taken={ids}
         onChange={onAdd}
-        label="Add a home to the battle"
-        placeholder="Pick a home to add"
+        label={t("Add a home to the battle")}
+        placeholder={t("Pick a home to add")}
       />
     </PixPanel>
   );

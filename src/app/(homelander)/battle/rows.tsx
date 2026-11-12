@@ -4,6 +4,7 @@ import { schoolTypeLabel, type SchoolType } from "@/lib/homelander/schools";
 import type { BattleContext } from "@/lib/homelander/battle-context";
 import type { Fighter } from "@/lib/homelander/battle-verdict";
 import type { Fit } from "@/lib/homelander/analysis";
+import type { TFn } from "@/lib/homelander/i18n/translate";
 import {
   car,
   chart,
@@ -64,67 +65,71 @@ export const fitTone: Record<Fit, "pandan" | "kaya" | "raya"> = {
   over: "raya",
 };
 
-const NC: Cell = {
-  main: "Not compared",
-  sub: "Not a daily commute",
-  tone: "muted",
-};
-const perMonthLead = (g: number) => `${money(g)}/mo less than next`;
-
+/** `tr` is the caller's translator (useT), so every sentence below follows the EN | Manglish switch. */
 export function buildSections(
   fighters: Fighter[],
   ctx: BattleContext,
+  tr: TFn,
 ): Section[] {
+  const NC: Cell = {
+    main: tr("Not compared"),
+    sub: tr("Not a daily commute"),
+    tone: "muted",
+  };
+  const perMonthLead = (g: number) => tr("{amount}/mo less than next", { amount: money(g) });
   const m = ctx.money;
   const anyPartner = fighters.some((f) => f.partner);
   const youMode = (f: Fighter) => f.you.mode;
   const modeWord =
     ctx.mode === "fastest"
-      ? "faster of car or train"
+      ? tr("faster of car or train")
       : ctx.mode === "car"
-        ? "driving"
-        : "train";
+        ? tr("driving")
+        : tr("train");
+  const by = (mode: string) => (mode === "train" ? tr("by train") : tr("by car"));
 
   /* ------------------------------------------------------------ money */
   const moneyRows: Row[] = [
     {
       id: "price",
-      label: "Price",
+      label: tr("Price"),
       hint: fighters.some((f) => f.unit.source !== "official")
-        ? "Sample or listed price, before rebates"
-        : "Listed price, before rebates",
+        ? tr("Sample or listed price, before rebates")
+        : tr("Listed price, before rebates"),
       cell: (f) => ({
         main: money(f.priceRM),
         sub:
-          f.unit.source === "official" ? "Gamuda Land listing" : "Sample price",
+          f.unit.source === "official" ? tr("Gamuda Land listing") : tr("Sample price"),
       }),
       value: (f) => f.priceRM,
       better: "low",
-      lead: (g) => `${kRM(g)} under next`,
+      lead: (g) => tr("{amount} under next", { amount: kRM(g) }),
     },
     {
       id: "psf",
-      label: "Price per sq ft",
+      label: tr("Price per sq ft"),
       cell: (f) => ({
         main: `RM${Math.round(f.psf)}`,
-        sub: `${f.unit.builtUpSqft.toLocaleString("en-MY")} sq ft built-up`,
+        sub: tr("{n} sq ft built-up", { n: f.unit.builtUpSqft.toLocaleString("en-MY") }),
       }),
       value: (f) => f.psf,
       better: "low",
     },
     {
       id: "loan",
-      label: "Loan",
+      label: tr("Loan"),
       hint:
         m.firstHome === true
-          ? "90% margin: the usual cap on a first home"
-          : "90% margin, usual for a 1st or 2nd home loan; a 3rd is capped at 70%",
-      cell: (f) => ({ main: money(f.loanRM), sub: `90% of ${kRM(f.priceRM)}` }),
+          ? tr("90% margin: the usual cap on a first home")
+          : tr("90% margin, usual for a 1st or 2nd home loan; a 3rd is capped at 70%"),
+      cell: (f) => ({ main: money(f.loanRM), sub: tr("90% of {amount}", { amount: kRM(f.priceRM) }) }),
     },
     {
       id: "instalment",
-      label: "Monthly instalment",
-      hint: `4.2% a year over ${m.tenureYears} years${m.tenureFromAge ? " (to age 70)" : " (age unknown)"}`,
+      label: tr("Monthly instalment"),
+      hint: m.tenureFromAge
+        ? tr("4.2% a year over {n} years (to age 70)", { n: m.tenureYears })
+        : tr("4.2% a year over {n} years (age unknown)", { n: m.tenureYears }),
       estimated: true,
       cell: (f) => ({ main: money(f.instalmentRM) }),
       value: (f) => f.instalmentRM,
@@ -133,22 +138,22 @@ export function buildSections(
     },
     {
       id: "down",
-      label: "Down payment",
-      hint: "10% of the price",
+      label: tr("Down payment"),
+      hint: tr("10% of the price"),
       cell: (f) => ({ main: money(f.downPaymentRM) }),
       value: (f) => f.downPaymentRM,
       better: "low",
     },
     {
       id: "stamp",
-      label: "Stamp duty",
-      hint: "Transfer (1-4% tiers) + 0.5% on the loan",
+      label: tr("Stamp duty"),
+      hint: tr("Transfer (1-4% tiers) + 0.5% on the loan"),
       estimated: true,
       cell: (f) => ({
         main: money(f.stampDutyRM + f.loanStampRM),
         sub: f.firstHomeExemptionMayApply
-          ? "First-home exemption may apply"
-          : `Transfer ${kRM(f.stampDutyRM)} + loan ${kRM(f.loanStampRM)}`,
+          ? tr("First-home exemption may apply")
+          : tr("Transfer {a} + loan {b}", { a: kRM(f.stampDutyRM), b: kRM(f.loanStampRM) }),
         tone: f.firstHomeExemptionMayApply ? "good" : undefined,
       }),
       value: (f) => f.stampDutyRM + f.loanStampRM,
@@ -156,70 +161,75 @@ export function buildSections(
     },
     {
       id: "legal",
-      label: "Legal fees",
-      hint: "SPA + loan agreement, scale fees. New launches often waive the SPA fee",
+      label: tr("Legal fees"),
+      hint: tr("SPA + loan agreement, scale fees. New launches often waive the SPA fee"),
       estimated: true,
       cell: (f) => ({
         main: money(f.spaLegalRM + f.loanLegalRM),
-        sub: `SPA ${kRM(f.spaLegalRM)} + loan ${kRM(f.loanLegalRM)}`,
+        sub: tr("SPA {a} + loan {b}", { a: kRM(f.spaLegalRM), b: kRM(f.loanLegalRM) }),
       }),
       value: (f) => f.spaLegalRM + f.loanLegalRM,
       better: "low",
     },
     {
       id: "upfront",
-      label: "Total cash upfront",
+      label: tr("Total cash upfront"),
       hint:
         m.savingsRM === null
-          ? "Down payment, stamp duty, legal fees. Savings unknown"
-          : `Against your ${kRM(m.savingsRM)} savings`,
+          ? tr("Down payment, stamp duty, legal fees. Savings unknown")
+          : tr("Against your {amount} savings", { amount: kRM(m.savingsRM) }),
       strong: true,
       cell: (f) => {
         if (f.savingsGapRM === null) return { main: money(f.upfrontRM) };
         return f.savingsGapRM >= 0
           ? {
               main: money(f.upfrontRM),
-              sub: `${kRM(f.savingsGapRM)} of savings left`,
+              sub: tr("{amount} of savings left", { amount: kRM(f.savingsGapRM) }),
               tone: "good",
             }
           : {
               main: money(f.upfrontRM),
-              sub: `${kRM(-f.savingsGapRM)} short`,
+              sub: tr("{amount} short", { amount: kRM(-f.savingsGapRM) }),
               tone: "bad",
             };
       },
       value: (f) => f.upfrontRM,
       better: "low",
-      lead: (g) => `${kRM(g)} less than next`,
+      lead: (g) => tr("{amount} less than next", { amount: kRM(g) }),
     },
     {
       id: "maintenance",
-      label: "Maintenance / service fee",
-      hint: "Per month. Quit rent and assessment not included",
+      label: tr("Maintenance / service fee"),
+      hint: tr("Per month. Quit rent and assessment not included"),
       cell: (f) => ({
         main: `${money(f.maintenanceRM)}/mo`,
         sub:
           f.maintenanceSource === "gamuda"
             ? f.maintenanceNote
-            : `${f.maintenanceNote} (estimated)`,
+            : tr("{note} (estimated)", { note: f.maintenanceNote }),
       }),
       value: (f) => f.maintenanceRM,
       better: "low",
     },
     {
       id: "monthly",
-      label: "Total monthly cost",
-      hint: `Instalment + fees + commute (${modeWord}${anyPartner ? ", both of you" : ""})`,
+      label: tr("Total monthly cost"),
+      hint: anyPartner
+        ? tr("Instalment + fees + commute ({mode}, both of you)", { mode: modeWord })
+        : tr("Instalment + fees + commute ({mode})", { mode: modeWord }),
       strong: true,
       estimated: true,
       cell: (f) => ({
         main: `${money(f.totalMonthlyRM)}/mo`,
         sub: (
           <>
-            {kRM(f.instalmentRM)} loan · {money(f.maintenanceRM)} fees ·{" "}
-            {f.you.compared
-              ? `${money(f.you.monthlyRM + (f.partner?.monthlyRM ?? 0))} commute`
-              : "commute not counted"}
+            {tr("{a} loan · {b} fees · {c}", {
+              a: kRM(f.instalmentRM),
+              b: money(f.maintenanceRM),
+              c: f.you.compared
+                ? tr("{amount} commute", { amount: money(f.you.monthlyRM + (f.partner?.monthlyRM ?? 0)) })
+                : tr("commute not counted"),
+            })}
           </>
         ),
       }),
@@ -229,8 +239,8 @@ export function buildSections(
     },
     {
       id: "left",
-      label: "Money left each month",
-      hint: `${money(m.netRM)} take-home − ${money(m.commitmentsRM)} other debts − total cost`,
+      label: tr("Money left each month"),
+      hint: tr("{a} take-home − {b} other debts − total cost", { a: money(m.netRM), b: money(m.commitmentsRM) }),
       cell: (f) => ({
         main: money(f.leftRM),
         tone:
@@ -238,12 +248,12 @@ export function buildSections(
       }),
       value: (f) => f.leftRM,
       better: "high",
-      lead: (g) => `${money(g)}/mo more than next`,
+      lead: (g) => tr("{amount}/mo more than next", { amount: money(g) }),
     },
     {
       id: "dsr",
-      label: "Debt service ratio",
-      hint: "All loans ÷ take-home. Most banks stop at 60%, some 70%",
+      label: tr("Debt service ratio"),
+      hint: tr("All loans ÷ take-home. Most banks stop at 60%, some 70%"),
       cell: (f) => ({
         main: pct(f.dsrAfter),
         sub: <DsrBar value={f.dsrAfter} />,
@@ -254,14 +264,17 @@ export function buildSections(
     },
     {
       id: "fit",
-      label: "Budget fit",
-      hint: `Bank ceiling about ${kRM(m.maxPriceRM)}${m.source === "sample" ? " (sample payslip)" : ""}`,
+      label: tr("Budget fit"),
+      hint:
+        m.source === "sample"
+          ? tr("Bank ceiling about {amount} (sample payslip)", { amount: kRM(m.maxPriceRM) })
+          : tr("Bank ceiling about {amount}", { amount: kRM(m.maxPriceRM) }),
       cell: (f) => ({
-        main: fitLabel[f.fit],
+        main: tr(fitLabel[f.fit]),
         sub:
           f.fit === "in"
-            ? `${kRM(m.maxPriceRM - f.priceRM)} headroom`
-            : `${kRM(f.priceRM - m.maxPriceRM)} over`,
+            ? tr("{amount} headroom", { amount: kRM(m.maxPriceRM - f.priceRM) })
+            : tr("{amount} over", { amount: kRM(f.priceRM - m.maxPriceRM) }),
         tone: f.fit === "in" ? "good" : f.fit === "stretch" ? "warn" : "bad",
       }),
       value: (f) => (f.fit === "in" ? 2 : f.fit === "stretch" ? 1 : 0),
@@ -274,8 +287,8 @@ export function buildSections(
   const commuteRows: Row[] = [
     {
       id: "km",
-      label: "Road distance",
-      hint: "One way, estimated road km",
+      label: tr("Road distance"),
+      hint: tr("One way, estimated road km"),
       cell: (f) =>
         c(f) ? { main: `${c(f)!.driveKmOneWay.toFixed(1)} km` } : NC,
       value: (f) => c(f)?.driveKmOneWay ?? null,
@@ -283,25 +296,25 @@ export function buildSections(
     },
     {
       id: "drive",
-      label: "Drive time",
-      hint: "One way at peak; off-peak below",
+      label: tr("Drive time"),
+      hint: tr("One way at peak; off-peak below"),
       mine: ctx.mode !== "train",
       estimated: true,
       cell: (f) =>
         c(f)
           ? {
               main: `${c(f)!.driveMinPeak} min`,
-              sub: `Off-peak ~${c(f)!.driveMinOffPeak} min`,
+              sub: tr("Off-peak ~{n} min", { n: c(f)!.driveMinOffPeak }),
             }
           : NC,
       value: (f) => c(f)?.driveMinPeak ?? null,
       better: "low",
-      lead: (g) => `${Math.round(g)} min faster`,
+      lead: (g) => tr("{n} min faster", { n: Math.round(g) }),
     },
     {
       id: "train",
-      label: "Train time",
-      hint: "Door to door: walk or feeder, ride, transfers",
+      label: tr("Train time"),
+      hint: tr("Door to door: walk or feeder, ride, transfers"),
       mine: ctx.mode !== "car",
       estimated: true,
       cell: (f) => {
@@ -309,8 +322,8 @@ export function buildSections(
         if (!x) return NC;
         const access =
           x.stationKm <= 1.2
-            ? `${Math.round((x.stationKm / 5) * 60)} min walk`
-            : `${x.stationKm.toFixed(1)} km feeder or drive`;
+            ? tr("{n} min walk", { n: Math.round((x.stationKm / 5) * 60) })
+            : tr("{km} km feeder or drive", { km: x.stationKm.toFixed(1) });
         return {
           main: `${x.trainMinOneWay} min`,
           sub: `${x.station} (${x.line}), ${access}`,
@@ -318,12 +331,12 @@ export function buildSections(
       },
       value: (f) => c(f)?.trainMinOneWay ?? null,
       better: "low",
-      lead: (g) => `${Math.round(g)} min faster`,
+      lead: (g) => tr("{n} min faster", { n: Math.round(g) }),
     },
     {
       id: "tolls",
-      label: "Tolls",
-      hint: "One way, Class 1 car",
+      label: tr("Tolls"),
+      hint: tr("One way, Class 1 car"),
       estimated: true,
       cell: (f) => {
         const x = c(f);
@@ -332,7 +345,7 @@ export function buildSections(
         return {
           main:
             x.tolls.oneWayRM > 0 ? `RM${x.tolls.oneWayRM.toFixed(2)}` : "RM0",
-          sub: names.length ? names.join(", ") : "No plaza on our estimate",
+          sub: names.length ? names.join(", ") : tr("No plaza on our estimate"),
         };
       },
       value: (f) => c(f)?.tolls.oneWayRM ?? null,
@@ -340,8 +353,8 @@ export function buildSections(
     },
     {
       id: "tolls-month",
-      label: "Tolls per month",
-      hint: `${ctx.officeDays} office days, both ways`,
+      label: tr("Tolls per month"),
+      hint: tr("{n} office days, both ways", { n: ctx.officeDays }),
       estimated: true,
       cell: (f) => (c(f) ? { main: money(c(f)!.car.tollRM) } : NC),
       value: (f) => c(f)?.car.tollRM ?? null,
@@ -349,14 +362,14 @@ export function buildSections(
     },
     {
       id: "fuel",
-      label: "Fuel + parking per month",
-      hint: "RON95 at subsidised price; parking at work",
+      label: tr("Fuel + parking per month"),
+      hint: tr("RON95 at subsidised price; parking at work"),
       estimated: true,
       cell: (f) =>
         c(f)
           ? {
               main: money(c(f)!.car.fuelRM + c(f)!.car.parkingRM),
-              sub: `Fuel ${money(c(f)!.car.fuelRM)} · parking ${money(c(f)!.car.parkingRM)}`,
+              sub: tr("Fuel {a} · parking {b}", { a: money(c(f)!.car.fuelRM), b: money(c(f)!.car.parkingRM) }),
             }
           : NC,
       value: (f) => (c(f) ? c(f)!.car.fuelRM + c(f)!.car.parkingRM : null),
@@ -364,15 +377,15 @@ export function buildSections(
     },
     {
       id: "fares",
-      label: "Train fares per month",
-      hint: "Fares plus feeder where the station is far",
+      label: tr("Train fares per month"),
+      hint: tr("Fares plus feeder where the station is far"),
       estimated: true,
       cell: (f) =>
         c(f)
           ? {
               main: money(c(f)!.train.totalRM),
               sub: c(f)!.train.accessRM
-                ? `Incl. ${money(c(f)!.train.accessRM)} feeder`
+                ? tr("Incl. {amount} feeder", { amount: money(c(f)!.train.accessRM) })
                 : undefined,
             }
           : NC,
@@ -381,14 +394,14 @@ export function buildSections(
     },
     {
       id: "commute-cost",
-      label: "Your commute cost",
-      hint: `Per month, ${modeWord}`,
+      label: tr("Your commute cost"),
+      hint: tr("Per month, {mode}", { mode: modeWord }),
       mine: true,
       strong: true,
       estimated: true,
       cell: (f) =>
         f.you.compared
-          ? { main: `${money(f.you.monthlyRM)}/mo`, sub: `By ${youMode(f)}` }
+          ? { main: `${money(f.you.monthlyRM)}/mo`, sub: tr("By {mode}", { mode: youMode(f) === "train" ? tr("train") : tr("car") }) }
           : NC,
       value: (f) => (f.you.compared ? f.you.monthlyRM : null),
       better: "low",
@@ -396,8 +409,8 @@ export function buildSections(
     },
     {
       id: "hours",
-      label: "Hours a year commuting",
-      hint: `Peak, both ways, ${ctx.officeDays} days a week, 48 weeks`,
+      label: tr("Hours a year commuting"),
+      hint: tr("Peak, both ways, {n} days a week, 48 weeks", { n: ctx.officeDays }),
       mine: true,
       strong: true,
       estimated: true,
@@ -405,28 +418,28 @@ export function buildSections(
         f.you.compared
           ? {
               main: `${f.you.hoursPerYear} h`,
-              sub: `${f.you.oneWayMin} min one way by ${youMode(f)} · ${Math.round(f.you.hoursPerYear / 8)} working days`,
+              sub: tr("{n} min one way {by} · {d} working days", { n: f.you.oneWayMin, by: by(youMode(f)), d: Math.round(f.you.hoursPerYear / 8) }),
             }
           : NC,
       value: (f) => (f.you.compared ? f.you.hoursPerYear : null),
       better: "low",
-      lead: (g) => `${Math.round(g)} h/yr less than next`,
+      lead: (g) => tr("{n} h/yr less than next", { n: Math.round(g) }),
     },
   ];
   if (anyPartner) {
     const partnerName =
-      fighters.find((f) => f.partner)?.partner?.anchor.name ?? "partner's work";
+      fighters.find((f) => f.partner)?.partner?.anchor.name ?? tr("partner's work");
     commuteRows.push(
       {
         id: "partner-time",
-        label: "Partner's commute",
-        hint: `To ${partnerName}, same mode, one way at peak`,
+        label: tr("Partner's commute"),
+        hint: tr("To {name}, same mode, one way at peak", { name: partnerName }),
         estimated: true,
         cell: (f) =>
           f.partner?.compared
             ? {
                 main: `${f.partner.oneWayMin} min`,
-                sub: `${f.partner.hoursPerYear} h a year by ${f.partner.mode}`,
+                sub: tr("{n} h a year {by}", { n: f.partner.hoursPerYear, by: by(f.partner.mode) }),
               }
             : NC,
         value: (f) => (f.partner?.compared ? f.partner.hoursPerYear : null),
@@ -434,8 +447,8 @@ export function buildSections(
       },
       {
         id: "partner-cost",
-        label: "Partner's commute cost",
-        hint: "Per month, included in the total",
+        label: tr("Partner's commute cost"),
+        hint: tr("Per month, included in the total"),
         estimated: true,
         cell: (f) =>
           f.partner?.compared
@@ -454,15 +467,17 @@ export function buildSections(
   const familyRows: Row[] = [
     {
       id: "beds",
-      label: "Bedrooms",
-      hint: `You need ${ctx.bedsNeeded}${ctx.hasProfile ? "" : " (default)"}`,
+      label: tr("Bedrooms"),
+      hint: ctx.hasProfile
+        ? tr("You need {n}", { n: ctx.bedsNeeded })
+        : tr("You need {n} (default)", { n: ctx.bedsNeeded }),
       cell: (f) => ({
         main: `${f.unit.beds} bed · ${f.unit.baths} bath`,
         sub: f.bedsShort
-          ? `${f.bedsShort} short`
+          ? tr("{n} short", { n: f.bedsShort })
           : f.bedsSpare
-            ? `${f.bedsSpare} spare`
-            : "Just right",
+            ? tr("{n} spare", { n: f.bedsSpare })
+            : tr("Just right"),
         tone: f.bedsShort ? "bad" : "good",
       }),
       value: (f) =>
@@ -473,11 +488,11 @@ export function buildSections(
   if (schoolTypes.length === 0) {
     familyRows.push({
       id: "schools-none",
-      label: "Schools",
-      hint: "Nearest school of each type",
+      label: tr("Schools"),
+      hint: tr("Nearest school of each type"),
       cell: () => ({
-        main: "No data yet",
-        sub: "School list still loading for this area",
+        main: tr("No data yet"),
+        sub: tr("School list still loading for this area"),
         tone: "muted",
       }),
     });
@@ -485,13 +500,13 @@ export function buildSections(
     for (const t of schoolTypes)
       familyRows.push({
         id: `school-${t}`,
-        label: schoolTypeLabel[t],
+        label: tr(schoolTypeLabel[t]),
         hint: ctx.schoolMatters
-          ? `Nearest; within ${ctx.schoolMaxKm} km is what you asked`
-          : "Nearest, straight line",
+          ? tr("Nearest; within {km} km is what you asked", { km: ctx.schoolMaxKm })
+          : tr("Nearest, straight line"),
         cell: (f) => {
           const s = f.schools.find((x) => x.type === t);
-          if (!s) return { main: "None nearby", tone: "muted" };
+          if (!s) return { main: tr("None nearby"), tone: "muted" };
           return {
             main: `${s.km.toFixed(1)} km`,
             sub: s.name,
@@ -509,19 +524,19 @@ export function buildSections(
     if (ctx.schoolMatters)
       familyRows.push({
         id: "school-check",
-        label: `Within your ${ctx.schoolMaxKm} km`,
+        label: tr("Within your {km} km", { km: ctx.schoolMaxKm }),
         hint:
           ctx.schoolTransport === "walk"
-            ? "You said they'll walk: under 1.5 km is kinder"
+            ? tr("You said they'll walk: under 1.5 km is kinder")
             : ctx.schoolTransport === "school_bus"
-              ? "School bus: distance matters less"
-              : "Primary and secondary",
+              ? tr("School bus: distance matters less")
+              : tr("Primary and secondary"),
         cell: (f) => {
-          const p = f.primaryWithin ? "Primary yes" : "Primary no";
-          const s = f.secondaryWithin ? "secondary yes" : "secondary no";
+          const p = f.primaryWithin ? tr("Primary yes") : tr("Primary no");
+          const s = f.secondaryWithin ? tr("secondary yes") : tr("secondary no");
           const n = Number(f.primaryWithin) + Number(f.secondaryWithin);
           return {
-            main: `${n} of 2`,
+            main: tr("{n} of 2", { n }),
             sub: `${p}, ${s}`,
             tone: n === 2 ? "good" : n === 0 ? "bad" : "warn",
           };
@@ -533,18 +548,18 @@ export function buildSections(
   if (ctx.parentsMovingIn || !ctx.hasProfile)
     familyRows.push({
       id: "parents",
-      label: "Parents moving in",
-      hint: ctx.parentsMovingIn ? "You said yes" : "In case they do",
+      label: tr("Parents moving in"),
+      hint: ctx.parentsMovingIn ? tr("You said yes") : tr("In case they do"),
       cell: (f) =>
         f.unit.landed
           ? {
-              main: "Stairs",
-              sub: "Check the plan for a ground-floor bedroom",
+              main: tr("Stairs"),
+              sub: tr("Check the plan for a ground-floor bedroom"),
               tone: ctx.parentsMovingIn ? "warn" : undefined,
             }
           : {
-              main: "Single level",
-              sub: "Lifts, no stairs inside",
+              main: tr("Single level"),
+              sub: tr("Lifts, no stairs inside"),
               tone: ctx.parentsMovingIn ? "good" : undefined,
             },
       value: ctx.parentsMovingIn ? (f) => (f.unit.landed ? 0 : 1) : undefined,
@@ -553,18 +568,18 @@ export function buildSections(
   if (ctx.pets !== false)
     familyRows.push({
       id: "pets",
-      label: "Pets",
-      hint: ctx.pets ? "You have pets" : "If you get one",
+      label: tr("Pets"),
+      hint: ctx.pets ? tr("You have pets") : tr("If you get one"),
       cell: (f) =>
         f.unit.landed
           ? {
-              main: "Usually fine",
-              sub: "Landed: follow township guidelines",
+              main: tr("Usually fine"),
+              sub: tr("Landed: follow township guidelines"),
               tone: ctx.pets ? "good" : undefined,
             }
           : {
-              main: "Check by-laws",
-              sub: "Strata rules may limit pets",
+              main: tr("Check by-laws"),
+              sub: tr("Strata rules may limit pets"),
               tone: ctx.pets ? "warn" : undefined,
             },
       value: ctx.pets ? (f) => (f.unit.landed ? 1 : 0) : undefined,
@@ -575,48 +590,50 @@ export function buildSections(
   const homeRows: Row[] = [
     {
       id: "type",
-      label: "Type",
+      label: tr("Type"),
       hint:
         ctx.homeType === "either"
           ? undefined
-          : `You want ${ctx.homeType === "landed" ? "landed" : "high-rise"}`,
+          : ctx.homeType === "landed"
+            ? tr("You want landed")
+            : tr("You want high-rise"),
       cell: (f) => {
         const wrong =
           ctx.homeType !== "either" &&
           (ctx.homeType === "landed") !== f.unit.landed;
         return {
           main: f.unit.type,
-          sub: f.unit.product ?? (f.unit.landed ? "Landed" : "High-rise"),
+          sub: f.unit.product ?? (f.unit.landed ? tr("Landed") : tr("High-rise")),
           tone: wrong ? "bad" : undefined,
         };
       },
     },
     {
       id: "builtup",
-      label: "Built-up",
+      label: tr("Built-up"),
       cell: (f) => ({ main: sqft(f.unit.builtUpSqft) }),
       value: (f) => f.unit.builtUpSqft,
       better: "high",
-      lead: (g) => `${Math.round(g).toLocaleString("en-MY")} sq ft more`,
+      lead: (g) => tr("{n} sq ft more", { n: Math.round(g).toLocaleString("en-MY") }),
     },
     {
       id: "land",
-      label: "Land size",
+      label: tr("Land size"),
       cell: (f) =>
         f.unit.landSize
           ? { main: f.unit.landSize }
           : f.unit.landed
-            ? { main: "Not listed", tone: "muted" }
-            : { main: "Strata", sub: "No individual land", tone: "muted" },
+            ? { main: tr("Not listed"), tone: "muted" }
+            : { main: tr("Strata"), sub: tr("No individual land"), tone: "muted" },
     },
     {
       id: "tenure",
-      label: "Tenure",
+      label: tr("Tenure"),
       cell: (f) => ({
         main: f.unit.tenure,
         sub:
           f.unit.tenure === "Leasehold"
-            ? "Ask how many years remain"
+            ? tr("Ask how many years remain")
             : undefined,
       }),
       value: (f) => (f.unit.tenure === "Freehold" ? 1 : 0),
@@ -624,20 +641,22 @@ export function buildSections(
     },
     {
       id: "completion",
-      label: "Keys",
+      label: tr("Keys"),
       hint:
         ctx.underConstructionOk === false
-          ? "You want a ready home"
+          ? tr("You want a ready home")
           : ctx.underConstructionOk === true
-            ? "You're OK waiting"
-            : "Expected completion",
+            ? tr("You're OK waiting")
+            : tr("Expected completion"),
       cell: (f) => ({
         main:
           f.waitYears === 0
-            ? `${f.unit.completion}, ready`
+            ? tr("{year}, ready", { year: f.unit.completion })
             : `${f.unit.completion}`,
         sub: f.waitYears
-          ? `${f.waitYears} year${f.waitYears === 1 ? "" : "s"} to wait`
+          ? f.waitYears === 1
+            ? tr("{n} year to wait", { n: f.waitYears })
+            : tr("{n} years to wait", { n: f.waitYears })
           : undefined,
         tone: f.waitConflict ? "bad" : f.waitYears === 0 ? "good" : undefined,
       }),
@@ -646,19 +665,19 @@ export function buildSections(
     },
     {
       id: "facilities",
-      label: "Facilities",
-      hint: "From the project page",
+      label: tr("Facilities"),
+      hint: tr("From the project page"),
       cell: (f) => ({
         main: (
           <span className="text-xs leading-snug font-normal">
-            {f.facilities.slice(0, 3).join(" · ") || "Not listed"}
+            {f.facilities.slice(0, 3).join(" · ") || tr("Not listed")}
           </span>
         ),
       }),
     },
     {
       id: "link",
-      label: "Official page",
+      label: tr("Official page"),
       cell: (f) =>
         f.township.officialUrl
           ? {
@@ -669,11 +688,11 @@ export function buildSections(
                   rel="noreferrer"
                   className="text-xs font-semibold underline decoration-2 underline-offset-4"
                 >
-                  {f.township.name} site
+                  {tr("{name} site", { name: f.township.name })}
                 </a>
               ),
             }
-          : { main: "Not linked yet", tone: "muted" },
+          : { main: tr("Not linked yet"), tone: "muted" },
     },
   ];
 
@@ -681,24 +700,24 @@ export function buildSections(
   const marketRows: Row[] = [
     {
       id: "stock",
-      label: "Units left",
-      hint: "Sample counts. No star: scarce is not better",
+      label: tr("Units left"),
+      hint: tr("Sample counts. No star: scarce is not better"),
       cell: (f) =>
         f.soldOut
-          ? { main: "Sold out", sub: f.availability.phase, tone: "bad" }
+          ? { main: tr("Sold out"), sub: f.availability.phase, tone: "bad" }
           : {
-              main: `${f.availability.left} of ${f.availability.total}`,
-              sub: `${f.availability.status}, ${f.availability.phase}`,
+              main: tr("{a} of {b}", { a: f.availability.left, b: f.availability.total }),
+              sub: `${tr(f.availability.status)}, ${f.availability.phase}`,
               tone: f.availability.left <= 7 ? "warn" : undefined,
             },
     },
     {
       id: "psf-type",
-      label: "Price psf vs similar",
-      hint: "Against the average of the same home type we list",
+      label: tr("Price psf vs similar"),
+      hint: tr("Against the average of the same home type we list"),
       cell: (f) => ({
         main: signedPct(f.psfVsType),
-        sub: `RM${Math.round(f.psf)} vs RM${Math.round(f.typeAvgPsf)} avg (${f.typeCount} ${f.unit.type.toLowerCase()}s)`,
+        sub: tr("RM{a} vs RM{b} avg ({n} {type}s)", { a: Math.round(f.psf), b: Math.round(f.typeAvgPsf), n: f.typeCount, type: f.unit.type.toLowerCase() }),
         tone:
           f.psfVsType <= -0.05
             ? "good"
@@ -711,21 +730,21 @@ export function buildSections(
     },
     {
       id: "status",
-      label: "Gamuda status",
+      label: tr("Gamuda status"),
       cell: (f) =>
         f.township.status === "completed"
-          ? { main: "Completed", sub: "Resale only", tone: "muted" }
+          ? { main: tr("Completed"), sub: tr("Resale only"), tone: "muted" }
           : {
-              main: "Selling now",
+              main: tr("Selling now"),
               sub: f.township.acres
-                ? `${f.township.acres.toLocaleString("en-MY")}-acre township`
+                ? tr("{n}-acre township", { n: f.township.acres.toLocaleString("en-MY") })
                 : undefined,
             },
     },
     {
       id: "match",
-      label: "Match score",
-      hint: "The swipe deck's fit for you",
+      label: tr("Match score"),
+      hint: tr("The swipe deck's fit for you"),
       cell: (f) => ({ main: `${f.match}` }),
       value: (f) => f.match,
       better: "high",
@@ -735,20 +754,22 @@ export function buildSections(
   return [
     {
       id: "money",
-      title: "Money",
+      title: tr("Money"),
       art: wallet,
-      blurb: "What it costs to buy, and to live there every month",
+      blurb: tr("What it costs to buy, and to live there every month"),
       rows: moneyRows,
     },
     {
       id: "commute",
-      title: `Commute to ${ctx.workLabel}`,
+      title: tr("Commute to {place}", { place: ctx.workLabel }),
       art: car,
-      blurb: `${ctx.officeDays} office days a week${anyPartner ? ", plus your partner" : ""}`,
+      blurb: anyPartner
+        ? tr("{n} office days a week, plus your partner", { n: ctx.officeDays })
+        : tr("{n} office days a week", { n: ctx.officeDays }),
       rows: commuteRows,
     },
-    { id: "family", title: "Family & schools", art: family, rows: familyRows },
-    { id: "home", title: "The home", art: home, rows: homeRows },
-    { id: "market", title: "Market", art: chart, rows: marketRows },
+    { id: "family", title: tr("Family & schools"), art: family, rows: familyRows },
+    { id: "home", title: tr("The home"), art: home, rows: homeRows },
+    { id: "market", title: tr("Market"), art: chart, rows: marketRows },
   ];
 }

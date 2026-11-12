@@ -7,6 +7,7 @@ import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import { anchorOptions, availabilityOf, rmShort, townshipById, unitById, type Anchor } from "@/lib/homelander/data";
 import { BATTLE_MAX, DECK_LIKE_LIMIT, LIKES_TO_BATTLE } from "@/lib/homelander/recommend";
+import { useT } from "@/lib/homelander/i18n/client";
 import { homelander, type HomeLanderState } from "@/lib/homelander/store";
 import { tasteInsights } from "@/lib/homelander/taste";
 import { cn } from "@/lib/utils";
@@ -56,10 +57,11 @@ export function Controls({
   /** The workplace Uncle heard in onboarding; when set, it wins over the picker. */
   fromUncle: { anchor: Anchor; said: string } | null;
 }) {
+  const t = useT();
   return (
     <PixPanel className="grid gap-4 p-4">
       <fieldset className="grid gap-2.5">
-        <legend className="mb-2.5 font-pixel text-xl leading-none">Show me</legend>
+        <legend className="mb-2.5 font-pixel text-xl leading-none">{t("Show me")}</legend>
         <div className="flex flex-wrap gap-2">
           {(Object.keys(filterLabels) as StockFilter[]).map((f) => (
             <button
@@ -72,7 +74,7 @@ export function Controls({
                 filter === f ? "bg-ink text-white" : "bg-white text-ink hover:bg-cloud",
               )}
             >
-              {filterLabels[f]}
+              {t(filterLabels[f])}
               <span
                 className={cn(
                   "min-w-5 rounded-full px-1.5 text-center text-xs tabular-nums",
@@ -84,24 +86,24 @@ export function Controls({
             </button>
           ))}
         </div>
-        <p className="text-xs text-ink-soft">Counts are homes you haven&apos;t swiped yet. Stock is sample data.</p>
+        <p className="text-xs text-ink-soft">{t("Counts are homes you haven't swiped yet. Stock is sample data.")}</p>
       </fieldset>
 
       <div className="grid gap-1.5 border-t-2 border-dashed border-ink/15 pt-4">
         {fromUncle ? (
           <>
-            <p className="font-pixel text-lg leading-none">You work near {fromUncle.anchor.name}</p>
+            <p className="font-pixel text-lg leading-none">{t("You work near {name}", { name: fromUncle.anchor.name })}</p>
             <p className="text-xs text-ink-soft">
-              Uncle heard &ldquo;{fromUncle.said}&rdquo;. Every commute is worked out from there.{" "}
+              {t("Uncle heard “{said}”. Every commute is worked out from there.", { said: fromUncle.said })}{" "}
               <Link href="/profile" className="font-semibold text-pandan-deep underline underline-offset-2">
-                Change
+                {t("Change")}
               </Link>
             </p>
           </>
         ) : (
           <>
             <label htmlFor="work-anchor" className="font-pixel text-lg leading-none">
-              Where do you work?
+              {t("Where do you work?")}
             </label>
             <div className="relative">
               <select
@@ -122,7 +124,7 @@ export function Controls({
                 className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-ink"
               />
             </div>
-            <p className="text-xs text-ink-soft">Every card works out your rush-hour commute from here.</p>
+            <p className="text-xs text-ink-soft">{t("Every card works out your rush-hour commute from here.")}</p>
           </>
         )}
       </div>
@@ -132,6 +134,7 @@ export function Controls({
 
 /** "What your swipes say": taste insights plus a read on how scarce your likes are. */
 export function Insights({ s }: { s: HomeLanderState }) {
+  const t = useT();
   const lines = tasteInsights(
     s.liked,
     s.passed.map((p) => p.id),
@@ -144,13 +147,13 @@ export function Insights({ s }: { s: HomeLanderState }) {
   if (scarce >= 1 && s.liked.length + s.passed.length >= 3) {
     lines.push(
       scarce === 1
-        ? "One of your likes is nearly sold out. Book a viewing soon lah."
-        : `${scarce} of your likes are nearly sold out. Don't wait too long.`,
+        ? t("One of your likes is nearly sold out. Book a viewing soon.")
+        : t("{n} of your likes are nearly sold out. Don't wait too long.", { n: scarce }),
     );
   }
   const reasons = s.passed.map((p) => p.reason).filter(Boolean);
   const top = reasons.length >= 2 ? mostCommon(reasons as string[]) : null;
-  if (top) lines.push(`Your top reason to say tak nak: "${top.toLowerCase()}".`);
+  if (top) lines.push(t("Your top reason to pass: “{reason}”.", { reason: t(top).toLowerCase() }));
 
   return (
     <PixPanel className="grid gap-3 p-4" aria-labelledby="taste-title">
@@ -161,17 +164,17 @@ export function Insights({ s }: { s: HomeLanderState }) {
             <span className="inline-flex items-center gap-1 rounded-full bg-pandan/15 px-2 py-0.5 font-semibold text-pandan-deep">
               <Sprite art="heart" scale={1.5} />
               {s.liked.length}
-              <span className="sr-only"> liked</span>
+              <span className="sr-only"> {t("liked")}</span>
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-raya/10 px-2 py-0.5 font-semibold text-raya-deep">
               <Sprite art="cross" scale={1.5} />
               {s.passed.length}
-              <span className="sr-only"> passed</span>
+              <span className="sr-only"> {t("passed")}</span>
             </span>
           </div>
         }
       >
-        What your swipes say
+        {t("What your swipes say")}
       </PanelTitle>
       {lines.length ? (
         <ul className="grid gap-2">
@@ -184,7 +187,7 @@ export function Insights({ s }: { s: HomeLanderState }) {
         </ul>
       ) : (
         <p className="text-sm text-ink-soft">
-          Swipe three homes and HomeLander starts reading your taste. The more you swipe, the sharper it gets.
+          {t("Swipe three homes and HomeLander starts reading your taste. The more you swipe, the sharper it gets.")}
         </p>
       )}
     </PixPanel>
@@ -200,6 +203,7 @@ function mostCommon(xs: string[]) {
 /** `liked` must be ordered best match first: Battle takes the top few. */
 export function BattleButton({ liked, className, size = "md" }: { liked: string[]; className?: string; size?: "md" | "lg" }) {
   const router = useRouter();
+  const t = useT();
   return (
     <PixButton
       type="button"
@@ -213,22 +217,23 @@ export function BattleButton({ liked, className, size = "md" }: { liked: string[
       }}
     >
       <Sprite art={swipeSprites.sword} scale={2} />
-      {liked.length >= LIKES_TO_BATTLE ? `Battle your top ${Math.min(liked.length, BATTLE_MAX)}` : "Battle them"}
+      {liked.length >= LIKES_TO_BATTLE ? t("Battle your top {n}", { n: Math.min(liked.length, BATTLE_MAX) }) : t("Battle them")}
     </PixButton>
   );
 }
 
 /** Likes so far out of the deck limit, with the Battle unlock marked. */
 function LikeMeter({ count }: { count: number }) {
+  const t = useT();
   return (
     <div className="grid gap-1.5">
       <div
         role="meter"
-        aria-label="Likes"
+        aria-label={t("Likes")}
         aria-valuenow={count}
         aria-valuemin={0}
         aria-valuemax={DECK_LIKE_LIMIT}
-        aria-valuetext={`${count} of ${DECK_LIKE_LIMIT} likes`}
+        aria-valuetext={t("{count} of {limit} likes", { count, limit: DECK_LIKE_LIMIT })}
         className="flex gap-[3px] bg-ink p-[3px]"
       >
         {Array.from({ length: DECK_LIKE_LIMIT }, (_, i) => (
@@ -243,10 +248,12 @@ function LikeMeter({ count }: { count: number }) {
       </div>
       <p className="text-xs text-ink-soft">
         {count < LIKES_TO_BATTLE
-          ? `${LIKES_TO_BATTLE - count} more ${LIKES_TO_BATTLE - count === 1 ? "like" : "likes"} to unlock Battle.`
+          ? LIKES_TO_BATTLE - count === 1
+            ? t("{n} more like to unlock Battle.", { n: LIKES_TO_BATTLE - count })
+            : t("{n} more likes to unlock Battle.", { n: LIKES_TO_BATTLE - count })
           : count >= DECK_LIKE_LIMIT
-            ? "Deck full. Time to battle."
-            : `Battle unlocked. Room for ${DECK_LIKE_LIMIT - count} more.`}
+            ? t("Deck full. Time to battle.")
+            : t("Battle unlocked. Room for {n} more.", { n: DECK_LIKE_LIMIT - count })}
       </p>
     </div>
   );
@@ -254,9 +261,10 @@ function LikeMeter({ count }: { count: number }) {
 
 /** Liked homes, best match first; the top few are the ones that go into Battle. */
 export function Shortlist({ liked, scoreOf }: { liked: string[]; scoreOf: (id: string) => number | undefined }) {
+  const t = useT();
   return (
     <PixPanel className="grid gap-3 p-4">
-      <PanelTitle aside={<span className="font-pixel text-lg tabular-nums">{liked.length}</span>}>Your shortlist</PanelTitle>
+      <PanelTitle aside={<span className="font-pixel text-lg tabular-nums">{liked.length}</span>}>{t("Your shortlist")}</PanelTitle>
       <LikeMeter count={liked.length} />
       {liked.length ? (
         <ol className="grid gap-1">
@@ -285,12 +293,12 @@ export function Shortlist({ liked, scoreOf }: { liked: string[]; scoreOf: (id: s
                 </div>
                 <div className="grid shrink-0 justify-items-end gap-1">
                   {score !== undefined ? <span className="font-pixel text-sm leading-none tabular-nums">{score}%</span> : null}
-                  <PixTag tone={statusTone[a.status]}>{stockLabel(a)}</PixTag>
+                  <PixTag tone={statusTone[a.status]}>{stockLabel(a, t)}</PixTag>
                 </div>
                 <button
                   type="button"
                   onClick={() => homelander.unlike(id)}
-                  aria-label={`Remove ${u.name} from your shortlist`}
+                  aria-label={t("Remove {name} from your shortlist", { name: u.name })}
                   className="grid size-8 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-raya/15 hover:text-raya-deep"
                 >
                   <Sprite art="cross" scale={2} />
@@ -300,12 +308,12 @@ export function Shortlist({ liked, scoreOf }: { liked: string[]; scoreOf: (id: s
           })}
         </ol>
       ) : (
-        <p className="text-sm text-ink-soft">Homes you say suka to land here, best match first.</p>
+        <p className="text-sm text-ink-soft">{t("Homes you like land here, best match first.")}</p>
       )}
       <div className="p-1 pb-2">
         <BattleButton liked={liked} className="w-full" />
         {liked.length > BATTLE_MAX ? (
-          <p className="mt-3 text-xs text-ink-soft">Battle takes your top {BATTLE_MAX} by match (highlighted). You can swap them there.</p>
+          <p className="mt-3 text-xs text-ink-soft">{t("Battle takes your top {n} by match (highlighted). You can swap them there.", { n: BATTLE_MAX })}</p>
         ) : null}
       </div>
     </PixPanel>
@@ -327,15 +335,16 @@ export function EndOfDeck({
   /** Liked homes, best match first, for the Battle hand-off. */
   rankedLikes: string[];
 }) {
+  const t = useT();
   if (filtered) {
     return (
       <PixPanel className="grid h-full content-center justify-items-center gap-4 p-6 text-center sm:p-8">
         <Sprite art="house" scale={6} className="text-sky-deep" />
-        <h2 className="font-pixel text-2xl leading-tight">Nothing left in this filter</h2>
-        <p className="max-w-xs text-sm text-ink-soft">There are still homes you haven&apos;t seen. Show them all?</p>
+        <h2 className="font-pixel text-2xl leading-tight">{t("Nothing left in this filter")}</h2>
+        <p className="max-w-xs text-sm text-ink-soft">{t("There are still homes you haven't seen. Show them all?")}</p>
         <div className="p-1">
           <PixButton type="button" tone="kaya" onClick={onShowAll}>
-            Show all homes
+            {t("Show all homes")}
           </PixButton>
         </div>
       </PixPanel>
@@ -348,26 +357,26 @@ export function EndOfDeck({
         art={swipeSprites.trophy}
         scale={7}
         className="animate-[pix-bob_1.2s_steps(2)_infinite] text-kaya-deep"
-        label="Trophy"
+        label={t("Trophy")}
       />
-      <h2 className="font-pixel text-3xl leading-tight sm:text-4xl">{full ? "Ten suka! Deck closed" : "Habis! Deck cleared"}</h2>
+      <h2 className="font-pixel text-3xl leading-tight sm:text-4xl">{full ? t("Ten liked! Deck closed") : t("All done! Deck cleared")}</h2>
       <p className="max-w-sm text-[15px]">
         {full ? (
-          <>That&apos;s a full shortlist. Uncle stops the deck here so the battle stays sharp.</>
+          <>{t("That's a full shortlist. Uncle stops the deck here so the battle stays sharp.")}</>
         ) : (
           <>
-            You met every Gamuda Land home in the deck and said suka to{" "}
+            {t("You met every Gamuda Land home in the deck and liked")}{" "}
             <strong className="font-pixel text-lg">{s.liked.length}</strong>.{" "}
           </>
         )}{" "}
-        {s.liked.length >= LIKES_TO_BATTLE ? "Time to make them fight it out." : "See where they sit on the map next."}
+        {s.liked.length >= LIKES_TO_BATTLE ? t("Time to make them fight it out.") : t("See where they sit on the map next.")}
       </p>
       <div className="flex flex-wrap justify-center gap-4 p-1 pb-2">
         <BattleButton liked={rankedLikes} size="lg" />
         <PixButton asChild size="lg">
           <Link href="/">
             <Sprite art="pin" scale={2} className="text-raya" />
-            See the map
+            {t("See the map")}
           </Link>
         </PixButton>
       </div>
@@ -377,7 +386,7 @@ export function EndOfDeck({
           onClick={() => homelander.demoShortlist(s.liked)}
           className="text-sm text-ink underline decoration-2 underline-offset-4 hover:text-raya-deep"
         >
-          Give the {s.passed.length} tak-naks a second chance
+          {t("Give the {n} passed homes a second chance", { n: s.passed.length })}
         </button>
       ) : null}
     </PixPanel>

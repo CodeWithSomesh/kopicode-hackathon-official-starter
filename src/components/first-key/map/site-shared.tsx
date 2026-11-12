@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useT } from "@/lib/homelander/i18n/client";
 import { parseVariant, siteLayout, type SiteBuilding } from "@/lib/first-key/site-layout";
 import type { ThemeColors } from "../use-theme-colors";
 
@@ -74,12 +75,13 @@ export function useZoomGate(get: () => unknown, enabled: boolean): boolean {
 
 /** The honesty chip: Kopitiam pixel style like the township pills, never clickable. */
 export function SiteChip() {
+  const t = useT();
   return (
     <div
       className="pix-frame pointer-events-none max-w-[170px] px-1.5 py-1 text-center font-pixel-label text-[10px] leading-tight uppercase text-ink max-lg:text-[9px] lg:max-w-none lg:whitespace-nowrap"
       style={{ "--pix-fill": "var(--color-cloud)", "--pix-drop": "3px" } as React.CSSProperties}
     >
-      Illustrative homes, not Gamuda&apos;s plan
+      {t("Illustrative homes, not Gamuda's plan")}
     </div>
   );
 }

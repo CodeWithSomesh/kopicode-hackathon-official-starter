@@ -14,6 +14,7 @@ import { BANDS, bandOf } from "./price-band";
 import { FLOOR_H, LOW_H, planFloor, unitsOnFloor } from "./layout";
 import { planCarPark, planDeck, planLobby } from "./lobby";
 import { floorKind, floorLabel } from "@/lib/first-key/township";
+import { useT } from "@/lib/homelander/i18n/client";
 import { InteriorMeshes, plateMaterial, slabGeom } from "./dollhouse";
 import {
   ROLES,
@@ -110,6 +111,7 @@ export function BuildingBurst({
   view,
   onClosed,
 }: Props) {
+  const tr = useT();
   const reduced = usePrefersReducedMotion();
   const colors = useThemeColors();
   const selected = building.units.find((u) => u.unit === selectedUnitId);
@@ -151,7 +153,7 @@ export function BuildingBurst({
           toneMapping: THREE.NeutralToneMapping,
           toneMappingExposure: 1,
         }}
-        aria-label={`3D view of block ${building.block}, floor ${floor}`}
+        aria-label={tr("3D view of block {block}, floor {floor}", { block: building.block, floor })}
       >
         <Scene
           building={building}
@@ -171,11 +173,11 @@ export function BuildingBurst({
         {building.floors > 1 && (
           <label className="flex min-w-48 flex-1 items-center gap-3 text-sm">
             <span className="shrink-0 font-medium tabular-nums">
-              Floor {floor}{" "}
+              {tr("Floor {n}", { n: floor })}{" "}
               <span className="text-muted-foreground">
-                of {building.floors}
+                {tr("of {n}", { n: building.floors })}
                 {floorLabel(building, floor) &&
-                  `: ${floorLabel(building, floor)}`}
+                  `: ${tr(floorLabel(building, floor))}`}
               </span>
             </span>
             <span className="flex w-full flex-col gap-1">
@@ -187,7 +189,7 @@ export function BuildingBurst({
                 value={floor}
                 onChange={(e) => setFloor(Number(e.target.value))}
                 className="w-full accent-[var(--primary)]"
-                aria-label="Floor to open"
+                aria-label={tr("Floor to open")}
               />
               <span className="flex h-1.5 w-full gap-px" aria-hidden>
                 {ladder.map((b, i) => (
@@ -210,7 +212,7 @@ export function BuildingBurst({
         )}
         <ul
           className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
-          aria-label="Price colours"
+          aria-label={tr("Price colours")}
         >
           {BANDS.map((b) => (
             <li key={b.label} className="flex items-center gap-1.5">
@@ -218,23 +220,25 @@ export function BuildingBurst({
                 className="size-3 rounded-full"
                 style={{ background: `var(--${b.token})` }}
               />
-              {b.label}
+              {tr(b.label)}
             </li>
           ))}
         </ul>
         <p className="w-full text-sm" aria-live="polite">
           {selected ? (
             <>
-              <strong>Unit {selected.unit}</strong>: {selected.type},{" "}
-              {selected.sizeSqft} sqft, RM
-              {selected.price.toLocaleString()} (about RM
-              {selected.monthly.toLocaleString()} a month), facing{" "}
-              {selected.facing}
+              <strong>{tr("Unit {unit}", { unit: selected.unit })}</strong>
+              {tr(": {type}, {size} sqft, RM{price} (about RM{monthly} a month), facing {facing}", {
+                type: selected.type,
+                size: selected.sizeSqft,
+                price: selected.price.toLocaleString(),
+                monthly: selected.monthly.toLocaleString(),
+                facing: selected.facing,
+              })}
             </>
           ) : (
             <span className="text-muted-foreground">
-              Tap a home to see it. Move the floor slider to lift the floors
-              above away.
+              {tr("Tap a home to see it. Move the floor slider to lift the floors above away.")}
             </span>
           )}
         </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/homelander/bank";
 import { rm, unitById, units, type Payslip } from "@/lib/homelander/data";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { MoneyField, PixSwitch } from "./fields";
 import { BankTable, HomesInRange, ResultsEmpty, Summary } from "./results";
@@ -35,6 +36,7 @@ const focusField = (k: FieldKey) =>
 
 export function BankView() {
   const { liked } = useHomeLander();
+  const tr = useT();
   const [values, setValues] = useState<FormValues>(emptyForm);
   const [attempted, setAttempted] = useState(false);
   const [step, setStep] = useState(0);
@@ -42,14 +44,21 @@ export function BankView() {
   const [targetId, setTargetId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
 
-  const errors = validate(values);
+  const errors = validate(values, tr);
   const shownErrors = attempted ? errors : {};
   const result = committed ? eligibility(committed) : null;
+
+  const savedToast = useEffectEvent((maxPriceRM: number) =>
+    toast.success(tr("Saved to your quest"), {
+      id: "homelander-bank-saved",
+      description: tr("Budget up to {amount}. Battle and Uncle will use it.", { amount: rm(maxPriceRM) }),
+    }),
+  );
 
   // Save to the quest whenever a fresh result settles, so Compare and Uncle can use it.
   useEffect(() => {
     if (!committed) return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       const e = eligibility(committed);
       homelander.setBudget({
         grossRM: e.grossRM,
@@ -58,25 +67,22 @@ export function BankView() {
         maxLoanRM: e.maxLoanRM,
         maxPriceRM: e.maxPriceRM,
       });
-      toast.success("Saved to your quest", {
-        id: "homelander-bank-saved",
-        description: `Budget up to ${rm(e.maxPriceRM)}. Battle and Uncle will use it.`,
-      });
+      savedToast(e.maxPriceRM);
     }, 700);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [committed]);
 
   function update(next: FormValues) {
     setValues(next);
     // Once results are on screen they follow the form live, as long as it is valid.
-    if (committed && Object.keys(validate(next)).length === 0) setCommitted(toInput(next));
+    if (committed && Object.keys(validate(next, tr)).length === 0) setCommitted(toInput(next));
   }
 
   const set = (k: FieldKey) => (v: string) => update({ ...values, [k]: v });
 
   function submit(v: FormValues = values) {
     setAttempted(true);
-    const errs = validate(v);
+    const errs = validate(v, tr);
     const first = (Object.keys(errs) as FieldKey[]).sort((a, b) => stepOf(a) - stepOf(b))[0];
     if (first) {
       setStep(stepOf(first));
@@ -114,7 +120,7 @@ export function BankView() {
     setValues(v);
     if (v.age.trim() === "") {
       setStep(1);
-      setNotice("Payslip read. Add your age so we can work out how long the loan can run.");
+      setNotice(tr("Payslip read. Add your age so we can work out how long the loan can run."));
       focusField("age");
       return;
     }
@@ -133,9 +139,9 @@ export function BankView() {
           <Sprite art="bank" scale={5} />
         </PixPanel>
         <div className="grid gap-1">
-          <h1 className="font-pixel text-3xl leading-none font-bold lg:text-4xl">The Bank</h1>
+          <h1 className="font-pixel text-3xl leading-none font-bold lg:text-4xl">{tr("The Bank")}</h1>
           <p className="text-sm text-ink lg:text-base">
-            Tell the banker what you earn and owe. Find out how much gold you can borrow for a Gamuda Land home.
+            {tr("Tell the banker what you earn and owe. Find out how much gold you can borrow for a Gamuda Land home.")}
           </p>
         </div>
       </header>
@@ -148,7 +154,7 @@ export function BankView() {
             submit();
           }}
           className="grid gap-6"
-          aria-label="Income details"
+          aria-label={tr("Income details")}
         >
           <PixPanel className="grid gap-5 p-5">
             <PayslipScan onRead={onRead} />
@@ -159,7 +165,7 @@ export function BankView() {
               ))}
             </div>
             <p className="sr-only lg:hidden" aria-live="polite">
-              Step {step + 1} of {steps.length}: {steps[step]!.title}
+              {tr("Step {n} of {total}: {title}", { n: step + 1, total: steps.length, title: tr(steps[step]!.title) })}
             </p>
             {notice ? (
               <p role="status" className="border-l-4 border-kaya-deep bg-kaya/40 px-3 py-2 text-sm font-medium">
@@ -170,8 +176,8 @@ export function BankView() {
             <Step index={0} step={step}>
               <MoneyField
                 id="bank-gross"
-                label="Monthly gross salary"
-                hint="Before EPF and tax, as on your payslip."
+                label={tr("Monthly gross salary")}
+                hint={tr("Before EPF and tax, as on your payslip.")}
                 placeholder="0"
                 value={values.gross}
                 onChange={set("gross")}
@@ -179,8 +185,8 @@ export function BankView() {
               />
               <MoneyField
                 id="bank-other"
-                label="Other fixed income (optional)"
-                hint="Fixed allowances or rental. We count 80%, as banks often count only part of it."
+                label={tr("Other fixed income (optional)")}
+                hint={tr("Fixed allowances or rental. We count 80%, as banks often count only part of it.")}
                 placeholder="0"
                 value={values.other}
                 onChange={set("other")}
@@ -188,9 +194,9 @@ export function BankView() {
               />
               <MoneyField
                 id="bank-takeHome"
-                label="Take-home pay (optional)"
-                hint="Leave blank and we estimate it: EPF 11%, SOCSO and a rough PCB. Typing it is more accurate."
-                placeholder="We'll estimate"
+                label={tr("Take-home pay (optional)")}
+                hint={tr("Leave blank and we estimate it: EPF 11%, SOCSO and a rough PCB. Typing it is more accurate.")}
+                placeholder={tr("We'll estimate")}
                 value={values.takeHome}
                 onChange={set("takeHome")}
                 error={shownErrors.takeHome}
@@ -200,15 +206,15 @@ export function BankView() {
             <Step index={1} step={step}>
               <PixSwitch
                 id="bank-joint"
-                label="Apply with someone (joint loan)"
+                label={tr("Apply with someone (joint loan)")}
                 checked={values.joint}
                 onChange={(joint) => update({ ...values, joint })}
               />
               {values.joint ? (
                 <MoneyField
                   id="bank-jointGross"
-                  label="Their monthly gross salary"
-                  hint="We estimate their take-home the same way."
+                  label={tr("Their monthly gross salary")}
+                  hint={tr("We estimate their take-home the same way.")}
                   placeholder="0"
                   value={values.jointGross}
                   onChange={set("jointGross")}
@@ -217,10 +223,10 @@ export function BankView() {
               ) : null}
               <MoneyField
                 id="bank-age"
-                label="Your age"
-                hint="The loan runs up to 35 years and must end by age 70."
+                label={tr("Your age")}
+                hint={tr("The loan runs up to 35 years and must end by age 70.")}
                 prefix=""
-                suffix="years"
+                suffix={tr("years")}
                 placeholder="30"
                 maxLength={2}
                 value={values.age}
@@ -231,14 +237,14 @@ export function BankView() {
 
             <Step index={2} step={step}>
               <p className="text-sm text-ink-soft">
-                Monthly payments{values.joint ? " for both of you" : ""}. Leave blank if none.
+                {values.joint ? tr("Monthly payments for both of you. Leave blank if none.") : tr("Monthly payments. Leave blank if none.")}
               </p>
               <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
-                <MoneyField id="bank-car" label="Car loan" placeholder="0" value={values.car} onChange={set("car")} error={shownErrors.car} />
+                <MoneyField id="bank-car" label={tr("Car loan")} placeholder="0" value={values.car} onChange={set("car")} error={shownErrors.car} />
                 <MoneyField id="bank-ptptn" label="PTPTN" placeholder="0" value={values.ptptn} onChange={set("ptptn")} error={shownErrors.ptptn} />
                 <MoneyField
                   id="bank-personal"
-                  label="Personal loan"
+                  label={tr("Personal loan")}
                   placeholder="0"
                   value={values.personal}
                   onChange={set("personal")}
@@ -246,7 +252,7 @@ export function BankView() {
                 />
                 <MoneyField
                   id="bank-housing"
-                  label="Other housing loan"
+                  label={tr("Other housing loan")}
                   placeholder="0"
                   value={values.housing}
                   onChange={set("housing")}
@@ -255,11 +261,11 @@ export function BankView() {
               </div>
               <MoneyField
                 id="bank-card"
-                label="Credit card balance owed"
+                label={tr("Credit card balance owed")}
                 hint={
                   card && !Number.isNaN(card)
-                    ? `Banks count 5% a month: ${rm(cardMinimum(card))}.`
-                    : "The total balance. Banks count 5% of it as a monthly payment."
+                    ? tr("Banks count 5% a month: {amount}.", { amount: rm(cardMinimum(card)) })
+                    : tr("The total balance. Banks count 5% of it as a monthly payment.")
                 }
                 placeholder="0"
                 value={values.card}
@@ -272,21 +278,21 @@ export function BankView() {
             <div className="flex gap-3 lg:hidden">
               {step > 0 ? (
                 <PixButton type="button" size="lg" onClick={() => setStep(step - 1)} className="flex-1">
-                  Back
+                  {tr("Back")}
                 </PixButton>
               ) : null}
               {step < steps.length - 1 ? (
                 <PixButton type="button" tone="ink" size="lg" onClick={next} className="flex-[2]">
-                  Next
+                  {tr("Next")}
                 </PixButton>
               ) : (
                 <PixButton type="submit" tone="pandan" size="lg" className="flex-[2]">
-                  Ask the bank
+                  {tr("Ask the bank")}
                 </PixButton>
               )}
             </div>
             <PixButton type="submit" tone="pandan" size="lg" className="hidden w-full lg:inline-flex">
-              {committed ? "Ask again" : "Ask the bank"}
+              {committed ? tr("Ask again") : tr("Ask the bank")}
             </PixButton>
           </PixPanel>
         </form>
@@ -309,6 +315,7 @@ export function BankView() {
 }
 
 function Step({ index, step, children }: { index: number; step: number; children: React.ReactNode }) {
+  const tr = useT();
   return (
     <fieldset className={cn("grid gap-4", index !== step && "hidden lg:grid")}>
       <legend
@@ -317,7 +324,7 @@ function Step({ index, step, children }: { index: number; step: number; children
         className="mb-4 flex items-center gap-2 font-pixel text-xl leading-none focus-visible:outline-none"
       >
         <span className="inline-flex size-7 items-center justify-center bg-ink text-sm text-white">{index + 1}</span>
-        {steps[index]!.title}
+        {tr(steps[index]!.title)}
       </legend>
       {children}
     </fieldset>

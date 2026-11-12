@@ -6,6 +6,7 @@
  */
 
 import { DSR_LIMIT, LOAN_RATE, MARGIN, loanFromInstalment, monthlyInstalment } from "./data";
+import { translate, type TFn } from "./i18n/translate";
 
 /* ---------------------------------------------------------------- inputs */
 
@@ -260,37 +261,40 @@ export function parseRM(raw: string): number | null {
   return /^\d+(\.\d{1,2})?$/.test(s) ? Number(s) : NaN;
 }
 
-const amountError = (label: string) => `${label} should be a plain amount in ringgit, like 1,250. Remove letters or symbols.`;
+/** English by default; the bank screen passes its own `tr` (useT) so error messages follow the language switch. */
+const en: TFn = (s, vars) => translate("en", s, vars);
 
-export function validate(v: FormValues): Partial<Record<FieldKey, string>> {
+export function validate(v: FormValues, tr: TFn = en): Partial<Record<FieldKey, string>> {
+  const amountError = (label: string) =>
+    tr("{label} should be a plain amount in ringgit, like 1,250. Remove letters or symbols.", { label: tr(label) });
   const errors: Partial<Record<FieldKey, string>> = {};
   const gross = parseRM(v.gross);
   if (gross === null || gross === 0)
-    errors.gross = "Enter your monthly gross salary, the amount before EPF and tax. Or scan the sample payslip to try it.";
+    errors.gross = tr("Enter your monthly gross salary, the amount before EPF and tax. Or scan the sample payslip to try it.");
   else if (Number.isNaN(gross)) errors.gross = amountError("Gross salary");
-  else if (gross < 500) errors.gross = `RM${gross} looks low for a month. Enter your monthly salary, not a daily or weekly rate.`;
-  else if (gross > 300_000) errors.gross = "That is over RM300,000 a month. Check for an extra zero.";
+  else if (gross < 500) errors.gross = tr("RM{gross} looks low for a month. Enter your monthly salary, not a daily or weekly rate.", { gross });
+  else if (gross > 300_000) errors.gross = tr("That is over RM300,000 a month. Check for an extra zero.");
 
   if (v.joint) {
     const jg = parseRM(v.jointGross);
     if (jg === null || jg === 0)
-      errors.jointGross = "Enter your joint applicant's monthly gross salary, or switch joint applicant off.";
+      errors.jointGross = tr("Enter your joint applicant's monthly gross salary, or switch joint applicant off.");
     else if (Number.isNaN(jg)) errors.jointGross = amountError("Their gross salary");
-    else if (jg > 300_000) errors.jointGross = "That is over RM300,000 a month. Check for an extra zero.";
+    else if (jg > 300_000) errors.jointGross = tr("That is over RM300,000 a month. Check for an extra zero.");
   }
 
   const th = parseRM(v.takeHome);
   if (th !== null) {
     if (Number.isNaN(th)) errors.takeHome = amountError("Take-home");
     else if (gross !== null && !Number.isNaN(gross) && th > gross)
-      errors.takeHome = "Take-home can't be more than your gross salary. Fix it, or clear it and we'll estimate it.";
+      errors.takeHome = tr("Take-home can't be more than your gross salary. Fix it, or clear it and we'll estimate it.");
   }
 
   const age = v.age.trim() === "" ? null : Number(v.age);
-  if (age === null) errors.age = "Enter your age in years. It sets how long the loan can run.";
-  else if (!Number.isInteger(age) || age < 18) errors.age = "Enter your age as a whole number, 18 or older.";
+  if (age === null) errors.age = tr("Enter your age in years. It sets how long the loan can run.");
+  else if (!Number.isInteger(age) || age < 18) errors.age = tr("Enter your age as a whole number, 18 or older.");
   else if (age > LOAN_END_AGE - MIN_TENURE)
-    errors.age = `At ${age} the loan must end by ${LOAN_END_AGE}, so under ${MIN_TENURE} years. Ask a younger joint applicant to be the main borrower.`;
+    errors.age = tr("At {age} the loan must end by {end}, so under {min} years. Ask a younger joint applicant to be the main borrower.", { age, end: LOAN_END_AGE, min: MIN_TENURE });
 
   const money: [FieldKey, string][] = [
     ["other", "Other income"],

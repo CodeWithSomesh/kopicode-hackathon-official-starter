@@ -9,6 +9,7 @@ import {
   townships,
   units,
 } from "@/lib/homelander/data";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 
 /* Sprites only this screen uses. Colours are currentColor, so they follow the theme. */
@@ -135,6 +136,7 @@ export function UnitSelect({
   compact?: boolean;
   className?: string;
 }) {
+  const tr = useT();
   return (
     <label className={cn("relative block", className)}>
       <span className="sr-only">{label}</span>
@@ -160,7 +162,7 @@ export function UnitSelect({
             <optgroup
               key={t.id}
               label={
-                t.status === "completed" ? `${t.name} (completed)` : t.name
+                t.status === "completed" ? `${t.name} ${tr("(completed)")}` : t.name
               }
             >
               {list.map((u) => {
@@ -170,8 +172,8 @@ export function UnitSelect({
                   <option key={u.id} value={u.id} disabled={inRing}>
                     {u.product ? `${u.product}: ` : ""}
                     {u.name}, {rmShort(u.priceRM)}
-                    {soldOut ? " (sold out)" : ""}
-                    {inRing ? " (in the ring)" : ""}
+                    {soldOut ? ` ${tr("(sold out)")}` : ""}
+                    {inRing ? ` ${tr("(in the ring)")}` : ""}
                   </option>
                 );
               })}

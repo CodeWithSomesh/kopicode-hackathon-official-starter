@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useImperativeHandle, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from "react";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { prefersReducedMotion } from "./confetti";
 
@@ -82,6 +83,7 @@ export function CardStack<T extends { id: string }>({
   onDone,
   onTap,
 }: Props<T>) {
+  const t = useT();
   const [x, setX] = useState(0);
   const [y, setY] = useState(0);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -286,7 +288,7 @@ export function CardStack<T extends { id: string }>({
                     {yesLabel(card)}
                   </Stamp>
                   <Stamp side="right" opacity={no} className="text-raya-deep">
-                    TAK NAK
+                    {t("PASS")}
                   </Stamp>
                 </>
               ) : (

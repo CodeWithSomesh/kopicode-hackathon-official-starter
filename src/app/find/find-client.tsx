@@ -11,6 +11,7 @@ import type { Unit } from "@/lib/first-key/types";
 import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
 import { anchorOptions } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
+import { useT } from "@/lib/homelander/i18n/client";
 import { townInfoById } from "@/app/(homelander)/_landing/map-data";
 import { MapControls, type ControlMap } from "@/app/(homelander)/_landing/map-controls";
 import { PitchCard } from "@/app/(homelander)/_landing/pitch-card";
@@ -59,6 +60,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   const [devId, setDevId] = useState<string | undefined>(valid ? COVE_ID : wanted && townInfoById[wanted] ? wanted : undefined);
   const [map, setMap] = useState<ControlMap | null>(null);
   const hl = useHomeLander();
+  const t = useT();
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const [burstOpen, setBurstOpen] = useState(false);
   const [burstMounted, setBurstMounted] = useState(false); // keep the 3D scene once built; it idles on demand
@@ -142,7 +144,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
       />
       </div>
 
-      <h1 className="sr-only lg:hidden">Gamuda Land map</h1>
+      <h1 className="sr-only lg:hidden">{t("Gamuda Land map")}</h1>
 
       {/* The tower view covers all of this: keep it out of the Tab order and the accessibility tree while it is open */}
       <div inert={burstOpen}>
@@ -208,9 +210,16 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
       >
         <div className="absolute inset-x-0 top-[76px] z-10 flex items-center justify-between border-b bg-card/90 px-4 py-2 text-card-foreground backdrop-blur">
           <h1 className="text-base font-semibold">
-            {building ? `Block ${building.block}: ${building.floors} floors, ${building.units.length} units` : group ? `${group.houses.length === 1 ? "Bungalow" : group.houses.length === 2 ? "Semi-D pair" : "Terrace row"}: ${group.houses.length} landed ${group.houses.length === 1 ? "home" : "homes"}` : "Building"}
+            {building
+              ? t("Block {block}: {floors} floors, {n} units", { block: building.block, floors: building.floors, n: building.units.length })
+              : group
+                ? t(group.houses.length === 1 ? "{kind}: {n} landed home" : "{kind}: {n} landed homes", {
+                    kind: group.houses.length === 1 ? t("Bungalow") : group.houses.length === 2 ? t("Semi-D pair") : t("Terrace row"),
+                    n: group.houses.length,
+                  })
+                : t("Building")}
           </h1>
-          <Button variant="ghost" size="icon" aria-label="Back to the map" onClick={() => setLeaving(true)}>
+          <Button variant="ghost" size="icon" aria-label={t("Back to the map")} onClick={() => setLeaving(true)}>
             <X />
           </Button>
         </div>

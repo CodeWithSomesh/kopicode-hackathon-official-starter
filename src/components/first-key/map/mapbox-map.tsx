@@ -7,6 +7,7 @@ import type { LayerProps } from "react-map-gl/mapbox";
 import { gsap } from "gsap";
 import { township } from "@/lib/first-key/township";
 import { centroid } from "@/lib/first-key/geo";
+import { useT } from "@/lib/homelander/i18n/client";
 import { Pin, POI_ICONS, poiDetail, poiHidden, poiRank, TrainFront, useNamedPois } from "./poi-pin";
 import { anchorOptions, townshipById } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
@@ -123,6 +124,7 @@ const standardConfig = (dark: boolean, dusk: boolean) => ({
 
 export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
   const hl = useHomeLander();
+  const tr = useT();
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const mapRef = useRef<MapRef>(null);
   const [loaded, setLoaded] = useState(false);
@@ -486,13 +488,13 @@ export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArr
         {showTownship &&
           township.rail.stations.map((s) => (
             <Marker key={s.id} longitude={s.lng} latitude={s.lat} anchor="bottom">
-              <Pin id={s.id} d={poiRank(from, s.lng, s.lat)} label={s.name} detail={poiDetail(from, s.lng, s.lat)} Icon={TrainFront} tone="station" named={poiFit.named.has(s.id)} hidden={poiHidden(poiFit, s.id)} />
+              <Pin id={s.id} d={poiRank(from, s.lng, s.lat)} label={s.name} detail={poiDetail(from, s.lng, s.lat, tr)} Icon={TrainFront} tone="station" named={poiFit.named.has(s.id)} hidden={poiHidden(poiFit, s.id)} />
             </Marker>
           ))}
         {showTownship &&
           township.places.map((p) => (
             <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
-              <Pin id={p.id} d={poiRank(from, p.lng, p.lat)} label={p.name} detail={poiDetail(from, p.lng, p.lat)} Icon={POI_ICONS[p.kind]} named={poiFit.named.has(p.id)} hidden={poiHidden(poiFit, p.id)} />
+              <Pin id={p.id} d={poiRank(from, p.lng, p.lat)} label={p.name} detail={poiDetail(from, p.lng, p.lat, tr)} Icon={POI_ICONS[p.kind]} named={poiFit.named.has(p.id)} hidden={poiHidden(poiFit, p.id)} />
             </Marker>
           ))}
       </Map>

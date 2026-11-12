@@ -1,6 +1,7 @@
 "use client";
 
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
+import { useT } from "@/lib/homelander/i18n/client";
 import {
   PRESETS,
   STATS,
@@ -27,21 +28,22 @@ export function Priorities({
   onPreset: (p: PresetId) => void;
   onWeight: (k: StatKey, v: number) => void;
 }) {
+  const t = useT();
   const options: { id: PresetId; label: string }[] = [
-    { id: "uncle", label: hasProfile ? "Uncle's mix for you" : "Balanced" },
+    { id: "uncle", label: hasProfile ? t("Uncle's mix for you") : t("Balanced") },
     ...(Object.keys(PRESETS) as Exclude<PresetId, "uncle">[]).map((id) => ({
       id,
-      label: PRESETS[id].label,
+      label: t(PRESETS[id].label),
     })),
   ];
   const blurb =
     mode === "custom"
-      ? "Your own mix. Pick a preset to reset."
+      ? t("Your own mix. Pick a preset to reset.")
       : mode === "uncle"
         ? hasProfile && uncleWhy.length
-          ? `Weighted from what you told Uncle: ${uncleWhy.join(", ")}.`
-          : "An even mix. Sit with Uncle and it bends to your life."
-        : PRESETS[mode].blurb;
+          ? t("Weighted from what you told Uncle: {list}.", { list: uncleWhy.join(", ") })
+          : t("An even mix. Sit with Uncle and it bends to your life.")
+        : t(PRESETS[mode].blurb);
 
   return (
     <PixPanel
@@ -51,14 +53,14 @@ export function Priorities({
     >
       <div className="grid gap-1">
         <h2 id="prio-title" className="font-pixel text-xl leading-none">
-          What matters most?
+          {t("What matters most?")}
         </h2>
         <p className="text-sm text-ink-soft">{blurb}</p>
       </div>
       <div
         className="flex flex-wrap gap-2.5"
         role="group"
-        aria-label="Priority presets"
+        aria-label={t("Priority presets")}
       >
         {options.map((o) => (
           <PixButton
@@ -80,7 +82,7 @@ export function Priorities({
             className="grid grid-cols-[6.5rem_minmax(0,1fr)_1.5rem] items-center gap-3"
           >
             <label htmlFor={`w-${s.key}`} className="text-sm font-semibold">
-              {s.label}
+              {t(s.label)}
             </label>
             <input
               id={`w-${s.key}`}
@@ -97,7 +99,7 @@ export function Priorities({
               {weights[s.key]}
             </span>
             <span id={`w-${s.key}-hint`} className="sr-only">
-              {s.hint}
+              {t(s.hint)}
             </span>
           </li>
         ))}

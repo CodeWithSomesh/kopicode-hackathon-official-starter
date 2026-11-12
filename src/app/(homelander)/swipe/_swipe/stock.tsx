@@ -1,4 +1,6 @@
 import type { Availability } from "@/lib/homelander/data";
+import { useT } from "@/lib/homelander/i18n/client";
+import type { TFn } from "@/lib/homelander/i18n/translate";
 import { cn } from "@/lib/utils";
 
 export const statusTone = {
@@ -8,13 +10,14 @@ export const statusTone = {
   "Sold out": "ink",
 } as const satisfies Record<Availability["status"], string>;
 
-export const stockLabel = (a: Availability) =>
-  a.status === "Sold out" ? "Sold out" : a.left === 1 ? "Last unit" : `${a.left} left`;
+export const stockLabel = (a: Availability, t: TFn) =>
+  a.status === "Sold out" ? t("Sold out") : a.left === 1 ? t("Last unit") : t("{n} left", { n: a.left });
 
 const SEGMENTS = 12;
 
 /** Units left as a segmented stock bar, like an item counter in a shop. */
 export function StockBar({ a, className }: { a: Availability; className?: string }) {
+  const t = useT();
   const on = a.left === 0 ? 0 : Math.max(1, Math.round((a.left / Math.max(a.total, 1)) * SEGMENTS));
   const fill = {
     Available: "bg-pandan",
@@ -25,11 +28,11 @@ export function StockBar({ a, className }: { a: Availability; className?: string
   return (
     <div
       role="meter"
-      aria-label="Units left"
+      aria-label={t("Units left")}
       aria-valuenow={a.left}
       aria-valuemin={0}
       aria-valuemax={a.total}
-      aria-valuetext={`${a.left} of ${a.total} units left`}
+      aria-valuetext={t("{left} of {total} units left", { left: a.left, total: a.total })}
       className={cn("flex gap-[3px] bg-ink p-[3px]", className)}
     >
       {Array.from({ length: SEGMENTS }, (_, i) => (

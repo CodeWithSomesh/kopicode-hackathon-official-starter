@@ -5,6 +5,8 @@ import { township } from "@/lib/first-key/township";
 import { bearingDeg, compassOf, distanceM, walkingMinutes } from "@/lib/first-key/geo";
 import type { PlaceKind } from "@/lib/first-key/types";
 import { defineSprite, Sprite } from "@/components/homelander/sprite";
+import { useT } from "@/lib/homelander/i18n/client";
+import { translate, type TFn } from "@/lib/homelander/i18n/translate";
 
 // Shared by the MapLibre and the Mapbox map: the stations and places around the illustrative block.
 
@@ -18,10 +20,10 @@ export const POI_ICONS: Record<PlaceKind, LucideIcon> = {
 };
 export { TrainFront };
 
-export function poiDetail(from: [number, number] | undefined, lng: number, lat: number) {
+export function poiDetail(from: [number, number] | undefined, lng: number, lat: number, tr: TFn = (s, v) => translate("en", s, v)) {
   if (!from) return undefined;
   const m = distanceM(from, [lng, lat]);
-  return `${Math.round(m)} m, ${walkingMinutes(m)} min walk, ${compassOf(bearingDeg(from, [lng, lat]))}`;
+  return tr("{m} m, {n} min walk, {dir}", { m: Math.round(m), n: walkingMinutes(m), dir: compassOf(bearingDeg(from, [lng, lat])) });
 }
 
 /** Pins whose name is shown: at most NAMED, nearest to the selected block (or the township centre) first, and only where the label
@@ -310,6 +312,7 @@ const EGG_CSS = `
 `;
 
 function KopiEgg({ x, y, nudge }: { x: number; y: number; nudge: number }) {
+  const t = useT();
   return (
     // Hangs from the icon's centre (p-1 + half of size-6 = 16 px), whether or not the name is showing.
     <span
@@ -334,7 +337,7 @@ function KopiEgg({ x, y, nudge }: { x: number; y: number; nudge: number }) {
             } as React.CSSProperties
           }
         >
-          Kopi peng, ikat tepi!
+          {t("Iced kopi, to go!")}
         </span>
       </span>
     </span>

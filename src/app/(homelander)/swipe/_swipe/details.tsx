@@ -4,7 +4,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { PixTag } from "@/components/homelander/pixel";
 import { Sprite, type SpriteArt, type SpriteName } from "@/components/homelander/sprite";
-import { availabilityOf, rm, townshipById, type Unit } from "@/lib/homelander/data";
+import { availabilityOf, rm, samplePayslip, townshipById, type Unit } from "@/lib/homelander/data";
+import { useT } from "@/lib/homelander/i18n/client";
 import type { Pick as Match } from "@/lib/homelander/recommend";
 import { cn } from "@/lib/utils";
 import type { HomeDetails, MoneyBasis } from "./buyer";
@@ -31,6 +32,7 @@ export function CardDetails({
   onClose: () => void;
 }) {
   const t = townshipById[unit.townshipId]!;
+  const tr = useT();
   const { money, commute, family, completion } = d;
   const a = availabilityOf(unit.id);
   const c = commute.cost;
@@ -50,7 +52,7 @@ export function CardDetails({
           type="button"
           onClick={onClose}
           className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-white px-3 py-1.5 text-sm font-semibold hover:bg-cloud"
-          aria-label="Back to the photo (Escape)"
+          aria-label={tr("Back to the photo (Escape)")}
         >
           <Sprite art={swipeSprites.down} scale={2} />
           Photo
@@ -59,10 +61,10 @@ export function CardDetails({
 
       <div className="grid gap-5 px-4 pt-4 pb-6">
         {/* Money */}
-        <Section art={swipeSprites.coin} title="Money" tone="text-kaya-deep">
+        <Section art={swipeSprites.coin} title={tr("Money")} tone="text-kaya-deep">
           <div className="grid grid-cols-2 gap-2.5">
-            <Big label="Monthly instalment" value={rm(money.instalmentRM)} hint={`${basis.tenureYears} yrs at ${(basis.rate * 100).toFixed(1)}%`} />
-            <Big label="Cash upfront" value={rm(money.upfrontRM)} hint="Deposit, duty, legal" />
+            <Big label={tr("Monthly instalment")} value={rm(money.instalmentRM)} hint={tr("{n} yrs at {rate}%", { n: basis.tenureYears, rate: (basis.rate * 100).toFixed(1) })} />
+            <Big label={tr("Cash upfront")} value={rm(money.upfrontRM)} hint={tr("Deposit, duty, legal")} />
           </div>
           <Rows>
             <Row label="Down payment (10%)" value={rm(money.downPaymentRM)} />
@@ -71,8 +73,8 @@ export function CardDetails({
             <Row label="Legal fees" value={rm(money.legalRM)} />
             {money.savingsGapRM !== null ? (
               <Row
-                label="Against your savings"
-                value={money.savingsGapRM > 0 ? `${rm(money.savingsGapRM)} short` : `${rm(-money.savingsGapRM)} spare`}
+                label={tr("Against your savings")}
+                value={money.savingsGapRM > 0 ? tr("{amount} short", { amount: rm(money.savingsGapRM) }) : tr("{amount} spare", { amount: rm(-money.savingsGapRM) })}
                 tone={money.savingsGapRM > 0 ? "bad" : "good"}
               />
             ) : null}
@@ -80,57 +82,84 @@ export function CardDetails({
           <Rows>
             <Row label="Instalment" value={rm(money.instalmentRM)} />
             <Row
-              label={money.upkeepHow ?? "Maintenance"}
-              value={money.upkeepRM !== null ? rm(money.upkeepRM) : "Not published"}
+              label={
+                unit.maintenancePsfRM !== undefined
+                  ? tr("RM{amount} psf maintenance", { amount: unit.maintenancePsfRM.toFixed(2) })
+                  : unit.serviceRM !== undefined
+                    ? tr("Guard and service fee")
+                    : tr("Maintenance")
+              }
+              value={money.upkeepRM !== null ? rm(money.upkeepRM) : tr("Not published")}
               muted={money.upkeepRM === null}
             />
             <Row
-              label={commute.far ? "Commute" : `Commute by ${commute.mode}${commute.modeAssumed ? " (cheaper)" : ""}`}
-              value={commute.far ? "Not counted" : rm(money.commuteRM)}
+              label={
+                commute.far
+                  ? tr("Commute")
+                  : commute.mode === "train"
+                    ? commute.modeAssumed
+                      ? tr("Commute by train (cheaper)")
+                      : tr("Commute by train")
+                    : commute.modeAssumed
+                      ? tr("Commute by car (cheaper)")
+                      : tr("Commute by car")
+              }
+              value={commute.far ? tr("Not counted") : rm(money.commuteRM)}
               muted={commute.far}
             />
-            <Row label="Every month, all in" value={rm(money.totalMonthlyRM)} strong />
+            <Row label={tr("Every month, all in")} value={rm(money.totalMonthlyRM)} strong />
             <Row
-              label="Left after bills and loans"
+              label={tr("Left after bills and loans")}
               value={rm(money.leftRM)}
               tone={money.leftRM < 0 ? "bad" : money.leftRM < 1500 ? "warn" : "good"}
               strong
             />
           </Rows>
           <Note>
-            {basis.note} {rm(money.psfRM)} per sq ft. {unit.source === "official" ? "Price from gamudaland.com.my." : "Sample price."}
+            {basis.source === "uncle"
+              ? basis.estimated
+                ? tr("From what you told Uncle: {amount} take-home (estimated), {n}-year loan.", { amount: rm(basis.netRM), n: basis.tenureYears })
+                : tr("From what you told Uncle: {amount} take-home, {n}-year loan.", { amount: rm(basis.netRM), n: basis.tenureYears })
+              : basis.source === "bank"
+                ? tr("From your bank check: {amount} take-home.", { amount: rm(basis.netRM) })
+                : tr("Sample payslip ({amount} gross). Sit with Uncle for your own numbers.", { amount: rm(samplePayslip.grossRM) })}{" "}
+            {rm(money.psfRM)} per sq ft. {unit.source === "official" ? tr("Price from gamudaland.com.my.") : tr("Sample price.")}
           </Note>
           {basis.source === "sample" ? (
             <Link href="/onboarding" className="text-sm font-semibold text-pandan-deep underline underline-offset-4">
-              Tell Uncle your salary for real numbers
+              {tr("Tell Uncle your salary for real numbers")}
             </Link>
           ) : null}
         </Section>
 
         {/* Commute */}
-        <Section art={swipeSprites.car} title={`To ${commute.anchor.name}`} tone="text-sky-deep">
+        <Section art={swipeSprites.car} title={tr("To {name}", { name: commute.anchor.name })} tone="text-sky-deep">
           {commute.far ? (
             <div className="flex gap-2.5 rounded-xl bg-raya/10 p-3 text-sm">
               <Sprite art={swipeSprites.warn} scale={2} className="mt-0.5 shrink-0 text-raya-deep" />
               <p>
-                <span className="font-semibold">Far from your workplace.</span> {t.name} is in {t.state ?? t.area}, about{" "}
-                {Math.round(commute.straightKm)} km from {commute.anchor.name} as the crow flies. Think relocation or remote
-                work, not a daily drive.
+                <span className="font-semibold">{tr("Far from your workplace.")}</span>{" "}
+                {tr("{town} is in {place}, about {km} km from {anchor} as the crow flies. Think relocation or remote work, not a daily drive.", {
+                  town: t.name,
+                  place: t.state ?? t.area,
+                  km: Math.round(commute.straightKm),
+                  anchor: commute.anchor.name,
+                })}
               </p>
             </div>
           ) : (
             <>
               <div className="grid grid-cols-3 gap-2.5">
-                <Big label="Peak drive" value={`${c.driveMinPeak} min`} hint={`${c.driveKmOneWay} km`} />
-                <Big label="Off-peak" value={`${c.driveMinOffPeak} min`} hint="One way" />
-                <Big label="By train" value={`${c.trainMinOneWay} min`} hint={c.station} />
+                <Big label={tr("Peak drive")} value={`${c.driveMinPeak} min`} hint={`${c.driveKmOneWay} km`} />
+                <Big label={tr("Off-peak")} value={`${c.driveMinOffPeak} min`} hint={tr("One way")} />
+                <Big label={tr("By train")} value={`${c.trainMinOneWay} min`} hint={c.station} />
               </div>
               <Rows>
-                <Row label="Nearest station" value={`${c.station}, ${c.stationKm.toFixed(1)} km`} />
+                <Row label={tr("Nearest station")} value={`${c.station}, ${c.stationKm.toFixed(1)} km`} />
                 <Row label="Line" value={c.line} />
                 <Row
-                  label="Tolls, one way (est.)"
-                  value={c.tolls.oneWayRM > 0 ? rm(c.tolls.oneWayRM) : "None on the likely route"}
+                  label={tr("Tolls, one way (est.)")}
+                  value={c.tolls.oneWayRM > 0 ? rm(c.tolls.oneWayRM) : tr("None on the likely route")}
                   muted={c.tolls.oneWayRM === 0}
                 />
                 {c.tolls.plazas.length ? (
@@ -143,33 +172,33 @@ export function CardDetails({
                     ))}
                   </li>
                 ) : null}
-                <Row label="Fuel a month" value={rm(c.car.fuelRM)} />
-                <Row label="Tolls a month" value={rm(c.car.tollRM)} />
-                <Row label="Parking a month" value={rm(c.car.parkingRM)} />
-                <Row label="Driving, all in" value={rm(c.car.totalRM)} strong={commute.mode === "car"} />
-                <Row label="Train fares and feeder" value={rm(c.train.totalRM)} strong={commute.mode === "train"} />
+                <Row label={tr("Fuel a month")} value={rm(c.car.fuelRM)} />
+                <Row label={tr("Tolls a month")} value={rm(c.car.tollRM)} />
+                <Row label={tr("Parking a month")} value={rm(c.car.parkingRM)} />
+                <Row label={tr("Driving, all in")} value={rm(c.car.totalRM)} strong={commute.mode === "car"} />
+                <Row label={tr("Train fares and feeder")} value={rm(c.train.totalRM)} strong={commute.mode === "train"} />
               </Rows>
               <p className="flex items-center gap-2 rounded-xl bg-cloud px-3 py-2 text-sm">
                 <Sprite art={swipeSprites.clock} scale={2} className="shrink-0 text-ink" />
                 <span>
-                  <span className="font-pixel text-base tabular-nums">{commute.mode === "train" ? c.hoursPerYear.train : c.hoursPerYear.car} h</span> a
-                  year on the road at {commute.officeDays} office days a week ({rm(modeCost)} a month).
+                  <span className="font-pixel text-base tabular-nums">{commute.mode === "train" ? c.hoursPerYear.train : c.hoursPerYear.car} h</span>{" "}
+                  {tr("a year on the road at {days} office days a week ({amount} a month).", { days: commute.officeDays, amount: rm(modeCost) })}
                 </span>
               </p>
             </>
           )}
-          <Note>Estimates from distance and rush-hour speeds. Tolls are estimated from a hand-built plaza table.</Note>
+          <Note>{tr("Estimates from distance and rush-hour speeds. Tolls are estimated from a hand-built plaza table.")}</Note>
         </Section>
 
         {/* Family */}
-        <Section art={swipeSprites.family} title="Family" tone="text-pandan-deep">
+        <Section art={swipeSprites.family} title={tr("Family")} tone="text-pandan-deep">
           <Rows>
             <Row
-              label="Bedrooms"
-              value={family.need !== null ? `${family.beds} for your ${family.need}` : `${family.beds}`}
+              label={tr("Bedrooms")}
+              value={family.need !== null ? tr("{beds} for your {need}", { beds: family.beds, need: family.need }) : `${family.beds}`}
               tone={family.need === null ? undefined : family.beds >= family.need ? "good" : "bad"}
             />
-            <Row label="Bathrooms" value={`${unit.baths}`} />
+            <Row label={tr("Bathrooms")} value={`${unit.baths}`} />
           </Rows>
           {family.schools.length ? (
             <ul className="grid gap-1.5">
@@ -177,7 +206,7 @@ export function CardDetails({
                 <li key={s.type} className="flex items-start gap-2.5 text-sm">
                   <Sprite art={swipeSprites.school} scale={2} className={cn("mt-0.5 shrink-0", s.tooFar ? "text-raya-deep" : "text-ink-soft")} />
                   <span className="min-w-0 flex-1">
-                    <span className="block text-xs text-ink-soft">{s.label}</span>
+                    <span className="block text-xs text-ink-soft">{tr(s.label)}</span>
                     <span className="block truncate">{s.school.name}</span>
                   </span>
                   <span className={cn("shrink-0 font-semibold tabular-nums", s.tooFar && "text-raya-deep")}>
@@ -187,27 +216,27 @@ export function CardDetails({
               ))}
             </ul>
           ) : (
-            <Note>No schools in our data around {t.name} yet.</Note>
+            <Note>{tr("No schools in our data around {name} yet.", { name: t.name })}</Note>
           )}
           {family.schoolLimitKm !== null && family.schools.some((s) => s.tooFar) ? (
-            <Note tone="bad">Red ones are beyond the {family.schoolLimitKm} km you said is okay.</Note>
+            <Note tone="bad">{tr("Red ones are beyond the {km} km you said is okay.", { km: family.schoolLimitKm })}</Note>
           ) : null}
         </Section>
 
         {/* Home */}
-        <Section art="house" title="The home" tone="text-teh">
+        <Section art="house" title={tr("The home")} tone="text-teh">
           <Rows>
-            <Row label="Type" value={unit.type} />
+            <Row label={tr("Type")} value={unit.type} />
             <Row label="Built-up" value={`${n(unit.builtUpSqft)} sq ft`} />
-            {unit.landSize ? <Row label="Land" value={unit.landSize} /> : null}
+            {unit.landSize ? <Row label={tr("Land")} value={unit.landSize} /> : null}
             <Row label="Tenure" value={unit.tenure} />
             <Row
-              label="Completion"
-              value={completion.year <= 2026 ? `${completion.year}, ready` : `${completion.year}`}
+              label={tr("Completion")}
+              value={completion.year <= 2026 ? tr("{year}, ready", { year: completion.year }) : `${completion.year}`}
               tone={completion.cantWait ? "bad" : undefined}
             />
           </Rows>
-          {completion.cantWait ? <Note tone="bad">You said you can&apos;t wait for a home under construction.</Note> : null}
+          {completion.cantWait ? <Note tone="bad">{tr("You said you can't wait for a home under construction.")}</Note> : null}
           {[...(t.facilities ?? []), ...unit.highlights].length ? (
             <ul className="flex flex-wrap gap-1.5">
               {[...new Set([...(t.facilities ?? []), ...unit.highlights])].map((f) => (
@@ -221,9 +250,10 @@ export function CardDetails({
           <div className="grid gap-1.5 rounded-xl border-2 border-ink/15 p-3">
             <div className="flex items-baseline justify-between gap-2 text-sm">
               <span>
-                <span className="font-pixel text-lg tabular-nums">{a.left}</span> of {a.total} left in {a.phase}
+                <span className="font-pixel text-lg tabular-nums">{a.left}</span>{" "}
+                {tr("of {total} left in {phase}", { total: a.total, phase: a.phase })}
               </span>
-              <span className="font-pixel-label text-[10px] text-ink-soft uppercase">Sample stock</span>
+              <span className="font-pixel-label text-[10px] text-ink-soft uppercase">{tr("Sample stock")}</span>
             </div>
             <StockBar a={a} />
           </div>
@@ -234,7 +264,7 @@ export function CardDetails({
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-pandan-deep underline underline-offset-4"
             >
-              Official {t.name} page
+              {tr("Official {name} page", { name: t.name })}
               <Sprite art={swipeSprites.ext} scale={1.5} />
             </a>
           ) : null}
@@ -242,7 +272,7 @@ export function CardDetails({
 
         {/* Uncle */}
         {pick ? (
-          <Section art="uncle" title="Uncle's take" tone="text-ink">
+          <Section art="uncle" title={tr("Uncle's take")} tone="text-ink">
             <p className="font-pixel text-base">{pick.score}% match</p>
             {pick.reasons.length ? (
               <ul className="grid gap-1.5">
@@ -265,7 +295,7 @@ export function CardDetails({
               </ul>
             ) : (
               <PixTag tone="pandan" className="justify-self-start">
-                No catches
+                {tr("No catches")}
               </PixTag>
             )}
           </Section>

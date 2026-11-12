@@ -31,6 +31,8 @@ export type MoneyBasis = {
   rate: number;
   savingsRM?: number;
   source: "uncle" | "bank" | "sample";
+  /** Uncle branch only: the take-home figure was estimated. The note is rebuilt (and translated) in details.tsx. */
+  estimated?: boolean;
   note: string;
 };
 
@@ -46,6 +48,7 @@ export function moneyBasis(profile: Profile, budget: Budget | null): MoneyBasis 
       rate: e.rate,
       savingsRM: profile.savingsRM,
       source: "uncle",
+      estimated: e.takeHomeEstimated,
       note: `From what you told Uncle: ${rm(e.netRM)} take-home${e.takeHomeEstimated ? " (estimated)" : ""}, ${tenure}-year loan.`,
     };
   }

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
 import { rm, samplePayslip, type Payslip } from "@/lib/homelander/data";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 
 const rows: { key: keyof Payslip; label: string }[] = [
@@ -21,6 +22,7 @@ const STEP_MS = 320;
  * Nothing is uploaded; it always reads the same sample.
  */
 export function PayslipScan({ onRead }: { onRead: (p: Payslip) => void }) {
+  const tr = useT();
   const [phase, setPhase] = useState<"idle" | "reading" | "done">("idle");
   const [found, setFound] = useState(0);
   const timers = useRef<number[]>([]);
@@ -48,7 +50,7 @@ export function PayslipScan({ onRead }: { onRead: (p: Payslip) => void }) {
   return (
     <div className="grid gap-3">
       <PixButton type="button" tone="kaya" size="lg" onClick={scan} disabled={phase === "reading"} className="w-full">
-        {phase === "reading" ? "Reading payslip" : phase === "done" ? "Scan again" : "Scan my payslip"}
+        {phase === "reading" ? tr("Reading payslip") : phase === "done" ? tr("Scan again") : tr("Scan my payslip")}
         {phase === "reading" ? (
           <span aria-hidden className="animate-[pix-blink_0.8s_steps(1)_infinite]">
             _
@@ -70,7 +72,7 @@ export function PayslipScan({ onRead }: { onRead: (p: Payslip) => void }) {
                   key={r.key}
                   className={cn("flex justify-between gap-4 px-1.5 py-0.5", lit ? "bg-kaya" : "text-ink-soft/40")}
                 >
-                  <dt>{r.label}</dt>
+                  <dt>{tr(r.label)}</dt>
                   <dd className="tabular-nums">{lit ? rm(samplePayslip[r.key] as number) : "RM ----"}</dd>
                 </div>
               );
@@ -87,8 +89,8 @@ export function PayslipScan({ onRead }: { onRead: (p: Payslip) => void }) {
           ) : null}
           <p className="pt-2 text-xs text-ink-soft" aria-live="polite">
             {phase === "done"
-              ? `Read: take-home ${rm(net)} after EPF, SOCSO and PCB. Car loan and PTPTN added to what you owe.`
-              : "Sample payslip. In the real app it is read on your phone and never stored."}
+              ? tr("Read: take-home {amount} after EPF, SOCSO and PCB. Car loan and PTPTN added to what you owe.", { amount: rm(net) })
+              : tr("Sample payslip. In the real app it is read on your phone and never stored.")}
           </p>
         </PixPanel>
       ) : null}

@@ -2,6 +2,7 @@
 
 import { Sprite } from "@/components/homelander/sprite";
 import { rmShort } from "@/lib/homelander/data";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { mapSprites, type TownInfo } from "./map-data";
 
@@ -17,6 +18,7 @@ export function TownPill({
   selected: boolean;
   onPick: () => void;
 }) {
+  const t = useT();
   const done = info.t.status === "completed";
   const short = info.t.name.replace(/^(The|Bandar|Kota) /, "").replace(/ (Mansions|Suites)$/, "");
   return (
@@ -28,7 +30,7 @@ export function TownPill({
           onPick();
         }}
         aria-pressed={selected}
-        aria-label={done ? `${info.t.name}, completed, resale only` : `${info.t.name}, from ${rmShort(info.from)}, ${info.left} units left`}
+        aria-label={done ? t("{name}, completed, resale only", { name: info.t.name }) : t("{name}, from {price}, {n} units left", { name: info.t.name, price: rmShort(info.from), n: info.left })}
         className={cn(
           "pix-frame flex cursor-pointer items-center gap-2 px-2 py-1.5 whitespace-nowrap text-ink max-lg:gap-1 max-lg:px-1.5 max-lg:py-1",
           done && "gap-1 px-1.5 py-1 text-ink-soft max-lg:px-1 max-lg:py-0.5",
@@ -60,7 +62,7 @@ export function TownPill({
                 done ? "bg-ink-soft text-white" : info.left ? "bg-pandan-deep text-white" : "bg-ink text-white",
               )}
             >
-              {done ? "Completed, resale only" : info.left ? `${info.left} left` : "Sold out"}
+              {done ? t("Completed, resale only") : info.left ? t("{n} left", { n: info.left }) : t("Sold out")}
             </span>
           </span>
         </span>
@@ -76,14 +78,15 @@ export function TownPill({
 
 /** Where the buyer works (from the deck's work anchor). */
 export function WorkMarker({ name }: { name: string }) {
+  const t = useT();
   return (
-    <div className="pointer-events-none flex flex-col items-center" aria-label={`Your work: ${name}`} role="img">
+    <div className="pointer-events-none flex flex-col items-center" aria-label={t("Your work: {name}", { name })} role="img">
       <div
         className="pix-frame flex items-center gap-1.5 px-1.5 py-1"
         style={{ "--pix-fill": "var(--color-lilac)", "--pix-drop": "3px" } as React.CSSProperties}
       >
         <Sprite art={mapSprites.office} scale={2} className="text-ink" />
-        <span className="font-pixel-label text-[11px] leading-none uppercase">Work</span>
+        <span className="font-pixel-label text-[11px] leading-none uppercase">{t("Work")}</span>
       </div>
       <Sprite art={mapSprites.tail} scale={2} className="mt-[3px] text-ink" />
     </div>

@@ -13,6 +13,7 @@ import { FLOOR_H, LOW_H } from "./layout";
 import { InteriorMeshes, plateMaterial, slabGeom } from "./dollhouse";
 import { LROLES, groupSpec, landedFrame, landedMaterials, landedParts, type LRole, type LandedSpec } from "../tower/landed-model";
 import { landedPlan } from "./landed-plan";
+import { useT } from "@/lib/homelander/i18n/client";
 import type { MapView } from "./map-view";
 
 /**
@@ -45,6 +46,7 @@ const smooth = (a: number, b: number, v: number) => {
 const rm = (n: number) => `RM${n.toLocaleString("en-MY")}`;
 
 export function LandedBurst({ group, selectedHouseId, onSelectHouse, active, open, view, onClosed }: Props) {
+  const tr = useT();
   const reduced = usePrefersReducedMotion();
   const colors = useThemeColors();
   const spec = useMemo(() => groupSpec(group), [group]);
@@ -65,7 +67,7 @@ export function LandedBurst({ group, selectedHouseId, onSelectHouse, active, ope
         frameloop={active ? "always" : "demand"}
         camera={{ fov: view?.fov ?? 36.87, near: 1, far: 5000, position: [0, 300, 300] }}
         gl={{ antialias: true, alpha: true, toneMapping: THREE.NeutralToneMapping, toneMappingExposure: 1 }}
-        aria-label={`3D view of ${group.id}, storey ${storey}`}
+        aria-label={tr("3D view of {id}, storey {storey}", { id: group.id, storey })}
       >
         <Scene group={group} spec={spec} houses={houses} colors={colors} storey={storey} reduced={reduced} open={open} view={view} onClosed={onClosed} bg={bg} selected={selected} onSelectHouse={onSelectHouse} />
       </Canvas>
@@ -74,19 +76,30 @@ export function LandedBurst({ group, selectedHouseId, onSelectHouse, active, ope
         {N > 1 && (
           <label className="flex min-w-48 flex-1 items-center gap-3 text-sm">
             <span className="shrink-0 font-medium tabular-nums">
-              Storey {storey} <span className="text-muted-foreground">of {N}</span>
+              {tr("Storey {n}", { n: storey })} <span className="text-muted-foreground">{tr("of {n}", { n: N })}</span>
             </span>
-            <input type="range" min={1} max={N} step={1} value={storey} onChange={(e) => setStorey(Number(e.target.value))} className="w-full accent-[var(--primary)]" aria-label="Storey to open" />
+            <input type="range" min={1} max={N} step={1} value={storey} onChange={(e) => setStorey(Number(e.target.value))} className="w-full accent-[var(--primary)]" aria-label={tr("Storey to open")} />
           </label>
         )}
-        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{tr(label)}</p>
         <p className="w-full text-sm" aria-live="polite">
           {selected ? (
             <>
-              <strong>Lot {selected.lotNo}</strong>: {selected.label}, {selected.builtUpSqft.toLocaleString()} sqft built-up on {selected.landSqft.toLocaleString()} sqft of land, {selected.beds} bed {selected.baths} bath, {selected.parking} car porch, {rm(selected.price)} (about {rm(selected.monthly)} a month), front faces {selected.facing}
+              <strong>{tr("Lot {lot}", { lot: selected.lotNo })}</strong>
+              {tr(": {label}, {built} sqft built-up on {land} sqft of land, {beds} bed {baths} bath, {car} car porch, {price} (about {monthly} a month), front faces {facing}", {
+                label: tr(selected.label),
+                built: selected.builtUpSqft.toLocaleString(),
+                land: selected.landSqft.toLocaleString(),
+                beds: selected.beds,
+                baths: selected.baths,
+                car: selected.parking,
+                price: rm(selected.price),
+                monthly: rm(selected.monthly),
+                facing: selected.facing,
+              })}
             </>
           ) : (
-            <span className="text-muted-foreground">Tap a house to see it. Move the storey slider to lift the storeys above away.</span>
+            <span className="text-muted-foreground">{tr("Tap a house to see it. Move the storey slider to lift the storeys above away.")}</span>
           )}
         </p>
       </div>

@@ -294,6 +294,22 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       );
       return { share, hours: day.filter((d) => d.share >= 0.05).length / 2 };
     },
+    notes: (w) => {
+      const hours =
+        dayStrip(
+          livingFloor,
+          living.id,
+          { lat, lng, month: w.month, facing: w.facing },
+          w.curtains,
+        ).filter((d) => d.share >= 0.05).length / 2;
+      return readFengShui({
+        plan,
+        items: w.items,
+        facing: w.facing,
+        livingSunHours: hours,
+        livingCurtains: w.curtains.has(living.id),
+      });
+    },
     ong: (w) => {
       const hours =
         dayStrip(

@@ -1,3 +1,5 @@
+import { fixAll, fixOne, pickNote } from "./autofix";
+import type { Note } from "./fengshui";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
 import {
   moveBy,
@@ -35,6 +37,8 @@ export type Ctx = {
   heat: (w: World) => { share: number; hours: number };
   /** Ong meter and the worst problem, for "ong tak?". */
   ong: (w: World) => { score: number; top?: string };
+  /** The feng shui notes for a world, for "fix it". */
+  notes: (w: World) => Note[];
 };
 
 type Dir = "left" | "right" | "up" | "down";
@@ -54,6 +58,7 @@ export type Command =
   | { type: "hot" }
   | { type: "ong" }
   | { type: "reset" }
+  | { type: "fix"; kind?: Kind; all: boolean }
   | { type: "help" };
 
 /* ------------------------------------------------------------------ words */
@@ -264,6 +269,18 @@ const WORDS: Record<string, string> = {
   hide: "V:hide",
   sorok: "V:hide",
   reset: "V:reset",
+  fix: "V:fix",
+  betulkan: "V:fix",
+  betulkn: "V:fix",
+  baiki: "V:fix",
+  repair: "V:fix",
+  settle: "V:fix",
+  selesaikan: "V:fix",
+  sort: "V:fix",
+  solve: "V:fix",
+  all: "Q:all",
+  semua: "Q:all",
+  everything: "Q:all",
   help: "V:help",
   tolong: "",
   apa: "",
@@ -374,6 +391,8 @@ export function parse(clause: string): Command | null {
   const turns = Number(pick("X:") ?? 1);
 
   if (has("V:reset")) return { type: "reset" };
+  // "fix it" / "betulkan semua" / "fix the mirror": let the Ong meter's problems fix themselves.
+  if (has("V:fix")) return { type: "fix", kind, all: has("Q:all") };
   if (has("V:help")) return { type: "help" };
   if (has("V:curtain")) return { type: "curtain", close: !has("V:open"), room };
 
@@ -613,8 +632,8 @@ const DIR_WORDS: Record<Dir, { en: string; mg: string; v: [number, number] }> =
 
 export const HELP: Reply = say(
   true,
-  "Try: put a plant in the living room · move the sofa left 1 m · turn the bed · remove the mirror · face north · 9 am · December · close the curtains · hot or not? · how's the feng shui? · reset",
-  "Cuba: letak pokok kat ruang tamu · alih sofa kiri 1 · pusing katil · buang cermin · hadap utara · pukul 9 pagi · bulan Disember · tutup langsir · panas tak? · ong tak? · mula semula",
+  "Try: put a plant in the living room · move the sofa left 1 m · turn the bed · remove the mirror · face north · 9 am · December · close the curtains · hot or not? · how's the feng shui? · fix it · fix all · reset",
+  "Cuba: letak pokok kat ruang tamu · alih sofa kiri 1 · pusing katil · buang cermin · hadap utara · pukul 9 pagi · bulan Disember · tutup langsir · panas tak? · ong tak? · betulkan · betulkan semua · mula semula",
 );
 
 export function run(
@@ -908,6 +927,99 @@ export function run(
       const en = `Ong meter ${o.score}/100.${o.top ? ` Fix first: ${o.top}.` : " Nothing to fix."}`;
       const mg = `Ong meter ${o.score}/100. ${o.score >= 85 ? "Huat ah!" : o.score >= 60 ? "Okay lah." : "Aiyo."}${o.top ? ` Betulkan dulu: ${o.top}.` : ""}`;
       return { world: w, reply: say(true, en, mg) };
+    }
+    case "fix": {
+      const evaluate = (s: { items: Item[]; curtains: ReadonlySet<string> }) =>
+        ctx.notes({ ...w, items: s.items, curtains: s.curtains });
+      const start = { items: w.items, curtains: w.curtains };
+      const after = (st: typeof start, uid?: string): World => {
+        const it = uid ? st.items.find((i) => i.uid === uid) : undefined;
+        const fi = it ? plan.floors.findIndex((f) => f.id === it.floor) : -1;
+        return {
+          ...w,
+          items: st.items,
+          curtains: st.curtains,
+          selected: uid ?? w.selected,
+          floorIdx: fi >= 0 ? fi : w.floorIdx,
+        };
+      };
+      const score = (st: typeof start) =>
+        ctx.ong({ ...w, items: st.items, curtains: st.curtains }).score;
+
+      if (cmd.all) {
+        const { state, done } = fixAll(plan, start, evaluate);
+        const fixed = done.filter((d) => d.ok);
+        const stuck = done.flatMap((d) =>
+          !d.ok && d.note ? [d.note.title] : [],
+        );
+        if (!done.length)
+          return {
+            world: w,
+            reply: say(
+              true,
+              "Nothing to fix. Huat!",
+              "Takde apa nak betulkan. Huat ah!",
+            ),
+          };
+        const s = score(state);
+        const lastUid = [...fixed].reverse().find((d) => d.ok && d.uid);
+        return {
+          world: after(state, lastUid && lastUid.ok ? lastUid.uid : undefined),
+          reply: say(
+            fixed.length > 0,
+            [
+              fixed.length
+                ? `Fixed ${fixed.length}: ${fixed.map((d) => (d.ok ? d.did.en : "")).join("; ")}.`
+                : "",
+              stuck.length
+                ? `Couldn't fix ${stuck.map((n) => `"${n}"`).join(", ")} without moving other furniture first.`
+                : "",
+              `Ong meter now ${s}.`,
+            ]
+              .filter(Boolean)
+              .join(" "),
+            [
+              fixed.length
+                ? `Dah betulkan ${fixed.length}: ${fixed.map((d) => (d.ok ? d.did.mg : "")).join("; ")}.`
+                : "",
+              stuck.length
+                ? `Tak boleh betulkan ${stuck.map((n) => `"${n}"`).join(", ")} tanpa alih barang lain dulu.`
+                : "",
+              `Ong meter sekarang ${s}.`,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          ),
+        };
+      }
+
+      const note = pickNote(evaluate(start), w.items, cmd.kind);
+      if (!note)
+        return {
+          world: w,
+          reply: cmd.kind
+            ? say(
+                true,
+                `Nothing wrong with the ${low(cmd.kind)}.`,
+                `${ms(cmd.kind)} tu okay je, takde masalah.`,
+              )
+            : say(
+                true,
+                "Nothing to fix. Huat!",
+                "Takde apa nak betulkan. Huat ah!",
+              ),
+        };
+      const r = fixOne(plan, start, evaluate, note);
+      if (!r.ok) return { world: w, reply: say(false, r.why.en, r.why.mg) };
+      const s = score(r.state);
+      return {
+        world: after(r.state, r.uid),
+        reply: say(
+          true,
+          `Fixed "${note.title}": ${r.did.en}. Ong meter now ${s}.`,
+          `Dah betulkan "${note.title}": ${r.did.mg}. Ong meter sekarang ${s}.`,
+        ),
+      };
     }
     case "reset":
       return {

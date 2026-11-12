@@ -44,6 +44,8 @@ const CHIPS = [
   "pukul 9 pagi",
   "tutup langsir",
   "ong tak?",
+  "betulkan",
+  "fix all",
   "mula semula",
 ];
 

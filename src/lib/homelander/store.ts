@@ -47,7 +47,7 @@ export type HomeLanderState = {
   answers: Answers | null;
   leads: Lead[];
   budget: Budget | null;
-  /** Unit ids picked for the Compare screen (2 or 3). */
+  /** Unit ids picked for Battle (2 to 5). */
   compare: string[];
   /** What Uncle learned in onboarding (and the buyer corrected). */
   profile: Profile;
@@ -188,7 +188,7 @@ export const homelander = {
     set({ onboardedAt: at });
   },
   setCompare(ids: string[]) {
-    set({ compare: ids.slice(0, 3) });
+    set({ compare: ids.slice(0, 5) });
   },
   reset() {
     set({ ...initial });

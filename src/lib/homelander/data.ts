@@ -9,11 +9,22 @@
 
 export type LatLng = { lat: number; lng: number };
 
+export type Region = "klang-valley" | "johor" | "sabah";
+
 export type Township = {
   id: string;
   name: string;
   area: string;
   pos: LatLng;
+  /** Contract fields (filled with real Gamuda Land data): optional until every project has them. */
+  state?: "Selangor" | "Kuala Lumpur" | "Johor" | "Sabah";
+  region?: Region;
+  /** Selling now, or completed (resale only, greyed on the map). */
+  status?: "selling" | "completed";
+  acres?: number;
+  officialUrl?: string;
+  /** Short facts from the official page, e.g. "120-acre wetland park". */
+  facilities?: string[];
 };
 
 export type HomeType = "Terrace" | "Semi-D" | "Bungalow" | "Condo" | "Serviced apartment";
@@ -33,6 +44,17 @@ export type Unit = {
   photo: string;
   photoAlt: string;
   highlights: string[];
+  /** Contract fields, optional until filled. */
+  /** Product line / phase name as Gamuda sells it, e.g. "Mori Pines". */
+  product?: string;
+  /** Land size for landed homes, e.g. "22' x 75'". */
+  landSize?: string;
+  /** Monthly maintenance or service charge, RM per sq ft (strata); landed gated homes use a guard fee in serviceRM. */
+  maintenancePsfRM?: number;
+  /** Flat monthly fee for landed gated-and-guarded homes. */
+  serviceRM?: number;
+  /** "official" when price/size come from gamudaland.com.my, "sample" when estimated for the demo. */
+  source?: "official" | "sample";
 };
 
 export const townships: Township[] = [

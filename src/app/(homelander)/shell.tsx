@@ -95,15 +95,17 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
                   <span className="sr-only"> homes liked</span>
                 </span>
               </PixPanel>
-              <Link
-                href="/admin"
-                className="hidden font-pixel-label text-xs text-ink underline decoration-2 underline-offset-4 lg:inline"
-              >
-                Gamuda view
-              </Link>
-              <Link href="/profile" className="font-pixel text-sm underline decoration-2 underline-offset-4">
-                Profile
-              </Link>
+              {/* A surface behind each bare link: the Night toggle darkens the map but not these tokens, so ink-on-map was 1.19:1 */}
+              <PixPanel asChild flat>
+                <Link href="/admin" className="hidden px-2 py-2 font-pixel-label text-xs lg:inline">
+                  Gamuda view
+                </Link>
+              </PixPanel>
+              <PixPanel asChild flat>
+                <Link href="/profile" className="px-2 py-1.5 font-pixel text-sm">
+                  Profile
+                </Link>
+              </PixPanel>
               <Link href="/login" className="pix-btn inline-flex min-h-9 items-center px-3 text-sm text-white" style={{ "--pix-fill": "var(--color-pandan-deep)" } as React.CSSProperties}>
                 Login
               </Link>

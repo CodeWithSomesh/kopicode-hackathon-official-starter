@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { drawItems } from "./draw-items";
 import { CATALOG, type Item } from "./furniture";
@@ -70,6 +71,7 @@ export function PlanCanvas({
   strips,
   className,
 }: Props) {
+  const t = useT();
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -221,7 +223,7 @@ export function PlanCanvas({
       ctx.setLineDash([]);
     }
 
-    drawItems(ctx, items, selected, c, px);
+    drawItems(ctx, items, selected, c, px, t);
 
     for (const it of items) {
       if (!flagged.has(it.uid)) continue;
@@ -288,7 +290,8 @@ export function PlanCanvas({
     ctx.textBaseline = "top";
     for (const r of floor.rooms) {
       ctx.font = font(11, 600);
-      const nameW = ctx.measureText(r.label).width;
+      const roomName = t(r.label);
+      const nameW = ctx.measureText(roomName).width;
       if (nameW > r.w - 0.2) continue;
       const area =
         r.kind !== "outdoor" && r.kind !== "stairs" && r.h > 1.6
@@ -311,7 +314,7 @@ export function PlanCanvas({
       }
       ctx.font = font(11, 600);
       ctx.fillStyle = r.kind === "outdoor" ? c.soft : c.ink;
-      ctx.fillText(r.label, r.x + 0.15, r.y + 0.15);
+      ctx.fillText(roomName, r.x + 0.15, r.y + 0.15);
       if (area) {
         ctx.font = font(10);
         ctx.fillStyle = c.soft;
@@ -335,7 +338,7 @@ export function PlanCanvas({
           my - 0.3 < r.y + r.h,
       );
       ctx.textBaseline = indoorAbove ? "top" : "bottom";
-      ctx.fillText("MAIN DOOR", mx, my + (indoorAbove ? 6 * px : -6 * px));
+      ctx.fillText(t("MAIN DOOR"), mx, my + (indoorAbove ? 6 * px : -6 * px));
     }
 
     // Scale bar, bottom-left: 1 metre.
@@ -419,6 +422,7 @@ export function PlanCanvas({
     selected,
     flagged,
     strips,
+    t,
   ]);
 
   return (
@@ -430,7 +434,7 @@ export function PlanCanvas({
         className="absolute inset-0 block h-full w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pandan-deep"
         role="application"
         aria-roledescription="floor plan"
-        aria-label={`Floor plan, ${floor.label}. Tap a piece of furniture to select it, then drag it or use the arrow keys. R turns it, Delete removes it.`}
+        aria-label={t("Floor plan, {floor}. Tap a piece of furniture to select it, then drag it or use the arrow keys. R turns it, Delete removes it.", { floor: t(floor.label) })}
         onKeyDown={onKeyDown}
         onPointerDown={(e) => {
           const [x, y] = toWorld(e.clientX, e.clientY);

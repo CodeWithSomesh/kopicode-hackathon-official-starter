@@ -29,20 +29,23 @@ export const painPoints = [
 ] as const;
 export type PainPoint = (typeof painPoints)[number];
 
+/** i18n marker (npm run i18n:check sees tr(text)); render sites call t(label). The model prompt keeps the English. */
+const tr = (s: string) => s;
+
 /** Plain labels, as the buyer would say them. */
 export const painPointLabel: Record<PainPoint, string> = {
-  upfront_cash: "Cash upfront (deposit, stamp duty, legal fees)",
-  loan_approval: "Getting the loan approved",
-  monthly_burden: "Monthly instalment too high",
-  hidden_costs: "Hidden costs (maintenance, quit rent, reno)",
-  commute_traffic: "Traffic and a long commute",
-  build_delay: "Waiting years for the keys",
-  resale_value: "Resale value",
-  leasehold_worry: "Leasehold running out",
-  safety_security: "Safety and security",
-  near_family: "Being near family",
-  space_too_small: "Homes that are too small",
-  flood_risk: "Flooding",
+  upfront_cash: tr("Cash upfront (deposit, stamp duty, legal fees)"),
+  loan_approval: tr("Getting the loan approved"),
+  monthly_burden: tr("Monthly instalment too high"),
+  hidden_costs: tr("Hidden costs (maintenance, quit rent, reno)"),
+  commute_traffic: tr("Traffic and a long commute"),
+  build_delay: tr("Waiting years for the keys"),
+  resale_value: tr("Resale value"),
+  leasehold_worry: tr("Leasehold running out"),
+  safety_security: tr("Safety and security"),
+  near_family: tr("Being near family"),
+  space_too_small: tr("Homes that are too small"),
+  flood_risk: tr("Flooding"),
 };
 
 /** Short labels for pills and table rows. */
@@ -130,19 +133,19 @@ export type ProfileKey = keyof Profile;
 
 /** What Mochi must have before the buyer can move on to swiping, with a plain label for each. */
 export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) => boolean }[] = [
-  { key: "livingWith", label: "Who you live with" },
-  { key: "topWorry", label: "What worries you most about buying" },
-  { key: "workArea", label: "Where you work" },
-  { key: "officeDays", label: "Office days a week" },
-  { key: "commuteMode", label: "Car or train" },
-  { key: "preferredAreas", label: "Areas you like" },
-  { key: "homeType", label: "Landed or high-rise" },
-  { key: "minBedrooms", label: "Bedrooms you need" },
-  { key: "grossRM", label: "Monthly salary" },
-  { key: "carRM", label: "Loans you're paying" },
-  { key: "savingsRM", label: "Savings for the down payment" },
-  { key: "firstHome", label: "First home or not" },
-  { key: "age", label: "Your age" },
+  { key: "livingWith", label: tr("Who you live with") },
+  { key: "topWorry", label: tr("What worries you most about buying") },
+  { key: "workArea", label: tr("Where you work") },
+  { key: "officeDays", label: tr("Office days a week") },
+  { key: "commuteMode", label: tr("Car or train") },
+  { key: "preferredAreas", label: tr("Areas you like") },
+  { key: "homeType", label: tr("Landed or high-rise") },
+  { key: "minBedrooms", label: tr("Bedrooms you need") },
+  { key: "grossRM", label: tr("Monthly salary") },
+  { key: "carRM", label: tr("Loans you're paying") },
+  { key: "savingsRM", label: tr("Savings for the down payment") },
+  { key: "firstHome", label: tr("First home or not") },
+  { key: "age", label: tr("Your age") },
 ];
 
 const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);

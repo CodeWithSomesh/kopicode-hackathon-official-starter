@@ -3,6 +3,7 @@
 import { LightbulbIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 
 /* ---------------------------------------------------------------- section card */
@@ -28,16 +29,17 @@ export function Section({
   children: React.ReactNode;
   className?: string;
 }) {
+  const t = useT();
   return (
     <section id={id} aria-labelledby={`${id}-title`} className={cn("scroll-mt-20", className)}>
       <Card className="gap-0 overflow-hidden py-0">
         <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-5 pb-4">
           <div className="grid min-w-0 gap-1">
             <h2 id={`${id}-title`} className="text-base leading-tight font-semibold">
-              {title}
+              {t(title)}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {purpose} <span className="text-foreground/70">For {audience}.</span>
+              {t(purpose)} <span className="text-foreground/70">{t("For {audience}.", { audience: t(audience) })}</span>
             </p>
           </div>
           {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -50,11 +52,12 @@ export function Section({
 }
 
 export function Takeaway({ children }: { children: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="mx-5 mb-3 flex items-start gap-2.5 rounded-lg border border-[color-mix(in_oklch,var(--chart-1)_30%,transparent)] bg-[color-mix(in_oklch,var(--chart-1)_7%,transparent)] px-3.5 py-2.5 text-sm">
       <LightbulbIcon className="mt-0.5 size-4 shrink-0 text-[var(--chart-1)]" aria-hidden />
       <p>
-        <span className="sr-only">Takeaway: </span>
+        <span className="sr-only">{t("Takeaway:")} </span>
         {children}
       </p>
     </div>
@@ -63,12 +66,13 @@ export function Takeaway({ children }: { children: React.ReactNode }) {
 
 /** A bordered inner panel, like the reference's nested chart wells. */
 export function Panel({ title, note, children, className }: { title?: string; note?: string; children: React.ReactNode; className?: string }) {
+  const t = useT();
   return (
     <div className={cn("rounded-lg border bg-background/40 p-4", className)}>
       {title ? (
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-medium">{title}</h3>
-          {note ? <p className="text-xs text-muted-foreground">{note}</p> : null}
+          <h3 className="text-sm font-medium">{t(title)}</h3>
+          {note ? <p className="text-xs text-muted-foreground">{t(note)}</p> : null}
         </div>
       ) : null}
       {children}
@@ -79,7 +83,8 @@ export function Panel({ title, note, children, className }: { title?: string; no
 /* ---------------------------------------------------------------- deltas */
 
 export function Delta({ value, kind, invert = false }: { value: number | null; kind: "count" | "rate" | "money"; invert?: boolean }) {
-  if (value === null || !Number.isFinite(value)) return <Badge variant="secondary">new</Badge>;
+  const t = useT();
+  if (value === null || !Number.isFinite(value)) return <Badge variant="secondary">{t("new")}</Badge>;
   const up = value >= 0;
   const good = invert ? !up : up;
   const text = kind === "rate" ? `${up ? "+" : ""}${(value * 100).toFixed(1)} pts` : `${up ? "+" : ""}${(value * 100).toFixed(1)}%`;
@@ -93,7 +98,7 @@ export function Delta({ value, kind, invert = false }: { value: number | null; k
     >
       <Icon className="size-3" aria-hidden />
       {text}
-      <span className="sr-only"> vs previous period</span>
+      <span className="sr-only"> {t("vs previous period")}</span>
     </span>
   );
 }
@@ -198,15 +203,17 @@ export function Meter({ value, max = 1, color = "var(--chart-1)", className }: {
   );
 }
 
-export function Empty({ children = "No data for this filter yet." }: { children?: React.ReactNode }) {
-  return <div className="grid h-40 place-items-center rounded-lg border border-dashed text-sm text-muted-foreground">{children}</div>;
+export function Empty({ children }: { children?: React.ReactNode }) {
+  const t = useT();
+  return <div className="grid h-40 place-items-center rounded-lg border border-dashed text-sm text-muted-foreground">{children ?? t("No data for this filter yet.")}</div>;
 }
 
 export function LiveBadge() {
+  const t = useT();
   return (
     <span className="inline-flex items-center gap-1 rounded-md bg-[color-mix(in_oklch,var(--live)_15%,transparent)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--live)]">
       <span className="size-1.5 rounded-full bg-[var(--live)]" aria-hidden />
-      Live
+      {t("Live")}
     </span>
   );
 }

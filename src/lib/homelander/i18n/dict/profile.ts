@@ -18,4 +18,11 @@ export const profile: Dict = {
   "Chat with Uncle again": "Chat dengan Uncle lagi",
   "Shortlist": "Shortlist",
   "No homes yet. Swipe to build your shortlist.": "Belum ada homes. Swipe untuk buat shortlist.",
+  "Ask Mochi": "Tanya Mochi",
+  "Car + train": "Kereta + train",
+  "What Mochi knows about you. Change it any time by chatting with Mochi again.": "Apa Mochi tahu pasal you. Nak tukar? Chat dengan Mochi lagi bila-bila.",
+  "Chat with Mochi again": "Chat dengan Mochi lagi",
+  "Clear your answers, likes and bank estimate, and start fresh with Mochi?": "Padam jawapan, suka dan anggaran bank, dan mula baru dengan Mochi?",
+  "Start over": "Mula balik",
+  "What worries you most about buying": "Apa paling risau pasal beli rumah",
 };

@@ -8,9 +8,10 @@ import {
   PixPanel,
   PixTag,
 } from "@/components/homelander/pixel";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { isFixable } from "./autofix";
-import { ongVerdict, type Note } from "./fengshui";
+import { noteText, ongVerdict, type Note } from "./fengshui";
 
 type Props = {
   notes: Note[];
@@ -37,6 +38,7 @@ export function FengShuiPanel({
   onFix,
   onFixAll,
 }: Props) {
+  const t = useT();
   const verdict = ongVerdict(score);
   const [open, setOpen] = useState<string | null>(null);
   const problems = notes.filter((n) => n.tone !== "good");
@@ -46,35 +48,36 @@ export function FengShuiPanel({
   return (
     <PixPanel className="grid gap-3 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-pixel text-lg font-bold">Ong meter</h2>
+        <h2 className="font-pixel text-lg font-bold">{t("Ong meter")}</h2>
         <div className="flex items-center gap-2" aria-live="polite">
           <span className="font-pixel text-2xl font-bold tabular-nums">
             {score}
           </span>
-          <PixTag tone={verdict.tone}>{verdict.word}</PixTag>
+          <PixTag tone={verdict.tone}>{t(verdict.word)}</PixTag>
         </div>
       </div>
       <PixMeter
         value={score}
         tone={verdict.tone}
-        label={`Ong meter ${score} out of 100`}
+        label={t("Ong meter {score} out of 100", { score })}
       />
 
       {problems.length ? (
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-ink-soft">
-            {problems.length} {problems.length === 1 ? "thing" : "things"} to
-            look at
+            {problems.length === 1
+              ? t("{n} thing to look at", { n: problems.length })
+              : t("{n} things to look at", { n: problems.length })}
           </p>
           {fixable > 0 ? (
             <PixButton size="sm" onClick={onFixAll}>
-              <Wand2 className="size-4" aria-hidden="true" /> Fix all
+              <Wand2 className="size-4" aria-hidden="true" /> {t("Fix all")}
             </PixButton>
           ) : null}
         </div>
       ) : (
         <p className="text-sm">
-          Nothing to fix. Move things around and watch the score.
+          {t("Nothing to fix. Move things around and watch the score.")}
         </p>
       )}
 
@@ -104,25 +107,25 @@ export function FengShuiPanel({
                       tone={n.tone === "fix" ? "raya" : "kaya"}
                       className="mt-0.5 shrink-0"
                     >
-                      {n.tone === "fix" ? "Fix" : "Watch"}
+                      {n.tone === "fix" ? t("Fix") : t("Watch")}
                     </PixTag>
                     <span className="text-sm font-semibold">
-                      {n.title}
+                      {noteText(n, t, "title")}
                       {n.floor !== currentFloor ? (
                         <span className="font-normal text-ink-soft">
                           {" "}
-                          · {floorLabel(n.floor)}
+                          · {t(floorLabel(n.floor))}
                         </span>
                       ) : null}
                     </span>
                   </span>
                   {n.fix ? (
-                    <span className="text-xs text-ink-soft">{n.fix}</span>
+                    <span className="text-xs text-ink-soft">{noteText(n, t, "fix")}</span>
                   ) : null}
                 </button>
                 {isOpen ? (
                   <div className="grid gap-2 px-2.5 pb-2.5">
-                    <p className="text-xs">{n.detail}</p>
+                    <p className="text-xs">{noteText(n, t, "detail")}</p>
                     {isFixable(n) ? (
                       <PixButton
                         size="sm"
@@ -130,13 +133,11 @@ export function FengShuiPanel({
                         className="justify-self-start"
                         onClick={() => onFix(n)}
                       >
-                        <Wand2 className="size-4" aria-hidden="true" /> Fix it
-                        for me
+                        <Wand2 className="size-4" aria-hidden="true" /> {t("Fix it for me")}
                       </PixButton>
                     ) : (
                       <p className="text-xs text-ink-soft">
-                        Built into the plan, so moving furniture can&apos;t fix
-                        it.
+                        {t("Built into the plan, so moving furniture can't fix it.")}
                       </p>
                     )}
                   </div>
@@ -150,7 +151,9 @@ export function FengShuiPanel({
       {good.length ? (
         <details className="text-sm">
           <summary className="cursor-pointer text-xs font-semibold text-ink-soft hover:text-ink">
-            {good.length} {good.length === 1 ? "thing is" : "things are"} good
+            {good.length === 1
+              ? t("{n} thing is good", { n: good.length })
+              : t("{n} things are good", { n: good.length })}
           </summary>
           <ul className="mt-2 grid gap-1">
             {good.map((n) => (
@@ -161,9 +164,9 @@ export function FengShuiPanel({
                   className="flex w-full items-start gap-2 text-left text-xs hover:underline"
                 >
                   <PixTag tone="pandan" className="shrink-0">
-                    Good
+                    {t("Good")}
                   </PixTag>
-                  <span>{n.title}</span>
+                  <span>{noteText(n, t, "title")}</span>
                 </button>
               </li>
             ))}

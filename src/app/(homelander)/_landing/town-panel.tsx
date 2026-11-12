@@ -14,6 +14,7 @@ import {
   type Availability,
 } from "@/lib/homelander/data";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { mapSprites, type TownInfo } from "./map-data";
 
@@ -33,6 +34,7 @@ const DEEP: Partial<Record<Availability["status"], string>> = { Available: DEEP_
  */
 export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownInfo; anchor: Anchor; onClose: () => void; illustrative?: boolean }) {
   const s = useHomeLander();
+  const tr = useT();
   const { t } = info;
   const done = t.status === "completed";
   const drive = driveMinutes(t.pos, anchor.pos);
@@ -62,25 +64,25 @@ export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownI
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <PixTag tone="kaya">From {rmShort(info.from)}</PixTag>
             {done ? (
-              <PixTag tone="ink">Completed, resale only</PixTag>
+              <PixTag tone="ink">{tr("Completed, resale only")}</PixTag>
             ) : (
-              <PixTag tone={info.left ? "pandan" : "ink"} className={info.left ? DEEP_PANDAN : undefined}>{info.left} left</PixTag>
+              <PixTag tone={info.left ? "pandan" : "ink"} className={info.left ? DEEP_PANDAN : undefined}>{tr("{n} left", { n: info.left })}</PixTag>
             )}
             <PixTag>Sample</PixTag>
           </div>
         </div>
-        <PixButton size="sm" className="size-9 shrink-0 px-0" onClick={onClose} aria-label="Close township panel">
+        <PixButton size="sm" className="size-9 shrink-0 px-0" onClick={onClose} aria-label={tr("Close township panel")}>
           <Sprite art="cross" scale={2} />
         </PixButton>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b-[3px] border-ink px-3 py-2">
         <PixButton asChild size="sm" tone="raya" className="text-white" style={{ "--pix-fill": "var(--color-raya-deep)" } as React.CSSProperties}>
-          <Link href="/login">Chat with Mochi</Link>
+          <Link href="/login">{tr("Chat with Mochi")}</Link>
         </PixButton>
         {illustrative && (
           <span className="text-xs text-ink-soft">
-            The glass block on the map is an illustrative block at Gamuda Cove (made-up units and prices). Tap a block to open it up.
+            {tr("The glass block on the map is an illustrative block at Gamuda Cove (made-up units and prices). Tap a block to open it up.")}
           </span>
         )}
       </div>
@@ -94,7 +96,7 @@ export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownI
           <Sprite art={mapSprites.train} scale={2} className="text-ink" />
           <span className="font-pixel tabular-nums">{train.minutes} min</span> train
         </span>
-        <span className="text-ink-soft">to {anchor.name}, rush hour (estimate)</span>
+        <span className="text-ink-soft">{tr("to {name}, rush hour (estimate)", { name: anchor.name })}</span>
       </p>
 
       <ul className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain p-3 pb-4">
@@ -122,7 +124,7 @@ export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownI
                     {u.type}, {u.beds} bed, {u.builtUpSqft.toLocaleString("en-MY")} sqft
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    <PixTag tone={statusTone[av.status]} className={DEEP[av.status]}>{av.status}</PixTag>
+                    <PixTag tone={statusTone[av.status]} className={DEEP[av.status]}>{tr(av.status)}</PixTag>
                     <PixTag>
                       {av.left}/{av.total} {av.phase}
                     </PixTag>
@@ -130,7 +132,7 @@ export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownI
                 </div>
               </div>
               <p className="text-xs text-ink-soft">
-                {drive} min drive or {train.minutes} min by train via {train.station} to {anchor.name}.
+                {tr("{drive} min drive or {train} min by train via {station} to {anchor}.", { drive, train: train.minutes, station: train.station, anchor: anchor.name })}
               </p>
               <div className="flex flex-wrap gap-2.5 pt-1 pb-1.5">
                 <PixButton
@@ -140,23 +142,23 @@ export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownI
                   onClick={() => (liked ? homelander.unlike(u.id) : homelander.like(u.id))}
                 >
                   <Sprite art="heart" scale={2} className={liked ? "text-white" : "text-raya"} />
-                  {liked ? "Liked" : "Like"}
+                  {liked ? tr("Liked") : tr("Like")}
                 </PixButton>
                 <PixButton
                   size="sm"
                   tone={inBattle ? "kaya" : "white"}
                   aria-pressed={inBattle}
                   disabled={battleFull}
-                  title={battleFull ? "The battle holds 3 homes. Remove one first." : undefined}
+                  title={battleFull ? tr("The battle holds 3 homes. Remove one first.") : undefined}
                   onClick={() =>
                     homelander.setCompare(inBattle ? s.compare.filter((x) => x !== u.id) : [...s.compare, u.id])
                   }
                 >
                   <Sprite art="bars" scale={2} />
-                  {inBattle ? "In battle" : battleFull ? "Battle full" : "Add to battle"}
+                  {inBattle ? tr("In battle") : battleFull ? tr("Battle full") : tr("Add to battle")}
                 </PixButton>
                 <PixButton asChild size="sm" tone="lilac">
-                  <Link href={`/homes/${u.id}/feng-shui`}>Feng Shui</Link>
+                  <Link href={`/homes/${u.id}/feng-shui`}>{tr("Feng Shui")}</Link>
                 </PixButton>
               </div>
             </li>
@@ -165,9 +167,9 @@ export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownI
       </ul>
 
       <div className="flex items-center justify-between gap-3 border-t-[3px] border-ink p-3">
-        <span className="text-xs text-ink-soft">Battle: {s.compare.length}/3 homes</span>
+        <span className="text-xs text-ink-soft">{tr("Battle: {n}/3 homes", { n: s.compare.length })}</span>
         <PixButton asChild size="sm" tone="pandan" className="text-white" style={{ "--pix-fill": "var(--color-pandan-deep)" } as React.CSSProperties}>
-          <Link href="/swipe">See in deck</Link>
+          <Link href="/swipe">{tr("See in deck")}</Link>
         </PixButton>
       </div>
     </PixPanel>

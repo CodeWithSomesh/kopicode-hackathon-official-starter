@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2Icon } from "lucide-react";
 import { PixButton } from "@/components/homelander/pixel";
+import { useT } from "@/lib/homelander/i18n/client";
 
 /** Google's "G" in its own brand colours (allowed for the sign-in button). */
 function GoogleG() {
@@ -21,6 +22,7 @@ function GoogleG() {
  * which swaps the code for a session and continues to `next`.
  */
 export function GoogleButton({ next, disabled }: { next: string; disabled?: boolean }) {
+  const t = useT();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +40,7 @@ export function GoogleButton({ next, disabled }: { next: string; disabled?: bool
       // On success the browser is already on its way to Google.
     } catch {
       setPending(false);
-      setError("We couldn't reach Google just now. Try again in a moment, or use your email below.");
+      setError(t("We couldn't reach Google just now. Try again in a moment, or use your email below."));
     }
   }
 
@@ -53,7 +55,7 @@ export function GoogleButton({ next, disabled }: { next: string; disabled?: bool
         aria-describedby={disabled ? "auth-demo-note" : error ? "google-error" : undefined}
       >
         {pending ? <Loader2Icon className="size-5 animate-spin motion-reduce:animate-none" aria-hidden /> : <GoogleG />}
-        {pending ? "Opening Google…" : "Continue with Google"}
+        {pending ? t("Opening Google…") : t("Continue with Google")}
       </PixButton>
       {error ? (
         <p id="google-error" role="alert" className="text-sm font-medium text-raya-deep">

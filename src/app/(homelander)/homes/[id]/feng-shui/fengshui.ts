@@ -1,5 +1,6 @@
 import { CATALOG, type Item, type Kind } from "./furniture";
 import { boxOf, frontOf, type Box } from "./layout-ops";
+import type { TFn } from "@/lib/homelander/i18n/translate";
 import type { Door, Floor, Plan, Pt, Room, Window } from "./plans";
 
 /**
@@ -15,12 +16,38 @@ export type Note = {
   title: string;
   detail: string;
   fix?: string;
+  /** Title, detail and fix as English templates ("{room}" slots) plus their values, so the UI can translate them. */
+  tpl?: { title: string; detail: string; fix?: string };
+  vars?: Record<string, string>;
   floor: string;
   /** Pieces the note is about; tapping the note selects the first. */
   uids: string[];
   /** A strip to draw on the plan, e.g. the line from the main door out the window. */
   strip?: Box;
 };
+
+/** i18n marker: npm run i18n:check sees tr(text) literals; the UI calls noteText() which translates them. */
+const tr = (s: string) => s;
+
+const fill = (s: string, v?: Record<string, string>) => (v ? s.replace(/\{(\w+)\}/g, (m, k: string) => v[k] ?? m) : s);
+
+/** Fills the English text in place (commands.ts and autofix.ts quote it) and keeps the templates for translation. */
+function withText(n: Note): Note {
+  return {
+    ...n,
+    tpl: { title: n.title, detail: n.detail, fix: n.fix },
+    title: fill(n.title, n.vars),
+    detail: fill(n.detail, n.vars),
+    fix: n.fix === undefined ? undefined : fill(n.fix, n.vars),
+  };
+}
+
+/** One field of a note in the buyer's language; the slot values (room, piece) are translated too. */
+export function noteText(n: Note, t: TFn, field: "title" | "detail" | "fix"): string {
+  const src = n.tpl?.[field] ?? n[field] ?? "";
+  const vars = Object.fromEntries(Object.entries(n.vars ?? {}).map(([k, v]) => [k, t(v)]));
+  return t(src, vars);
+}
 
 const EPS = 1e-6;
 const WALL_GAP = 0.15;
@@ -180,8 +207,9 @@ function doorThroughLine(floor: Floor, items: Item[]): Note | null {
     return {
       id: `through-blocked-${floor.id}`,
       tone: "good",
-      title: `The ${label(blockers[0].kind)} breaks the door-to-${best.what.replace(/^(a|the) /, "")} line`,
-      detail: "Qi now slows down and settles instead of rushing straight out.",
+      title: tr("The {piece} breaks the door-to-{what} line"),
+      vars: { piece: label(blockers[0].kind), what: best.what.replace(/^(a|the) /, "") },
+      detail: tr("Qi now slows down and settles instead of rushing straight out."),
       floor: floor.id,
       uids: blockers.map((i) => i.uid),
     };
@@ -189,10 +217,11 @@ function doorThroughLine(floor: Floor, items: Item[]): Note | null {
   return {
     id: `through-${floor.id}`,
     tone: "fix",
-    title: `Main door lines up with ${best.what}`,
+    title: tr("Main door lines up with {what}"),
+    vars: { what: best.what },
     detail:
-      "Qi comes in the front and rushes straight out the back, so the home struggles to hold wealth.",
-    fix: "Put a plant, shoe rack or screen somewhere along the red strip.",
+      tr("Qi comes in the front and rushes straight out the back, so the home struggles to hold wealth."),
+    fix: tr("Put a plant, shoe rack or screen somewhere along the red strip."),
     floor: floor.id,
     uids: [],
     strip,
@@ -273,7 +302,7 @@ export function readFengShui({
   livingCurtains,
 }: RuleInput): Note[] {
   const notes: Note[] = [];
-  const push = (n: Note | null) => n && notes.push(n);
+  const push = (n: Note | null) => n && notes.push(withText(n));
 
   for (const floor of plan.floors) {
     const on = items.filter((i) => i.floor === floor.id);
@@ -296,10 +325,10 @@ export function readFengShui({
         push({
           id: `mirror-door-${it.uid}`,
           tone: "fix",
-          title: "Mirror faces the main door",
+          title: tr("Mirror faces the main door"),
           detail:
-            "It bounces the good qi straight back out the door as it comes in.",
-          fix: "Turn the mirror or move it to a side wall.",
+            tr("It bounces the good qi straight back out the door as it comes in."),
+          fix: tr("Turn the mirror or move it to a side wall."),
           floor: floor.id,
           uids: [it.uid],
         });
@@ -313,10 +342,11 @@ export function readFengShui({
           push({
             id: `bed-door-${it.uid}`,
             tone: "fix",
-            title: `Bed in ${room.label.toLowerCase()} points its feet at the door`,
+            title: tr("Bed in {room} points its feet at the door"),
+            vars: { room: room.label.toLowerCase() },
             detail:
-              "The 'coffin position'. Most aunties will tell you to avoid it.",
-            fix: "Turn the bed so the door is to one side.",
+              tr("The 'coffin position'. Most aunties will tell you to avoid it."),
+            fix: tr("Turn the bed so the door is to one side."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -325,10 +355,11 @@ export function readFengShui({
           push({
             id: `bed-window-${it.uid}`,
             tone: "watch",
-            title: `Bed in ${room.label.toLowerCase()} has a window behind the headboard`,
+            title: tr("Bed in {room} has a window behind the headboard"),
+            vars: { room: room.label.toLowerCase() },
             detail:
-              "No solid backing while you sleep, and the sun and noise come in right at your head.",
-            fix: "Move the headboard to a solid wall.",
+              tr("No solid backing while you sleep, and the sun and noise come in right at your head."),
+            fix: tr("Move the headboard to a solid wall."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -336,10 +367,11 @@ export function readFengShui({
           push({
             id: `bed-float-${it.uid}`,
             tone: "watch",
-            title: `Bed in ${room.label.toLowerCase()} isn't against a wall`,
+            title: tr("Bed in {room} isn't against a wall"),
+            vars: { room: room.label.toLowerCase() },
             detail:
-              "A headboard against a solid wall gives support, like a mountain behind you.",
-            fix: "Slide the bed until its head touches a wall.",
+              tr("A headboard against a solid wall gives support, like a mountain behind you."),
+            fix: tr("Slide the bed until its head touches a wall."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -356,9 +388,10 @@ export function readFengShui({
           push({
             id: `bed-bath-${it.uid}`,
             tone: "fix",
-            title: `Bathroom door faces the bed in ${room.label.toLowerCase()}`,
-            detail: "Bathroom qi flows straight onto the bed.",
-            fix: "Move the bed out of line with the bathroom door, or keep that door shut.",
+            title: tr("Bathroom door faces the bed in {room}"),
+            vars: { room: room.label.toLowerCase() },
+            detail: tr("Bathroom qi flows straight onto the bed."),
+            fix: tr("Move the bed out of line with the bathroom door, or keep that door shut."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -373,10 +406,10 @@ export function readFengShui({
           push({
             id: `mirror-bed-${mirror.uid}`,
             tone: "fix",
-            title: "Mirror reflects the bed",
+            title: tr("Mirror reflects the bed"),
             detail:
-              "Said to disturb sleep and invite a third party into the relationship.",
-            fix: "Turn the mirror so it doesn't face the bed.",
+              tr("Said to disturb sleep and invite a third party into the relationship."),
+            fix: tr("Turn the mirror so it doesn't face the bed."),
             floor: floor.id,
             uids: [mirror.uid, it.uid],
           });
@@ -392,10 +425,10 @@ export function readFengShui({
           push({
             id: `sofa-door-${it.uid}`,
             tone: "fix",
-            title: "Sofa has its back to the main door",
+            title: tr("Sofa has its back to the main door"),
             detail:
-              "You can't see who comes in. Feng shui likes a 'commanding position' facing the door.",
-            fix: "Turn the sofa so you can see the main door from it.",
+              tr("You can't see who comes in. Feng shui likes a 'commanding position' facing the door."),
+            fix: tr("Turn the sofa so you can see the main door from it."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -403,9 +436,9 @@ export function readFengShui({
           push({
             id: `sofa-float-${it.uid}`,
             tone: "watch",
-            title: "Sofa isn't backed by a wall",
-            detail: "A solid wall behind the sofa gives the family support.",
-            fix: "Push the sofa back against a wall.",
+            title: tr("Sofa isn't backed by a wall"),
+            detail: tr("A solid wall behind the sofa gives the family support."),
+            fix: tr("Push the sofa back against a wall."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -421,10 +454,11 @@ export function readFengShui({
           push({
             id: `desk-door-${it.uid}`,
             tone: "watch",
-            title: `Desk in ${room.label.toLowerCase()} puts your back to the door`,
+            title: tr("Desk in {room} puts your back to the door"),
+            vars: { room: room.label.toLowerCase() },
             detail:
-              "You'll keep turning around. Facing the door is the commanding position for work and study.",
-            fix: "Turn the desk so you can see the door when you sit.",
+              tr("You'll keep turning around. Facing the door is the commanding position for work and study."),
+            fix: tr("Turn the desk so you can see the door when you sit."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -437,9 +471,9 @@ export function readFengShui({
           push({
             id: `altar-bath-${it.uid}`,
             tone: "fix",
-            title: "Altar backs onto a bathroom",
-            detail: "The altar should rest on a clean, solid wall.",
-            fix: "Move the altar to a wall that isn't shared with a bathroom.",
+            title: tr("Altar backs onto a bathroom"),
+            detail: tr("The altar should rest on a clean, solid wall."),
+            fix: tr("Move the altar to a wall that isn't shared with a bathroom."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -447,9 +481,9 @@ export function readFengShui({
           push({
             id: `altar-float-${it.uid}`,
             tone: "watch",
-            title: "Altar isn't against a wall",
-            detail: "An altar needs a solid wall behind it.",
-            fix: "Push the altar back against a solid wall.",
+            title: tr("Altar isn't against a wall"),
+            detail: tr("An altar needs a solid wall behind it."),
+            fix: tr("Push the altar back against a solid wall."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -457,8 +491,8 @@ export function readFengShui({
           push({
             id: `altar-ok-${it.uid}`,
             tone: "good",
-            title: "Altar sits against a solid wall",
-            detail: "Good support, with clear space in front.",
+            title: tr("Altar sits against a solid wall"),
+            detail: tr("Good support, with clear space in front."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -470,8 +504,9 @@ export function readFengShui({
           push({
             id: `plant-wealth-${it.uid}`,
             tone: "good",
-            title: `Plant in the wealth corner (${wealth.dir})`,
-            detail: "Wood energy feeds wealth. Huat ah!",
+            title: tr("Plant in the wealth corner ({dir})"),
+            vars: { dir: wealth.dir },
+            detail: tr("Wood energy feeds wealth. Nice!"),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -479,8 +514,8 @@ export function readFengShui({
           push({
             id: `plant-door-${it.uid}`,
             tone: "good",
-            title: "Plant welcomes qi at the main door",
-            detail: "Healthy greenery near the entrance draws good energy in.",
+            title: tr("Plant welcomes qi at the main door"),
+            detail: tr("Healthy greenery near the entrance draws good energy in."),
             floor: floor.id,
             uids: [it.uid],
           });
@@ -507,10 +542,10 @@ export function readFengShui({
           id: `stove-sink-${floor.id}`,
           tone: "watch",
           title: facingEachOther
-            ? "Stove faces the sink"
-            : "Stove sits right next to the sink",
+            ? tr("Stove faces the sink")
+            : tr("Stove sits right next to the sink"),
           detail:
-            "Fire and water clash, which is said to stir up quarrels at home.",
+            tr("Fire and water clash, which is said to stir up quarrels at home."),
           floor: floor.id,
           uids: [stove.uid, sink.uid],
         });
@@ -518,8 +553,8 @@ export function readFengShui({
         push({
           id: `stove-sink-ok-${floor.id}`,
           tone: "good",
-          title: "Stove and sink keep their distance",
-          detail: "Fire and water aren't fighting in this kitchen.",
+          title: tr("Stove and sink keep their distance"),
+          detail: tr("Fire and water aren't fighting in this kitchen."),
           floor: floor.id,
           uids: [stove.uid],
         });
@@ -538,9 +573,9 @@ export function readFengShui({
       push({
         id: `bath-centre-${floor.id}`,
         tone: "watch",
-        title: "A bathroom sits in the centre of the floor",
+        title: tr("A bathroom sits in the centre of the floor"),
         detail:
-          "The centre is the heart of the home, so plumbing here is a classic worry. It's built in, so keep it clean and the door shut.",
+          tr("The centre is the heart of the home, so plumbing here is a classic worry. It's built in, so keep it clean and the door shut."),
         floor: floor.id,
         uids: [],
       });
@@ -554,10 +589,11 @@ export function readFengShui({
     push({
       id: "living-yang",
       tone: "watch",
-      title: `About ${livingSunHours} hours of direct sun on the living room`,
+      title: tr("About {hours} hours of direct sun on the living room"),
+      vars: { hours: String(livingSunHours) },
       detail:
-        "Too much yang: hot, glary and restless. Your aircon bill will feel it too.",
-      fix: "Close the living room curtains in the afternoon, or pick a different facing.",
+        tr("Too much yang: hot, glary and restless. Your aircon bill will feel it too."),
+      fix: tr("Close the living room curtains in the afternoon, or pick a different facing."),
       floor: livingFloor.id,
       uids: [],
     });
@@ -580,9 +616,9 @@ export function ongScore(notes: Note[]) {
 }
 
 export function ongVerdict(score: number) {
-  if (score >= 85) return { word: "Huat ah!", tone: "pandan" as const };
-  if (score >= 60) return { word: "Okay lah", tone: "kaya" as const };
-  return { word: "Aiyo", tone: "raya" as const };
+  if (score >= 85) return { word: tr("Great"), tone: "pandan" as const };
+  if (score >= 60) return { word: tr("Okay"), tone: "kaya" as const };
+  return { word: tr("Needs work"), tone: "raya" as const };
 }
 
 /* ------------------------------------------------------------------ bagua */

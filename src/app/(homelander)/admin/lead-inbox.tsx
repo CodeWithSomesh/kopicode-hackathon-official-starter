@@ -3,6 +3,7 @@
 import { PixPanel, PixTag } from "@/components/homelander/pixel";
 import { rm, townshipById, unitById } from "@/lib/homelander/data";
 import { sampleLeads } from "@/lib/homelander/demand";
+import { useT } from "@/lib/homelander/i18n/client";
 import { useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,9 @@ const when = new Intl.DateTimeFormat("en-MY", {
 
 /** Sample leads plus any viewing requests booked from /homelander in this browser (shown first, marked Live). */
 export function LeadInbox() {
+  const t = useT();
   const { leads: live } = useHomeLander();
+  const status = { New: t("New"), Contacted: t("Contacted"), "Viewing booked": t("Viewing booked") };
   const rows = [
     ...live.map((l) => ({ ...l, status: "New" as const, live: true })),
     ...sampleLeads.map((l) => ({ ...l, live: false })),
@@ -26,21 +29,21 @@ export function LeadInbox() {
       <section aria-labelledby="leads-title" className="grid gap-3 p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <h2 id="leads-title" className="font-pixel text-xl font-bold">
-            Pre-qualified viewing requests
+            {t("Pre-qualified viewing requests")}
           </h2>
           <p className="text-xs text-ink-soft tabular-nums">
-            {live.length + sampleLeads.length} total · newest first
+            {t("{n} total · newest first", { n: live.length + sampleLeads.length })}
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-ink-soft">
-                <th className="py-2 pr-3 font-normal">Buyer</th>
-                <th className="py-2 pr-3 font-normal">HomeLander&apos;s pick</th>
-                <th className="py-2 pr-3 text-right font-normal">Bank limit</th>
-                <th className="py-2 pr-3 font-normal">Why this home</th>
-                <th className="py-2 font-normal">Status</th>
+                <th className="py-2 pr-3 font-normal">{t("Buyer")}</th>
+                <th className="py-2 pr-3 font-normal">{t("HomeLander's pick")}</th>
+                <th className="py-2 pr-3 text-right font-normal">{t("Bank limit")}</th>
+                <th className="py-2 pr-3 font-normal">{t("Why this home")}</th>
+                <th className="py-2 font-normal">{t("Status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -72,11 +75,11 @@ export function LeadInbox() {
                       {l.maxPriceRM ? (
                         rm(l.maxPriceRM)
                       ) : (
-                        <span className="text-ink-soft">Not scanned</span>
+                        <span className="text-ink-soft">{t("Not scanned")}</span>
                       )}
                     </td>
                     <td className="max-w-[22rem] py-2.5 pr-3 text-ink-soft">
-                      {l.reasons.slice(0, 2).join(" · ") || "—"}
+                      {l.reasons.slice(0, 2).map((x) => t(x)).join(" · ") || "—"}
                     </td>
                     <td className="py-2.5">
                       <PixTag
@@ -90,7 +93,7 @@ export function LeadInbox() {
                                 : "white"
                         }
                       >
-                        {l.live ? "Live · New" : l.status}
+                        {l.live ? t("Live · New") : status[l.status]}
                       </PixTag>
                     </td>
                   </tr>

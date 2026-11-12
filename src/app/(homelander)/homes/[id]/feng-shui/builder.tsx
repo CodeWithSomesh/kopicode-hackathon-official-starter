@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
+import { useLang, useT } from "@/lib/homelander/i18n/client";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
 import { CommandConsole, type LogEntry } from "./command-console";
 import {
   describeItems,
+  describeProblem,
   ROOM_PHRASE,
   runText,
   unreadable,
@@ -15,13 +17,12 @@ import {
   type Reply,
   type World,
 } from "./commands";
-import { ongScore, readFengShui, type Note } from "./fengshui";
+import { noteText, ongScore, readFengShui, type Note } from "./fengshui";
 import { FengShuiPanel } from "./fengshui-panel";
 import { FurniturePanel } from "./furniture-panel";
 import { SunPanel } from "./sun-panel";
 import { fixOne, type FixState } from "./autofix";
 import {
-  describe,
   moveBy,
   moveTo,
   place,
@@ -33,8 +34,8 @@ import dynamic from "next/dynamic";
 import { PlanCanvas } from "./plan-canvas";
 import { planBounds, plans, type Plan } from "./plans";
 import {
+  FACINGS,
   MONTHS,
-  bearingLabel,
   dayStrip,
   heatOf,
   sunAt,
@@ -47,28 +48,38 @@ import { clearLayout, loadLayout, saveLayout } from "./saved";
 import { speak, type SpeechLang } from "./voice";
 import { MicButton, SpeechToolbar } from "./voice-controls";
 
+function Loading3D() {
+  const t = useT();
+  return <>{t("Loading 3D view…")}</>;
+}
+
 /** three.js only loads when someone opens the 3D view. */
 const Plan3D = dynamic(() => import("./plan-3d").then((m) => m.Plan3D), {
   ssr: false,
   loading: () => (
     <div className="grid h-[62vh] min-h-[420px] w-full place-items-center text-sm text-ink-soft lg:h-[80vh]">
-      Loading 3D view…
+      <Loading3D />
     </div>
   ),
 });
 
 type Props = { unitId: string; planId: Plan["id"]; lat: number; lng: number };
 
+/** i18n marker: npm run i18n:check sees tr(text) literals; the render site calls t(word). */
+const tr = (s: string) => s;
+
 const heatTag: Record<
   Heat["level"],
   { tone: "pandan" | "kaya" | "raya"; word: string }
 > = {
-  cool: { tone: "pandan", word: "Cool" },
-  warm: { tone: "kaya", word: "Warm" },
-  hot: { tone: "raya", word: "Hot" },
+  cool: { tone: "pandan", word: tr("Cool") },
+  warm: { tone: "kaya", word: tr("Warm") },
+  hot: { tone: "raya", word: tr("Hot") },
 };
 
 export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
+  const t = useT();
+  const siteLang = useLang();
   const plan = plans[planId];
   const bounds = useMemo(() => planBounds(plan), [plan]);
 
@@ -82,7 +93,10 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [view, setView] = useState<"plan" | "3d">("plan");
-  const [lang, setLang] = useState<Lang>("mg");
+  // The console's reply language starts from the EN | Manglish switch; its own toggle overrides until the switch changes.
+  const [langPick, setLangPick] = useState<{ site: typeof siteLang; lang: Lang } | null>(null);
+  const lang: Lang = langPick?.site === siteLang ? langPick.lang : siteLang === "mglish" ? "mg" : "en";
+  const setLang = (l: Lang) => setLangPick({ site: siteLang, lang: l });
   const [log, setLog] = useState<LogEntry[]>([]);
   const [speakOn, setSpeakOn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -119,7 +133,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const apply = (r: Result, quiet = false) => {
     if (r.ok) setItems(r.items);
     else if (!quiet)
-      toast.error(describe(r.problem, roomLabel), { id: "feng-shui-layout" });
+      toast.error(describeProblem(r.problem)[lang], { id: "feng-shui-layout" });
     return r.ok;
   };
 
@@ -145,10 +159,10 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const turn = () => selected && apply(rotate(selected, floor, items));
   const drop = () => {
     if (!selected) return;
-    const label = selectedItem ? CATALOG[selectedItem.kind].label : "Piece";
+    const label = t(selectedItem ? CATALOG[selectedItem.kind].label : "Piece");
     if (apply(remove(selected, items))) {
       setSelected(null);
-      toast(`${label} removed.`, { id: "feng-shui-layout" });
+      toast(t("{piece} removed.", { piece: label }), { id: "feng-shui-layout" });
     }
   };
   const add = (kind: Kind, roomId?: string) => {
@@ -156,7 +170,10 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     if (apply(r) && r.ok) {
       setSelected(r.item.uid);
       toast.success(
-        `${CATALOG[kind].label} added to the ${roomLabel(r.item.room).toLowerCase()}.`,
+        t("{piece} added to the {room}.", {
+          piece: t(CATALOG[kind].label),
+          room: t(roomLabel(r.item.room)).toLowerCase(),
+        }),
         {
           id: "feng-shui-layout",
         },
@@ -164,7 +181,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     }
   };
   const reset = () => {
-    if (!window.confirm("Put all the furniture back where it started?")) return;
+    if (!window.confirm(t("Put all the furniture back where it started?"))) return;
     clearLayout(unitId);
     setItems(defaultItems(planId));
     setSelected(null);
@@ -487,8 +504,8 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       ctx.notes({ ...world, items: st.items, curtains: st.curtains });
     const r = fixOne(plan, { items, curtains }, evaluate, n);
     if (!r.ok) {
-      addLog({ said: `Fix: ${n.title}`, replies: [{ ok: false, ...r.why }] });
-      toast.error(r.why.en, { id: "feng-shui-layout" });
+      addLog({ said: `${t("Fix")}: ${noteText(n, t, "title")}`, replies: [{ ok: false, ...r.why }] });
+      toast.error(r.why[lang], { id: "feng-shui-layout" });
       return;
     }
     const moved = r.uid
@@ -504,7 +521,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     });
     const s = ongScore(evaluate(r.state));
     addLog({
-      said: `Fix: ${n.title}`,
+      said: `${t("Fix")}: ${noteText(n, t, "title")}`,
       replies: [
         {
           ok: true,
@@ -536,7 +553,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
               <div
                 className="flex flex-wrap gap-2"
                 role="tablist"
-                aria-label="Floor"
+                aria-label={t("Floor")}
               >
                 {plan.floors.map((f, i) => (
                   <PixButton
@@ -550,15 +567,15 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
                       setSelected(null);
                     }}
                   >
-                    {f.label}
+                    {t(f.label)}
                   </PixButton>
                 ))}
               </div>
             ) : null}
-            <div className="ml-auto flex gap-1" role="group" aria-label="View">
+            <div className="ml-auto flex gap-1" role="group" aria-label={t("View")}>
               {(
                 [
-                  ["plan", "Plan"],
+                  ["plan", tr("Plan")],
                   ["3d", "3D"],
                 ] as const
               ).map(([v, label]) => (
@@ -569,7 +586,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
                   aria-pressed={view === v}
                   onClick={() => setView(v)}
                 >
-                  {label}
+                  {t(label)}
                 </PixButton>
               ))}
             </div>
@@ -608,25 +625,25 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
             <Stat
-              label="Time"
-              value={`${timeLabel(time)}, ${MONTHS[month - 1]}`}
+              label={t("Time")}
+              value={`${timeLabel(time)}, ${t(MONTHS[month - 1])}`}
             />
             <Stat
-              label="Sun"
+              label={t("Sun")}
               value={
                 sun.up
-                  ? `${bearingLabel(sun.azimuth)}, ${Math.round(sun.elevation)}°`
-                  : "Below horizon"
+                  ? `${bearingName(sun.azimuth, siteLang)}, ${Math.round(sun.elevation)}°`
+                  : t("Below horizon")
               }
             />
             <Stat
-              label="Living room in sun"
+              label={t("Living room in sun")}
               value={`${Math.round(livingHeat.share * 100)}%`}
             />
             <div className="grid gap-1">
-              <dt className="text-xs text-ink-soft">Feels</dt>
+              <dt className="text-xs text-ink-soft">{t("Feels")}</dt>
               <dd>
-                <PixTag tone={tag.tone}>{tag.word}</PixTag>
+                <PixTag tone={tag.tone}>{t(tag.word)}</PixTag>
               </dd>
             </div>
           </dl>
@@ -636,13 +653,13 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           log={log}
           lang={lang}
           onLang={setLang}
-          onRun={(t) => void runCommand(t)}
+          onRun={(said) => void runCommand(said)}
           busy={busy}
           toolbar={<SpeechToolbar speakOn={speakOn} onSpeakOn={setSpeakOn} />}
           extra={
             <MicButton
               disabled={busy}
-              onHeard={(t, l) => void runCommand(t, l)}
+              onHeard={(said, l) => void runCommand(said, l)}
             />
           }
         />
@@ -688,6 +705,12 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       </div>
     </div>
   );
+}
+
+/** The sun's compass direction in lower case: the Malay word under Manglish. */
+function bearingName(az: number, site: "en" | "mglish") {
+  const f = FACINGS[Math.round(az / 45) % 8];
+  return (site === "mglish" ? f.malay : f.name).toLowerCase();
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

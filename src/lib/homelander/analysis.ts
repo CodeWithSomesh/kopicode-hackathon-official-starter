@@ -19,6 +19,9 @@ import {
 import { nearestByType, schoolTypeLabel, type SchoolType } from "./schools";
 import type { BattleContext } from "./battle-context";
 
+/** i18n marker: npm run i18n:check sees tr(text) literals; the Battle screens call t(text) at render. */
+const tr = (s: string) => s;
+
 /**
  * Head-to-head analysis for Battle. Pure functions: one home + the buyer context in, every
  * figure the comparison table, scores and verdict need out. Every money figure is an
@@ -182,7 +185,7 @@ export function maintenanceOf(unit: Unit): {
     return {
       rm: Math.round(unit.serviceRM),
       source: unit.source === "official" ? "gamuda" : "estimated",
-      note: "Guarded-community fee",
+      note: tr("Guarded-community fee"),
     };
   if (!unit.landed)
     return {
@@ -195,7 +198,7 @@ export function maintenanceOf(unit: Unit): {
   return {
     rm: EST_LANDED_FEE_RM,
     source: "estimated",
-    note: "Est. guard and landscaping fee",
+    note: tr("Est. guard and landscaping fee"),
   };
 }
 
@@ -378,38 +381,38 @@ export type StatKey =
 export const STATS: { key: StatKey; label: string; hint: string }[] = [
   {
     key: "monthly",
-    label: "Monthly",
-    hint: "Money left each month after instalment, maintenance and commute",
+    label: tr("Monthly"),
+    hint: tr("Money left each month after instalment, maintenance and commute"),
   },
   {
     key: "cash",
-    label: "Cash upfront",
-    hint: "Down payment and fees against your savings",
+    label: tr("Cash upfront"),
+    hint: tr("Down payment and fees against your savings"),
   },
   {
     key: "commute",
-    label: "Commute",
-    hint: "Hours a year getting to work (and your partner's)",
+    label: tr("Commute"),
+    hint: tr("Hours a year getting to work (and your partner's)"),
   },
   {
     key: "space",
-    label: "Space",
-    hint: "Bedrooms against what you need, floor area, landed or high-rise",
+    label: tr("Space"),
+    hint: tr("Bedrooms against what you need, floor area, landed or high-rise"),
   },
   {
     key: "family",
-    label: "Family",
-    hint: "Schools within your distance, parents, pets, room to grow",
+    label: tr("Family"),
+    hint: tr("Schools within your distance, parents, pets, room to grow"),
   },
   {
     key: "value",
-    label: "Value",
-    hint: "Price per sq ft against homes of the same type",
+    label: tr("Value"),
+    hint: tr("Price per sq ft against homes of the same type"),
   },
   {
     key: "ready",
-    label: "Ready",
-    hint: "Years until the keys, against what you said is OK",
+    label: tr("Ready"),
+    hint: tr("Years until the keys, against what you said is OK"),
   },
 ];
 
@@ -492,8 +495,8 @@ export const PRESETS: Record<
   { label: string; blurb: string; weights: Weights }
 > = {
   monthly: {
-    label: "Lowest monthly cost",
-    blurb: "What you pay every month counts most, then cash upfront.",
+    label: tr("Lowest monthly cost"),
+    blurb: tr("What you pay every month counts most, then cash upfront."),
     weights: {
       monthly: 10,
       cash: 5,
@@ -505,8 +508,8 @@ export const PRESETS: Record<
     },
   },
   commute: {
-    label: "Shortest commute",
-    blurb: "Hours on the road or train count most.",
+    label: tr("Shortest commute"),
+    blurb: tr("Hours on the road or train count most."),
     weights: {
       monthly: 4,
       cash: 2,
@@ -518,8 +521,8 @@ export const PRESETS: Record<
     },
   },
   family: {
-    label: "Most space / family",
-    blurb: "Bedrooms, floor area and schools count most.",
+    label: tr("Most space / family"),
+    blurb: tr("Bedrooms, floor area and schools count most."),
     weights: {
       monthly: 4,
       cash: 2,
@@ -531,8 +534,8 @@ export const PRESETS: Record<
     },
   },
   value: {
-    label: "Best value",
-    blurb: "Price per sq ft against similar homes counts most.",
+    label: tr("Best value"),
+    blurb: tr("Price per sq ft against similar homes counts most."),
     weights: {
       monthly: 5,
       cash: 4,

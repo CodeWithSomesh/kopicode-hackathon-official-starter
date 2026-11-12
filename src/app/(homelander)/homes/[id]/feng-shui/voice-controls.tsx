@@ -3,6 +3,7 @@
 import { Loader2, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { RecorderError, canRecord, recordUtterance } from "./recorder";
 import {
@@ -13,25 +14,28 @@ import {
   type SpeechLang,
 } from "./voice";
 
+/** i18n marker: npm run i18n:check sees tr(text) literals; the toasts below call t(message). */
+const tr = (s: string) => s;
+
 const RECORDER_ERRORS: Record<RecorderError["code"], string> = {
-  "no-speech": "Didn't hear anything. Tap the mic, then start speaking.",
-  "no-mic": "No microphone found, or another app (Zoom, Meet) is using it.",
+  "no-speech": tr("Didn't hear anything. Tap the mic, then start speaking."),
+  "no-mic": tr("No microphone found, or another app (Zoom, Meet) is using it."),
   blocked:
-    "Microphone is blocked. Allow it from the icon in the address bar, then try again.",
+    tr("Microphone is blocked. Allow it from the icon in the address bar, then try again."),
   unsupported:
-    "This browser can't record audio. Try Chrome, Edge or Safari, or type instead.",
+    tr("This browser can't record audio. Try Chrome, Edge or Safari, or type instead."),
 };
 
 const BROWSER_ERRORS: Record<string, string> = {
-  "no-speech": "Didn't hear anything. Tap the mic, then start speaking.",
+  "no-speech": tr("Didn't hear anything. Tap the mic, then start speaking."),
   "audio-capture":
-    "No microphone found, or another app (Zoom, Meet) is using it.",
+    tr("No microphone found, or another app (Zoom, Meet) is using it."),
   "not-allowed":
-    "Microphone is blocked. Allow it from the icon in the address bar, then try again.",
+    tr("Microphone is blocked. Allow it from the icon in the address bar, then try again."),
   "service-not-allowed":
-    "This browser won't allow speech input here. Try Chrome, or type instead.",
+    tr("This browser won't allow speech input here. Try Chrome, or type instead."),
   network:
-    "The browser's speech service couldn't be reached (blocked network, or Brave / Arc / Opera). Type instead.",
+    tr("The browser's speech service couldn't be reached (blocked network, or Brave / Arc / Opera). Type instead."),
 };
 
 type State = "idle" | "listening" | "thinking";
@@ -48,6 +52,7 @@ export function MicButton({
   disabled?: boolean;
   onHeard: (text: string, lang?: SpeechLang) => void;
 }) {
+  const t = useT();
   const [state, setState] = useState<State>("idle");
   const [level, setLevel] = useState(0);
   const [supported, setSupported] = useState(true);
@@ -72,7 +77,7 @@ export function MicButton({
       const code = err instanceof Error ? err.message : "";
       if (code !== "aborted")
         toast.error(
-          BROWSER_ERRORS[code] ?? `Voice failed (${code}). Type instead.`,
+          t(BROWSER_ERRORS[code] ?? tr("Voice failed. Type instead.")),
           { id: "fs-mic" },
         );
     } finally {
@@ -94,7 +99,7 @@ export function MicButton({
       setState("idle");
       setLevel(0);
       const code = err instanceof RecorderError ? err.code : "no-mic";
-      toast.error(RECORDER_ERRORS[code], { id: "fs-mic" });
+      toast.error(t(RECORDER_ERRORS[code]), { id: "fs-mic" });
       return;
     }
     setLevel(0);
@@ -115,7 +120,7 @@ export function MicButton({
       };
       if (!data.text) {
         toast.error(
-          "Couldn't make out the words. Try again a bit closer to the mic.",
+          t("Couldn't make out the words. Try again a bit closer to the mic."),
           { id: "fs-mic" },
         );
         return;
@@ -127,15 +132,15 @@ export function MicButton({
       if (canListen()) {
         toast(
           signin
-            ? "Log in for multilingual voice. Using the browser's speech for now: one language at a time, tap the mic again."
-            : "Multilingual voice isn't reachable. Using the browser's speech instead: one language at a time, tap the mic again.",
+            ? t("Log in for multilingual voice. Using the browser's speech for now: one language at a time, tap the mic again.")
+            : t("Multilingual voice isn't reachable. Using the browser's speech instead: one language at a time, tap the mic again."),
           { id: "fs-mic", duration: 6000 },
         );
       } else {
         toast.error(
           signin
-            ? "Log in to use voice, or type instead."
-            : "Voice isn't reachable right now. Type instead.",
+            ? t("Log in to use voice, or type instead.")
+            : t("Voice isn't reachable right now. Type instead."),
           {
             id: "fs-mic",
           },
@@ -153,10 +158,10 @@ export function MicButton({
 
   const label =
     state === "listening"
-      ? "Stop and send"
+      ? t("Stop and send")
       : state === "thinking"
-        ? "Working out what you said"
-        : "Speak a command";
+        ? t("Working out what you said")
+        : t("Speak a command");
 
   return (
     <button
@@ -165,7 +170,7 @@ export function MicButton({
       disabled={disabled || !supported || state === "thinking"}
       aria-pressed={state === "listening"}
       aria-label={label}
-      title={supported ? label : "Voice isn't available in this browser"}
+      title={supported ? label : t("Voice isn't available in this browser")}
       className={cn(
         "relative grid size-10 shrink-0 place-items-center overflow-hidden border-2 border-white disabled:opacity-60",
         state === "listening"
@@ -200,10 +205,11 @@ export function SpeechToolbar({
   speakOn: boolean;
   onSpeakOn: (on: boolean) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
       <p className="text-white/80">
-        Tap the mic to speak in English, BM, 中文 or தமிழ்.
+        {t("Tap the mic to speak in English, BM, 中文 or தமிழ்.")}
       </p>
       <button
         type="button"
@@ -222,7 +228,7 @@ export function SpeechToolbar({
         ) : (
           <VolumeX className="size-4" aria-hidden="true" />
         )}
-        Read replies aloud
+        {t("Read replies aloud")}
       </button>
     </div>
   );

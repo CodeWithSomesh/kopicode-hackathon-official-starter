@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { PixPanel } from "@/components/homelander/pixel";
+import { translate } from "@/lib/homelander/i18n/translate";
 import { cn } from "@/lib/utils";
 import type { Lang, Reply } from "./commands";
 
@@ -58,6 +59,8 @@ export function CommandConsole({
   toolbar,
   busy,
 }: Props) {
+  // The console follows its own Reply-in toggle (which starts from the EN | Manglish switch in the header).
+  const t = (en: string) => translate(lang === "mg" ? "mglish" : "en", en);
   const [text, setText] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
@@ -74,13 +77,13 @@ export function CommandConsole({
   return (
     <PixPanel tone="ink" className="grid gap-3 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-pixel text-lg font-bold">Cakap je</h2>
+        <h2 className="font-pixel text-lg font-bold">{t("Talk to it")}</h2>
         <div
           className="flex items-center gap-1 text-xs"
           role="group"
-          aria-label="Reply language"
+          aria-label={t("Reply language")}
         >
-          <span className="mr-1 text-white/70">Reply in</span>
+          <span className="mr-1 text-white/70">{t("Reply in")}</span>
           {(
             [
               ["mg", "Manglish"],
@@ -109,13 +112,11 @@ export function CommandConsole({
         ref={box}
         className="grid max-h-56 min-h-24 content-start gap-2 overflow-y-auto border-2 border-white/30 p-3 text-sm"
         aria-live="polite"
-        aria-label="Conversation"
+        aria-label={t("Conversation")}
       >
         {log.length === 0 ? (
           <p className="text-white/70">
-            {lang === "mg"
-              ? "Taip arahan, atau tekan contoh di bawah."
-              : "Type a command, or tap an example below."}
+            {t("Type a command, or tap an example below.")}
           </p>
         ) : (
           log.map((e) => (
@@ -132,7 +133,7 @@ export function CommandConsole({
               </p>
               {e.heard?.length ? (
                 <p className="pl-4 text-xs text-white/60">
-                  {lang === "mg" ? "Faham sebagai" : "Understood as"}:{" "}
+                  {t("Understood as")}:{" "}
                   {e.heard.join(" · ")}
                 </p>
               ) : null}
@@ -167,7 +168,7 @@ export function CommandConsole({
         }}
       >
         <label htmlFor="fs-cmd" className="sr-only">
-          Command
+          {t("Command")}
         </label>
         <input
           id="fs-cmd"
@@ -175,11 +176,7 @@ export function CommandConsole({
           onChange={(e) => setText(e.target.value)}
           autoComplete="off"
           maxLength={400}
-          placeholder={
-            lang === "mg"
-              ? "alih sofa kiri 1 lepas tu pusing dia"
-              : "move the sofa left 1 m then turn it"
-          }
+          placeholder={t("move the sofa left 1 m then turn it")}
           className="min-w-0 flex-1 border-2 border-white bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-soft/70"
         />
         {extra}
@@ -188,7 +185,7 @@ export function CommandConsole({
           disabled={busy}
           className="border-2 border-white bg-kaya px-4 py-2 text-sm font-bold text-ink disabled:opacity-60"
         >
-          {busy ? "..." : "Jalan"}
+          {busy ? "..." : t("Go")}
         </button>
       </form>
 

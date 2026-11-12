@@ -3,22 +3,25 @@ import Link from "next/link";
 import { PixPanel, PixTag } from "@/components/homelander/pixel";
 import { UnitPhoto } from "@/components/homelander/unit-photo";
 import { rm, townshipById, units } from "@/lib/homelander/data";
+import { getT } from "@/lib/homelander/i18n/server";
 import { planFor, planNoun } from "../homes/[id]/feng-shui/plans";
 
-export const metadata: Metadata = { title: "Feng Shui Builder" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())("Feng Shui Builder") };
+}
 
 /** The Feng Shui tab: pick a home, then open its builder at /homes/<id>/feng-shui. */
-export default function FengShuiPickerPage() {
+export default async function FengShuiPickerPage() {
+  const t = await getT();
   return (
     <div className="grid grid-cols-1 gap-4">
       <header className="grid gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="font-pixel text-3xl font-bold">Feng Shui Builder</h1>
-          <PixTag tone="kaya">For fun, not professional advice</PixTag>
+          <h1 className="font-pixel text-3xl font-bold">{t("Feng Shui Builder")}</h1>
+          <PixTag tone="kaya">{t("For fun, not professional advice")}</PixTag>
         </div>
         <p className="text-ink-soft">
-          Pick a home. Each opens on a sample plan for its type, not the
-          unit&apos;s actual layout.
+          {t("Pick a home. Each opens on a sample plan for its type, not the unit's actual layout.")}
         </p>
       </header>
 
@@ -49,9 +52,9 @@ export default function FengShuiPickerPage() {
                     </span>
                   </div>
                   <p className="mt-auto text-sm text-ink-soft">
-                    {townshipById[u.townshipId]?.name} · {u.beds} bed ·{" "}
+                    {townshipById[u.townshipId]?.name} · {t("{n} bed", { n: u.beds })} ·{" "}
                     {u.builtUpSqft.toLocaleString("en-MY")} sq ft ·{" "}
-                    {planNoun(planFor(u.type))} plan
+                    {t("{plan} plan", { plan: t(planNoun(planFor(u.type))) })}
                   </p>
                 </div>
               </Link>

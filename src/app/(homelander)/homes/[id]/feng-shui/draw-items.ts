@@ -23,6 +23,8 @@ export function drawItems(
   selected: string | null,
   c: ItemColors,
   px: number,
+  /** Furniture name in the buyer's language (the EN | Manglish switch); English by default. */
+  name: (en: string) => string = (en) => en,
 ) {
   for (const it of items) {
     const cat = CATALOG[it.kind];
@@ -86,17 +88,18 @@ export function drawItems(
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillStyle = c.ink;
-    const tw = ctx.measureText(cat.label).width;
+    const label = name(cat.label);
+    const tw = ctx.measureText(label).width;
     const textH = 12 * px;
     // Plants, mirrors and stoves read from their drawing; text would sit on top of it.
     if (it.kind !== "plant" && it.kind !== "mirror" && it.kind !== "stove") {
       if (tw < b.w - 6 * px && textH < b.h)
-        ctx.fillText(cat.label, it.cx, it.cy);
+        ctx.fillText(label, it.cx, it.cy);
       else if (tw < b.h - 6 * px && textH < b.w) {
         ctx.save();
         ctx.translate(it.cx, it.cy);
         ctx.rotate(-Math.PI / 2);
-        ctx.fillText(cat.label, 0, 0);
+        ctx.fillText(label, 0, 0);
         ctx.restore();
       }
     }

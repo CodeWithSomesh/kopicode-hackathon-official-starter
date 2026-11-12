@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd ~/Repos/kopicode-layout/src && sed -i 's/\\\\.map((t) => t\\\\.trim())/.map((x) => x.trim())/' \\\"app/(homelander)/onboarding/profile-panel.tsx\\\" && sed -n 55,80p lib/homelander/profile.ts\"}",
+  "error": "Exit code 1\nsed: 1: \"app/(homelander)/onboar ...\": command a expects \\ followed by text",
+  "timestamp": "2026-11-12T19:47:59.101Z",
+  "retry_count": 1
+}

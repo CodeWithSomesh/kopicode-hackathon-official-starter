@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
+import { useT } from "@/lib/homelander/i18n/client";
 import { eligibility } from "@/lib/homelander/bank";
 import {
   filledKeys,
@@ -33,6 +34,9 @@ import { Typewriter } from "./typewriter";
 import { UnclePortrait } from "./uncle-portrait";
 import { useWhisperMic } from "./use-whisper-mic";
 
+/** i18n marker: lets npm run i18n:check see the literal; the render site calls t(error). */
+const tr = (s: string) => s;
+
 type Msg = { role: "user" | "assistant"; content: string };
 type Turn = {
   reply: string;
@@ -50,6 +54,7 @@ const langs: { id: VoiceLang; label: string; name: string }[] = [
 
 export function OnboardingView() {
   const router = useRouter();
+  const t = useT();
   const { profile } = useHomeLander();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [line, setLine] = useState<{ text: string; n: number } | null>(null);
@@ -88,7 +93,7 @@ export function OnboardingView() {
         const data = (await res.json()) as Turn & { error?: string };
         if (!res.ok || data.error)
           throw new Error(
-            data.error ?? "Uncle lost his train of thought. Try that again.",
+            data.error ?? tr("Uncle lost his train of thought. Try that again."),
           );
 
         homelander.patchProfile(data.patch);
@@ -109,7 +114,7 @@ export function OnboardingView() {
         setError(
           e instanceof Error
             ? e.message
-            : "Uncle lost his train of thought. Try that again.",
+            : tr("Uncle lost his train of thought. Try that again."),
         );
       } finally {
         setBusy(false);
@@ -138,22 +143,22 @@ export function OnboardingView() {
   );
 
   function send(text: string) {
-    const t = text.trim();
-    if (!t || busy) return;
+    const said = text.trim();
+    if (!said || busy) return;
     hush();
     setSpeaking(false);
     setDraft("");
-    const history: Msg[] = [...messages, { role: "user", content: t }];
+    const history: Msg[] = [...messages, { role: "user", content: said }];
     setMessages(history); // show it right away; Uncle's reply is appended when it arrives
     void ask(history);
   }
 
   const mic = useWhisperMic({
-    onText: (t) => send(t),
+    onText: (heard) => send(heard),
     onUnavailable: () => {
       setWhisper(false);
-      toast("Uncle's using the browser's own ears for now.", {
-        description: "Add GROQ_API_KEY to use Whisper.",
+      toast(t("Uncle's using the browser's own ears for now."), {
+        description: t("Add GROQ_API_KEY to use Whisper."),
       });
     },
     onError: (m) => toast.error(m),
@@ -182,9 +187,7 @@ export function OnboardingView() {
     rec.onresult = (e) => send(e.results[0]?.[0]?.transcript ?? "");
     rec.onerror = (e) => {
       if (e.error === "not-allowed")
-        toast.error(
-          "Mic is blocked. Allow it in the browser, or type to Uncle.",
-        );
+        toast.error(t("Mic is blocked. Allow it in the browser, or type to Uncle."));
     };
     rec.onend = () => setListening(false);
     recRef.current = rec;
@@ -216,14 +219,15 @@ export function OnboardingView() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="grid gap-1">
             <h1 className="font-pixel text-3xl leading-tight font-bold sm:text-4xl">
-              Sit with Uncle
+              {t("Sit with Uncle")}
             </h1>
             <p className="text-ink-soft">
-              A few minutes of kopi talk about your life, so we only show homes
-              that fit. Speak or type, in any language.
+              {t(
+                "A few minutes of kopi talk about your life, so we only show homes that fit. Speak or type, in any language.",
+              )}
             </p>
           </div>
-          <PixTag tone="lilac">{whisper ? "Whisper voice" : "Browser voice"}</PixTag>
+          <PixTag tone="lilac">{whisper ? t("Whisper voice") : t("Browser voice")}</PixTag>
         </div>
 
         <PixPanel className="grid gap-4 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:p-5">
@@ -239,19 +243,19 @@ export function OnboardingView() {
                 <Typewriter key={line.n} text={line.text} />
               ) : busy ? (
                 <span className="text-ink-soft">
-                  Uncle is pulling up a chair…
+                  {t("Uncle is pulling up a chair…")}
                 </span>
               ) : null}
             </p>
             {error ? (
               <div className="flex flex-wrap items-center gap-3 rounded-lg bg-raya/10 px-3 py-2 text-sm text-raya-deep">
-                <span className="min-w-0 flex-1">{error}</span>
+                <span className="min-w-0 flex-1">{t(error)}</span>
                 <button
                   type="button"
                   className="font-medium underline"
                   onClick={() => void ask(messages)}
                 >
-                  Try again
+                  {t("Try again")}
                 </button>
               </div>
             ) : null}
@@ -271,23 +275,23 @@ export function OnboardingView() {
             >
               <Sprite art="mic" scale={3} />
               {mic.state === "recording"
-                ? "Recording… tap to send"
+                ? t("Recording… tap to send")
                 : mic.state === "transcribing"
-                  ? "Uncle is listening…"
+                  ? t("Uncle is listening…")
                   : listening
-                    ? "Listening… tap to stop"
+                    ? t("Listening… tap to stop")
                     : busy
-                      ? "Uncle is thinking"
-                      : "Talk to Uncle"}
+                      ? t("Uncle is thinking")
+                      : t("Talk to Uncle")}
             </PixButton>
             {whisper ? (
               <p className="text-sm text-ink-soft">
-                Speak any mix of English, BM, 中文 or தமிழ். Uncle follows.
+                {t("Speak any mix of English, BM, 中文 or தமிழ். Uncle follows.")}
               </p>
             ) : (
               <div
                 role="radiogroup"
-                aria-label="Language you'll speak"
+                aria-label={t("Language you'll speak")}
                 className="flex gap-1.5"
               >
                 {langs.map((l) => (
@@ -319,13 +323,12 @@ export function OnboardingView() {
               className="ml-auto flex items-center gap-1.5 text-sm text-ink-soft underline-offset-4 hover:underline"
             >
               <Sprite art="speaker" scale={2} />
-              {soundOn ? "Sound on" : "Sound off"}
+              {soundOn ? t("Sound on") : t("Sound off")}
             </button>
           </div>
           {whisper || canListen ? null : (
             <p className="text-sm text-ink-soft">
-              This browser can&apos;t listen. Type to Uncle instead; Chrome or
-              Edge can listen.
+              {t("This browser can't listen. Type to Uncle instead; Chrome or Edge can listen.")}
             </p>
           )}
           <form
@@ -336,13 +339,13 @@ export function OnboardingView() {
             }}
           >
             <label htmlFor="say" className="sr-only">
-              Type to Uncle
+              {t("Type to Uncle")}
             </label>
             <input
               id="say"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Or type here, e.g. My wife and I, planning a kid next year"
+              placeholder={t("Or type here, e.g. My wife and I, planning a kid next year")}
               className="pix-frame pix-flat h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-ink-soft/60 focus-visible:outline-none"
             />
             <PixButton
@@ -350,14 +353,14 @@ export function OnboardingView() {
               tone="ink"
               disabled={busy || !draft.trim()}
             >
-              Send
+              {t("Send")}
             </PixButton>
           </form>
         </PixPanel>
 
         {messages.length ? (
           <PixPanel className="grid gap-2 p-4 sm:p-5">
-            <h2 className="font-pixel text-lg font-bold">Conversation</h2>
+            <h2 className="font-pixel text-lg font-bold">{t("Conversation")}</h2>
             <ol
               ref={logRef}
               className="grid max-h-72 gap-2 overflow-y-auto text-sm"

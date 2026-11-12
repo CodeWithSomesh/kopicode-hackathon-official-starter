@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
+import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
+import { FurniturePanel } from "./furniture-panel";
+import { describe, moveBy, moveTo, place, remove, rotate, type Result } from "./layout-ops";
 import { PlanCanvas } from "./plan-canvas";
 import { planBounds, plans, type Plan } from "./plans";
 import {
@@ -17,8 +21,9 @@ import {
   timeLabel,
   type Heat,
 } from "./sun";
+import { clearLayout, loadLayout, saveLayout } from "./saved";
 
-type Props = { planId: Plan["id"]; lat: number; lng: number };
+type Props = { unitId: string; planId: Plan["id"]; lat: number; lng: number };
 
 const heatTag: Record<Heat["level"], { tone: "pandan" | "kaya" | "raya"; word: string }> = {
   cool: { tone: "pandan", word: "Cool" },
@@ -26,7 +31,7 @@ const heatTag: Record<Heat["level"], { tone: "pandan" | "kaya" | "raya"; word: s
   hot: { tone: "raya", word: "Hot" },
 };
 
-export function FengShuiBuilder({ planId, lat, lng }: Props) {
+export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const plan = plans[planId];
   const bounds = useMemo(() => planBounds(plan), [plan]);
 
@@ -36,8 +41,107 @@ export function FengShuiBuilder({ planId, lat, lng }: Props) {
   const [time, setTime] = useState(17);
   const [month, setMonth] = useState(6);
   const [curtains, setCurtains] = useState<ReadonlySet<string>>(new Set());
+  const [items, setItems] = useState<Item[]>(() => defaultItems(planId));
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  // The server renders the default layout; the buyer's saved one loads after hydration.
+  useEffect(() => {
+    const saved = loadLayout(unitId, plan);
+    /* eslint-disable react-hooks/set-state-in-effect -- one-off sync from localStorage after mount */
+    if (saved) {
+      setFacing(saved.facing);
+      setTime(saved.time);
+      setMonth(saved.month);
+      setCurtains(new Set(saved.curtains));
+      setItems(saved.items);
+    }
+    setHydrated(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [unitId, plan]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    saveLayout(unitId, { facing, time, month, curtains: [...curtains], items });
+  }, [hydrated, unitId, facing, time, month, curtains, items]);
 
   const floor = plan.floors[floorIdx];
+  const floorItems = items.filter((i) => i.floor === floor.id);
+  const selectedItem = floorItems.find((i) => i.uid === selected) ?? null;
+  const roomLabel = (id: string) => floor.rooms.find((r) => r.id === id)?.label ?? id;
+
+  /** Apply a layout result; on failure say why, unless `quiet` (dragging into a wall). */
+  const apply = (r: Result, quiet = false) => {
+    if (r.ok) setItems(r.items);
+    else if (!quiet) toast.error(describe(r.problem, roomLabel), { id: "feng-shui-layout" });
+    return r.ok;
+  };
+
+  const dragTo = (uid: string, cx: number, cy: number) => {
+    const it = items.find((i) => i.uid === uid);
+    if (!it) return;
+    // Slide along whatever is in the way instead of sticking: try both axes, then each alone.
+    for (const [x, y] of [
+      [cx, cy],
+      [cx, it.cy],
+      [it.cx, cy],
+    ]) {
+      const r = moveTo(uid, x, y, floor, items);
+      if (r.ok) {
+        setItems(r.items);
+        return;
+      }
+    }
+  };
+
+  const nudge = (dx: number, dy: number) => selected && apply(moveBy(selected, dx, dy, floor, items));
+  const turn = () => selected && apply(rotate(selected, floor, items));
+  const drop = () => {
+    if (!selected) return;
+    const label = selectedItem ? CATALOG[selectedItem.kind].label : "Piece";
+    if (apply(remove(selected, items))) {
+      setSelected(null);
+      toast(`${label} removed.`, { id: "feng-shui-layout" });
+    }
+  };
+  const add = (kind: Kind, roomId?: string) => {
+    const r = place(kind, floor, items, roomId);
+    if (apply(r) && r.ok) {
+      setSelected(r.item.uid);
+      toast.success(`${CATALOG[kind].label} added to the ${roomLabel(r.item.room).toLowerCase()}.`, {
+        id: "feng-shui-layout",
+      });
+    }
+  };
+  const reset = () => {
+    if (!window.confirm("Put all the furniture back where it started?")) return;
+    clearLayout(unitId);
+    setItems(defaultItems(planId));
+    setSelected(null);
+  };
+
+  const onPlanKey = (e: KeyboardEvent<HTMLCanvasElement>) => {
+    if (!selected) return;
+    const step = e.shiftKey ? 0.5 : 0.1;
+    const moves: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    };
+    if (moves[e.key]) {
+      e.preventDefault();
+      nudge(...moves[e.key]);
+    } else if (e.key === "r" || e.key === "R") {
+      e.preventDefault();
+      turn();
+    } else if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      drop();
+    } else if (e.key === "Escape") {
+      setSelected(null);
+    }
+  };
   const livingFloor = plan.floors.find((f) => f.rooms.some((r) => r.kind === "living")) ?? plan.floors[0];
   const living = livingFloor.rooms.find((r) => r.kind === "living")!;
 
@@ -86,7 +190,10 @@ export function FengShuiBuilder({ planId, lat, lng }: Props) {
                 role="tab"
                 aria-selected={i === floorIdx}
                 tone={i === floorIdx ? "ink" : "white"}
-                onClick={() => setFloorIdx(i)}
+                onClick={() => {
+                  setFloorIdx(i);
+                  setSelected(null);
+                }}
               >
                 {f.label}
               </PixButton>
@@ -101,7 +208,12 @@ export function FengShuiBuilder({ planId, lat, lng }: Props) {
           patches={patches}
           sun={sun}
           facing={facing}
-          className="h-[58vh] min-h-[380px] w-full lg:h-[68vh]"
+          items={floorItems}
+          selected={selected}
+          onSelect={setSelected}
+          onDrag={dragTo}
+          onKeyDown={onPlanKey}
+          className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
         />
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
@@ -183,6 +295,18 @@ export function FengShuiBuilder({ planId, lat, lng }: Props) {
             </div>
           </div>
         </PixPanel>
+
+        <FurniturePanel
+          floor={floor}
+          items={floorItems}
+          selected={selectedItem}
+          onSelect={setSelected}
+          onAdd={add}
+          onNudge={nudge}
+          onRotate={turn}
+          onRemove={drop}
+          onReset={reset}
+        />
 
         <PixPanel className="grid gap-3 p-4">
           <div className="flex items-baseline justify-between gap-2">

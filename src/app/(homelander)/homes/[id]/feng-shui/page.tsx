@@ -38,7 +38,7 @@ export default async function FengShuiPage({ params }: PageProps<"/homes/[id]/fe
           this unit&apos;s actual plan.
         </p>
       </header>
-      <FengShuiBuilder planId={plan.id} lat={township?.pos.lat ?? 3.14} lng={township?.pos.lng ?? 101.69} />
+      <FengShuiBuilder unitId={unit.id} planId={plan.id} lat={township?.pos.lat ?? 3.14} lng={township?.pos.lng ?? 101.69} />
     </div>
   );
 }

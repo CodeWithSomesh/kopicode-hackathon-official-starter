@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
+import { drawItems } from "./draw-items";
+import { CATALOG, type Item } from "./furniture";
+import { hitTest } from "./layout-ops";
 import type { Floor, Pt } from "./plans";
 import type { Patch, Sun } from "./sun";
 
@@ -12,6 +15,13 @@ type Props = {
   patches: Patch[];
   sun: Sun;
   facing: number;
+  /** Furniture on this floor. */
+  items: Item[];
+  selected: string | null;
+  onSelect: (uid: string | null) => void;
+  /** Asks to move a piece's centre; the parent decides whether it fits. */
+  onDrag: (uid: string, cx: number, cy: number) => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLCanvasElement>) => void;
   className?: string;
 };
 
@@ -32,15 +42,59 @@ function palette(el: Element) {
     sunDeep: v("--color-kaya-deep", "#a97a0c"),
     glass: v("--color-sky-deep", "#3f8fb5"),
     door: v("--color-raya", "#d8452f"),
+    furniture: v("--color-lilac", "#d6ebf3"),
+    plant: v("--color-pandan", "#1f9d6b"),
+    select: v("--color-pandan-deep", "#12704b"),
     // Canvas can't resolve CSS variables in a font string, so take the computed family.
     family: css.fontFamily || "system-ui, sans-serif",
   };
 }
 
-export function PlanCanvas({ floor, bounds, patches, sun, facing, className }: Props) {
+export function PlanCanvas({
+  floor,
+  bounds,
+  patches,
+  sun,
+  facing,
+  items,
+  selected,
+  onSelect,
+  onDrag,
+  onKeyDown,
+  className,
+}: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  /** CSS-pixel to plan-metre mapping from the last draw, for pointer hit tests. */
+  const view = useRef({ scale: 1, offX: 0, offY: 0 });
+  const drag = useRef<{ uid: string; dx: number; dy: number } | null>(null);
+  const latest = useRef({ items, floor });
+  useEffect(() => {
+    latest.current = { items, floor };
+  });
+
+  const toWorld = (clientX: number, clientY: number) => {
+    const r = canvas.current!.getBoundingClientRect();
+    const { scale, offX, offY } = view.current;
+    return [(clientX - r.left - offX) / scale - PAD, (clientY - r.top - offY) / scale - PAD] as const;
+  };
+
+  // Touching a piece of furniture drags it; touching anywhere else still scrolls the page.
+  // Only a non-passive native listener can cancel the scroll, so this can't be a React prop.
+  useEffect(() => {
+    const cv = canvas.current;
+    if (!cv) return;
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      const [x, y] = toWorld(t.clientX, t.clientY);
+      const hit = hitTest(latest.current.items, latest.current.floor.id, x, y);
+      if (hit && !CATALOG[hit.kind].fixed) e.preventDefault();
+    };
+    cv.addEventListener("touchstart", onTouchStart, { passive: false });
+    return () => cv.removeEventListener("touchstart", onTouchStart);
+  }, []);
 
   useEffect(() => {
     const el = wrap.current;
@@ -67,6 +121,7 @@ export function PlanCanvas({ floor, bounds, patches, sun, facing, className }: P
     const scale = Math.min(usableW / worldW, size.h / worldH);
     const offX = (usableW - worldW * scale) / 2;
     const offY = (size.h - worldH * scale) / 2;
+    view.current = { scale, offX, offY };
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.w, size.h);
@@ -126,6 +181,8 @@ export function PlanCanvas({ floor, bounds, patches, sun, facing, className }: P
       ctx.restore();
     }
 
+    drawItems(ctx, items, selected, c, 1 / scale);
+
     // Walls.
     for (const r of floor.rooms) {
       ctx.strokeStyle = r.kind === "outdoor" ? c.soft : c.ink;
@@ -159,13 +216,27 @@ export function PlanCanvas({ floor, bounds, patches, sun, facing, className }: P
     ctx.textBaseline = "top";
     for (const r of floor.rooms) {
       ctx.font = font(11, 600);
-      if (ctx.measureText(r.label).width > r.w - 0.2) continue;
+      const nameW = ctx.measureText(r.label).width;
+      if (nameW > r.w - 0.2) continue;
+      const area = r.kind !== "outdoor" && r.kind !== "stairs" && r.h > 1.6 ? `${(r.w * r.h).toFixed(1)} m²` : "";
+      ctx.font = font(10);
+      const areaW = area ? ctx.measureText(area).width : 0;
+      // A light plate behind the label keeps it readable when furniture sits in the corner.
+      if (r.kind !== "outdoor") {
+        const pad = 2 * px;
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = c.surface;
+        ctx.fillRect(r.x + 0.15 - pad, r.y + 0.15 - pad, Math.max(nameW, areaW) + pad * 2, (area ? 27 : 13) * px + pad * 2);
+        ctx.globalAlpha = 1;
+      }
+      ctx.font = font(11, 600);
       ctx.fillStyle = r.kind === "outdoor" ? c.soft : c.ink;
       ctx.fillText(r.label, r.x + 0.15, r.y + 0.15);
-      ctx.font = font(10);
-      ctx.fillStyle = c.soft;
-      if (r.kind !== "outdoor" && r.kind !== "stairs" && r.h > 1.6)
-        ctx.fillText(`${(r.w * r.h).toFixed(1)} m²`, r.x + 0.15, r.y + 0.15 + 15 * px);
+      if (area) {
+        ctx.font = font(10);
+        ctx.fillStyle = c.soft;
+        ctx.fillText(area, r.x + 0.15, r.y + 0.15 + 15 * px);
+      }
     }
     const main = floor.doors.find((d) => d.kind === "main");
     if (main) {
@@ -246,16 +317,39 @@ export function PlanCanvas({ floor, bounds, patches, sun, facing, className }: P
       ctx.fill();
       ctx.stroke();
     }
-  }, [size, floor, bounds, patches, sun, facing]);
+  }, [size, floor, bounds, patches, sun, facing, items, selected]);
 
   return (
     <div ref={wrap} className={cn("relative", className)}>
       {/* Absolutely placed so the canvas's pixel size can never feed back into the layout. */}
       <canvas
         ref={canvas}
-        className="absolute inset-0 block h-full w-full"
-        role="img"
-        aria-label={`Floor plan, ${floor.label}, with sunlight on the floor`}
+        tabIndex={0}
+        className="absolute inset-0 block h-full w-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pandan-deep"
+        role="application"
+        aria-roledescription="floor plan"
+        aria-label={`Floor plan, ${floor.label}. Tap a piece of furniture to select it, then drag it or use the arrow keys. R turns it, Delete removes it.`}
+        onKeyDown={onKeyDown}
+        onPointerDown={(e) => {
+          const [x, y] = toWorld(e.clientX, e.clientY);
+          const hit = hitTest(items, floor.id, x, y);
+          onSelect(hit?.uid ?? null);
+          if (hit && !CATALOG[hit.kind].fixed) {
+            drag.current = { uid: hit.uid, dx: hit.cx - x, dy: hit.cy - y };
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }
+        }}
+        onPointerMove={(e) => {
+          const [x, y] = toWorld(e.clientX, e.clientY);
+          if (drag.current) {
+            onDrag(drag.current.uid, x + drag.current.dx, y + drag.current.dy);
+            return;
+          }
+          const hit = hitTest(items, floor.id, x, y);
+          e.currentTarget.style.cursor = hit ? (CATALOG[hit.kind].fixed ? "not-allowed" : "grab") : "default";
+        }}
+        onPointerUp={() => (drag.current = null)}
+        onPointerCancel={() => (drag.current = null)}
       />
     </div>
   );

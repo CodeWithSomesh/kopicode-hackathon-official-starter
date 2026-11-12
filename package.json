@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "check:geo": "node src/lib/first-key/geo.ts",
     "format": "prettier --write .",
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "i18n:sweep": "node scripts/i18n-sweep.mjs",
     "check": "npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { setMapDusk, setMapNight } from "@/components/first-key/use-map-colors";
+import { useT } from "@/lib/homelander/i18n/client";
 import { setTheme, themes, useHomeLanderTheme } from "@/lib/homelander/theme";
+import { DARK_THEMES } from "@/lib/homelander/theme-config";
 import { cn } from "@/lib/utils";
 import { PixPanel } from "./pixel";
 
@@ -29,7 +32,8 @@ function Swatches({
   );
 }
 
-const groups = [...new Set(themes.map((t) => t.group))];
+// Kopitiam (Teh Susu, Kopi O) first.
+const groups = [...new Set(themes.map((t) => t.group))].sort((a, b) => Number(b === "Kopitiam") - Number(a === "Kopitiam"));
 
 /** Lets the team flip between design themes on the real screens. */
 export function ThemeSwitcher({
@@ -38,6 +42,7 @@ export function ThemeSwitcher({
   align?: "left" | "right";
 }) {
   const current = useHomeLanderTheme();
+  const tr = useT();
   const active = themes.find((t) => t.id === current) ?? themes[0];
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -62,12 +67,16 @@ export function ThemeSwitcher({
         type="button"
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={`Design theme: ${active.name}. Change theme`}
+        aria-label={tr("Design theme: {name}. Change theme", { name: active.name })}
         onClick={() => setOpen((o) => !o)}
         className="block"
       >
-        <PixPanel flat className="flex h-8 items-center gap-2 px-2.5">
-          <Swatches colors={active.swatches} />
+        <PixPanel flat className="flex h-8 items-center gap-2 px-2.5 max-sm:px-2">
+          <span className="max-sm:hidden">
+            <Swatches colors={active.swatches} />
+          </span>
+          {/* Phones have no room for four swatches: one dot in the theme's accent. */}
+          <span aria-hidden className="size-4 rounded-full ring-2 ring-white sm:hidden" style={{ background: active.swatches[2] }} />
           <span className="hidden font-pixel text-sm leading-none sm:inline">
             {active.name}
           </span>
@@ -77,7 +86,7 @@ export function ThemeSwitcher({
       {open ? (
         <div
           role="dialog"
-          aria-label="Choose a design theme"
+          aria-label={tr("Choose a design theme")}
           className={cn(
             "z-50 max-sm:fixed max-sm:inset-x-4 max-sm:top-16 sm:absolute sm:top-full sm:mt-3 sm:w-[360px]",
             align === "right" ? "sm:right-0" : "sm:left-0",
@@ -85,7 +94,7 @@ export function ThemeSwitcher({
         >
           <PixPanel className="grid max-h-[min(640px,calc(100svh-7rem))] gap-1 overflow-y-auto p-2">
             <p className="px-2 pt-1.5 pb-1 text-xs text-ink-soft">
-              Design themes for the team to compare. Same screens, same data.
+              {tr("Pick a look. Same screens, same data.")}
             </p>
             {groups.map((g) => (
               <div key={g} className="grid gap-1">
@@ -103,6 +112,9 @@ export function ThemeSwitcher({
                         aria-pressed={on}
                         onClick={() => {
                           setTheme(t.id);
+                          // The map follows the theme: dark themes (Kopi O, Night Market) open it at night. Its own button overrides.
+                          setMapNight(DARK_THEMES.includes(t.id));
+                          setMapDusk(false);
                           setOpen(false);
                         }}
                         className={cn(
@@ -118,7 +130,7 @@ export function ThemeSwitcher({
                             {t.name}
                             {on ? (
                               <span className="text-xs font-normal text-ink-soft">
-                                Current
+                                {tr("Current")}
                               </span>
                             ) : null}
                           </span>

@@ -26,6 +26,7 @@ import { RtcRole, RtcTokenBuilder } from "agora-token";
 
 const API = "https://api.agora.io/api/conversational-ai-agent/v2/projects";
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 
 /** Fixed uid for Mochi in every channel; the buyer gets a random one. */
 export const AGENT_UID = 8888;
@@ -67,10 +68,15 @@ function read() {
     appCertificate: e.AGORA_APP_CERTIFICATE ?? "",
     customerId: e.AGORA_CUSTOMER_ID ?? "",
     customerSecret: e.AGORA_CUSTOMER_SECRET ?? "",
-    // LLM: any OpenAI-compatible chat completions URL; Groq by default, reusing GROQ_API_KEY.
-    llmUrl: e.AGORA_LLM_URL || GROQ_CHAT_URL,
-    llmApiKey: e.AGORA_LLM_API_KEY || e.GROQ_API_KEY || "",
-    llmModel: e.AGORA_LLM_MODEL || "openai/gpt-oss-120b",
+    // LLM: Agora's own hosted OpenAI model by default (no key, no Groq free-tier daily cap, which
+    // ran out mid-demo and made every reply fail). AGORA_LLM_VENDOR=groq uses Groq with GROQ_API_KEY;
+    // AGORA_LLM_URL + AGORA_LLM_API_KEY use any other OpenAI-compatible endpoint.
+    llmManaged: !e.AGORA_LLM_URL && e.AGORA_LLM_VENDOR !== "groq",
+    llmUrl: e.AGORA_LLM_URL || (e.AGORA_LLM_VENDOR === "groq" ? GROQ_CHAT_URL : OPENAI_CHAT_URL),
+    llmApiKey: e.AGORA_LLM_API_KEY || (e.AGORA_LLM_VENDOR === "groq" ? (e.GROQ_API_KEY ?? "") : ""),
+    llmModel:
+      e.AGORA_LLM_MODEL ||
+      (e.AGORA_LLM_URL || e.AGORA_LLM_VENDOR === "groq" ? "openai/gpt-oss-120b" : "gpt-4.1-mini"),
     asrVendor,
     asrLanguage: e.AGORA_ASR_LANGUAGE || (asrVendor === "speechmatics" ? "cmn_en_ms_ta" : asrVendor === "microsoft" ? "ms-MY" : "en-US"),
     speechmaticsKey: e.SPEECHMATICS_API_KEY ?? "",
@@ -97,7 +103,7 @@ function read() {
 /** True when every value the chosen ASR/TTS/LLM needs is present. Says nothing about which is missing. */
 export function agoraConfigured() {
   const c = read();
-  const base = [c.appId, c.appCertificate, c.customerId, c.customerSecret, c.llmUrl, c.llmApiKey].every(Boolean);
+  const base = [c.appId, c.appCertificate, c.customerId, c.customerSecret, c.llmUrl].every(Boolean) && (c.llmManaged || Boolean(c.llmApiKey));
   const asr = c.asrVendor === "speechmatics" ? Boolean(c.speechmaticsKey) : c.asrVendor === "microsoft" ? Boolean(c.azureKey) : true;
   const tts =
     c.ttsVendor === "elevenlabs"
@@ -273,6 +279,22 @@ function llmParams() {
 
 export type JoinInput = { channel: string; userUid: number; systemPrompt: string; greeting: string; lang: CallLang };
 
+/** What Mochi says when a reply fails, in the call's language (it used to be English on every call). */
+const FAILURE: Record<CallLang, string> = {
+  en: "Oops, Mochi missed that. Could you say it once more?",
+  ms: "Maaf, Mochi terlepas tadi. Boleh ulang sekali lagi?",
+  zh: "哎呀，Mochi没听清楚。可以再说一遍吗？",
+  ta: "மன்னிக்கவும், Mochi அதைக் கேட்கவில்லை. மீண்டும் ஒருமுறை சொல்ல முடியுமா?",
+};
+
+/** LLM block: Agora-managed (no api_key) or bring-your-own-key. */
+function llmConfig() {
+  const c = read();
+  return c.llmManaged
+    ? { credential_mode: "managed", vendor: "openai", style: "openai", url: c.llmUrl }
+    : { url: c.llmUrl, api_key: c.llmApiKey };
+}
+
 export class AgoraError extends Error {
   constructor(
     message: string,
@@ -313,11 +335,10 @@ export async function joinAgent({ channel, userUid, systemPrompt, greeting, lang
       idle_timeout: 30,
       advanced_features: { enable_rtm: false },
       llm: {
-        url: read().llmUrl,
-        api_key: read().llmApiKey,
+        ...llmConfig(),
         system_messages: [{ role: "system", content: systemPrompt }],
         greeting_message: greeting,
-        failure_message: "Oops, Mochi missed that. Could you say it once more?",
+        failure_message: FAILURE[lang],
         // Short memory keeps each turn small for Groq's tokens-per-minute limit; the profile in the
         // system prompt (refreshed through /update) carries everything older.
         max_history: 12,

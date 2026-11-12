@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import { drawItems } from "./draw-items";
-import type { BaguaCell, BaguaElement } from "./fengshui";
 import { CATALOG, type Item } from "./furniture";
 import { boxOf, hitTest, type Box } from "./layout-ops";
 import type { Floor, Pt } from "./plans";
@@ -23,8 +22,6 @@ type Props = {
   /** Asks to move a piece's centre; the parent decides whether it fits. */
   onDrag: (uid: string, cx: number, cy: number) => void;
   onKeyDown?: (e: KeyboardEvent<HTMLCanvasElement>) => void;
-  /** Lo Shu grid to draw over the floor, or null to hide it. */
-  bagua: BaguaCell[] | null;
   /** Pieces with a feng shui problem get a red marker. */
   flagged: ReadonlySet<string>;
   /** Problem strips, e.g. the main door's straight line out the window. */
@@ -69,7 +66,6 @@ export function PlanCanvas({
   onSelect,
   onDrag,
   onKeyDown,
-  bagua,
   flagged,
   strips,
   className,
@@ -211,27 +207,6 @@ export function PlanCanvas({
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.restore();
-    }
-
-    const elementColor: Record<BaguaElement, string> = {
-      Water: c.glass,
-      Wood: c.plant,
-      Fire: c.door,
-      Earth: c.sun,
-      Metal: c.soft,
-    };
-    if (bagua) {
-      for (const cell of bagua) {
-        ctx.globalAlpha = 0.13;
-        ctx.fillStyle = elementColor[cell.element];
-        ctx.fillRect(cell.box.x, cell.box.y, cell.box.w, cell.box.h);
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = c.soft;
-        ctx.lineWidth = 1.2 * px;
-        ctx.setLineDash([6 * px, 4 * px]);
-        ctx.strokeRect(cell.box.x, cell.box.y, cell.box.w, cell.box.h);
-        ctx.setLineDash([]);
-      }
     }
 
     for (const st of strips) {
@@ -433,36 +408,6 @@ export function PlanCanvas({
       ctx.fill();
       ctx.stroke();
     }
-
-    // Bagua labels last, so walls and furniture never cover them.
-    if (bagua) {
-      ctx.setTransform(
-        dpr * scale,
-        0,
-        0,
-        dpr * scale,
-        dpr * (offX + PAD * scale),
-        dpr * (offY + PAD * scale),
-      );
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      for (const cell of bagua) {
-        const cx = cell.box.x + cell.box.w / 2;
-        const cy = cell.box.y + cell.box.h / 2;
-        ctx.font = `700 ${11 * px}px ${c.family}`;
-        const top = `${cell.dir} · ${cell.area}`;
-        const tw = ctx.measureText(top).width;
-        ctx.globalAlpha = 0.9;
-        ctx.fillStyle = c.surface;
-        ctx.fillRect(cx - tw / 2 - 4 * px, cy - 9 * px, tw + 8 * px, 18 * px);
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = elementColor[cell.element];
-        ctx.lineWidth = 1.5 * px;
-        ctx.strokeRect(cx - tw / 2 - 4 * px, cy - 9 * px, tw + 8 * px, 18 * px);
-        ctx.fillStyle = c.ink;
-        ctx.fillText(top, cx, cy + 0.5 * px);
-      }
-    }
   }, [
     size,
     floor,
@@ -472,7 +417,6 @@ export function PlanCanvas({
     facing,
     items,
     selected,
-    bagua,
     flagged,
     strips,
   ]);

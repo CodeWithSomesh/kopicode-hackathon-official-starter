@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  PixButton,
-  PixMeter,
-  PixPanel,
-  PixTag,
-} from "@/components/homelander/pixel";
+import { PixMeter, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import { ongVerdict, type Note, type Tone } from "./fengshui";
 
@@ -15,8 +10,6 @@ type Props = {
   /** Label of each floor id, shown on notes from another floor. */
   floorLabel: (id: string) => string;
   currentFloor: string;
-  showBagua: boolean;
-  onToggleBagua: () => void;
   onPick: (note: Note) => void;
 };
 
@@ -34,8 +27,6 @@ export function FengShuiPanel({
   score,
   floorLabel,
   currentFloor,
-  showBagua,
-  onToggleBagua,
   onPick,
 }: Props) {
   const verdict = ongVerdict(score);
@@ -64,15 +55,6 @@ export function FengShuiPanel({
             : `${problems} ${problems === 1 ? "thing" : "things"} to look at. Tap a note to find it on the plan.`}
         </p>
       </div>
-
-      <PixButton
-        size="sm"
-        tone={showBagua ? "ink" : "white"}
-        aria-pressed={showBagua}
-        onClick={onToggleBagua}
-      >
-        {showBagua ? "Hide bagua map" : "Show bagua map"}
-      </PixButton>
 
       <ul className="grid gap-2">
         {notes.map((n) => {

@@ -27,7 +27,6 @@ export type World = {
   curtains: ReadonlySet<string>;
   floorIdx: number;
   selected: string | null;
-  showBagua: boolean;
 };
 
 export type Ctx = {
@@ -54,7 +53,6 @@ export type Command =
   | { type: "floor"; which: "ground" | "first" }
   | { type: "hot" }
   | { type: "ong" }
-  | { type: "bagua"; show: boolean }
   | { type: "reset" }
   | { type: "help" };
 
@@ -263,7 +261,6 @@ const WORDS: Record<string, string> = {
   around: "X:2",
   balik: "X:2",
   tunjuk: "V:look",
-  bagua: "V:bagua",
   hide: "V:hide",
   sorok: "V:hide",
   reset: "V:reset",
@@ -378,8 +375,6 @@ export function parse(clause: string): Command | null {
 
   if (has("V:reset")) return { type: "reset" };
   if (has("V:help")) return { type: "help" };
-  if (has("V:bagua"))
-    return { type: "bagua", show: !has("V:hide") && !has("V:close") };
   if (has("V:curtain")) return { type: "curtain", close: !has("V:open"), room };
 
   const isTime = has("V:time") || has("H:am") || has("H:pm") || has("H:noon");
@@ -618,8 +613,8 @@ const DIR_WORDS: Record<Dir, { en: string; mg: string; v: [number, number] }> =
 
 export const HELP: Reply = say(
   true,
-  "Try: put a plant in the living room · move the sofa left 1 m · turn the bed · remove the mirror · face north · 9 am · December · close the curtains · hot or not? · how's the feng shui? · show bagua · reset",
-  "Cuba: letak pokok kat ruang tamu · alih sofa kiri 1 · pusing katil · buang cermin · hadap utara · pukul 9 pagi · bulan Disember · tutup langsir · panas tak? · ong tak? · tunjuk bagua · mula semula",
+  "Try: put a plant in the living room · move the sofa left 1 m · turn the bed · remove the mirror · face north · 9 am · December · close the curtains · hot or not? · how's the feng shui? · reset",
+  "Cuba: letak pokok kat ruang tamu · alih sofa kiri 1 · pusing katil · buang cermin · hadap utara · pukul 9 pagi · bulan Disember · tutup langsir · panas tak? · ong tak? · mula semula",
 );
 
 export function run(
@@ -914,13 +909,6 @@ export function run(
       const mg = `Ong meter ${o.score}/100. ${o.score >= 85 ? "Huat ah!" : o.score >= 60 ? "Okay lah." : "Aiyo."}${o.top ? ` Betulkan dulu: ${o.top}.` : ""}`;
       return { world: w, reply: say(true, en, mg) };
     }
-    case "bagua":
-      return {
-        world: { ...w, showBagua: cmd.show },
-        reply: cmd.show
-          ? say(true, "Bagua map on.", "Okay, bagua dah tunjuk.")
-          : say(true, "Bagua map off.", "Okay, bagua dah sorok."),
-      };
     case "reset":
       return {
         world: { ...w, items: defaultItems(plan.id), selected: null },

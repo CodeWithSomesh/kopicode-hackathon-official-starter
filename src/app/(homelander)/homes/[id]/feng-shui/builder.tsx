@@ -16,7 +16,7 @@ import {
   type Reply,
   type World,
 } from "./commands";
-import { baguaCells, ongScore, readFengShui, type Note } from "./fengshui";
+import { ongScore, readFengShui, type Note } from "./fengshui";
 import { FengShuiPanel } from "./fengshui-panel";
 import { FurniturePanel } from "./furniture-panel";
 import {
@@ -81,7 +81,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [items, setItems] = useState<Item[]>(() => defaultItems(planId));
   const [selected, setSelected] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [showBagua, setShowBagua] = useState(false);
   const [view, setView] = useState<"plan" | "3d">("plan");
   const [lang, setLang] = useState<Lang>("mg");
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -266,11 +265,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       floorNotes.flatMap((n) => (n.strip && n.tone === "fix" ? [n.strip] : [])),
     [floorNotes],
   );
-  const bagua = useMemo(
-    () => (showBagua ? baguaCells(floor, facing) : null),
-    [showBagua, floor, facing],
-  );
-
   // Commands run against a snapshot of the page state and hand back the next one.
   const world: World = {
     items,
@@ -280,7 +274,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     curtains,
     floorIdx,
     selected,
-    showBagua,
   };
   const ctx: Ctx = {
     plan,
@@ -331,7 +324,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     setCurtains(w.curtains);
     setFloorIdx(w.floorIdx);
     setSelected(w.selected);
-    setShowBagua(w.showBagua);
   };
 
   const addLog = (e: Omit<LogEntry, "id">) =>
@@ -559,7 +551,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
               onSelect={setSelected}
               onDrag={dragTo}
               onKeyDown={onPlanKey}
-              bagua={bagua}
               flagged={flagged}
               strips={strips}
               className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
@@ -614,8 +605,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           score={score}
           floorLabel={(id) => plan.floors.find((f) => f.id === id)?.label ?? id}
           currentFloor={floor.id}
-          showBagua={showBagua}
-          onToggleBagua={() => setShowBagua((v) => !v)}
           onPick={pickNote}
         />
 

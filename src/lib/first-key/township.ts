@@ -6,7 +6,7 @@ import type { Building, Compass, LngLat, Place, Room, Township, Unit } from "./t
 // sit on real buildings in the basemap. (Site choice not checked against the live basemap.)
 
 export const PROJECT = "Seri Kopi Heights";
-const CENTER: LngLat = [101.68, 2.86];
+const CENTER: LngLat = [101.7155, 2.8565];
 
 /**
  * Monthly instalment in RM. Assumptions: 90% loan, 35 years, 4.2% a year, monthly compounding,

@@ -87,11 +87,14 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   const colors = useThemeColors();
   const { resolvedTheme } = useTheme();
   const dark = DARK_THEMES.includes(resolvedTheme ?? "");
+  // Mount the map only once the theme is known and the protocol is registered: one style set, no rebuild that
+  // aborts in-flight tile requests (those logged "Failed to fetch" at load).
+  const ready = resolvedTheme !== undefined && (!PMTILES_URL || protocolReady);
 
   // the id carries the colours, so any theme (Kopi O, Teh Susu...) gets its own texture
   const glassId = `glass-${dark ? "d" : "l"}-${colors["chart-3"]}-${colors.background}-${colors.primary}-${colors.foreground}`;
-  // Protomaps layers for the theme, with its flat `buildings` fill swapped for glass-textured extrusions: the real
-  // neighbourhood stands up around ours. Height from the data, else a default of 9 m (about 3 floors).
+  // Protomaps layers for the theme, with its flat `buildings` fill swapped for soft, plain extrusions: the real
+  // neighbourhood stands up quietly around ours (the township is the only textured thing). Height from the data, else 6 m.
   const basemap = useMemo<LayerSpecification[]>(
     () => [
       ...basemapLayers("protomaps", namedFlavor(dark ? "dark" : "light"), { lang: "en" }).filter((l) => l.id !== "buildings"),
@@ -103,14 +106,14 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         minzoom: 14,
         filter: ["in", ["get", "kind"], ["literal", ["building", "building_part"]]],
         paint: {
-          "fill-extrusion-height": ["coalesce", ["to-number", ["get", "height"], 0], 9],
+          "fill-extrusion-height": ["coalesce", ["to-number", ["get", "height"], 0], 6],
           "fill-extrusion-base": ["coalesce", ["to-number", ["get", "min_height"], 0], 0],
-          "fill-extrusion-opacity": 1,
-          "fill-extrusion-pattern": glassId,
+          "fill-extrusion-opacity": 0.7,
+          "fill-extrusion-color": colors.muted,
         },
       },
     ],
-    [dark, glassId],
+    [dark, colors.muted],
   );
   const style = useMemo<StyleSpecification>(
     () => ({
@@ -186,7 +189,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
       map.off("styledata", ensure);
       map.off("styleimagemissing", ensure);
     };
-  }, [colors, dark, glassId, loaded]);
+  }, [colors, dark, glassId, loaded, ready]);
 
   const flyTo = (id: string, then?: () => void) => {
     const map = mapRef.current?.getMap();
@@ -260,6 +263,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
 
   return (
     <div ref={wrap} className="absolute inset-0">
+      {ready && (
       <Map
         ref={mapRef}
         initialViewState={initialView}
@@ -267,6 +271,12 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         maxPitch={70}
         interactiveLayerIds={["township-buildings", "township-selected"]}
         cursor="auto"
+        onError={(e) => {
+          // A tile request dropped mid-flight (the view moved on) surfaces as "Failed to fetch" from the PMTiles source:
+          // a warning, not an error. Anything else is logged as before.
+          const tileDrop = e.error?.message === "Failed to fetch" && (e as unknown as { sourceId?: string }).sourceId === "protomaps";
+          (tileDrop ? console.warn : console.error)(e.error);
+        }}
         onClick={onClick}
         onLoad={() => setLoaded(true)}
         style={{ width: "100%", height: "100%" }}
@@ -282,6 +292,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
           </Marker>
         ))}
       </Map>
+      )}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 const TOKENS = [
   "background",
   "card",
+  "muted",
   "foreground",
   "primary",
   "muted-foreground",

@@ -2,7 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Map, { Marker, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
+import Map, { Layer, Marker, Source, type LayerProps, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
 import { addProtocol, setWorkerUrl, type ExpressionSpecification, type LayerSpecification, type Map as MLMap, type StyleSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { gsap } from "gsap";
@@ -15,6 +15,9 @@ import { useHomeLander } from "@/lib/homelander/store";
 import { pillLean, pillLeanPhone, pillNudgePhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import { useMapColors } from "../use-map-colors";
+import { ZONE, groupById, groups } from "@/lib/first-key/landed";
+import { EnclaveSwitch } from "./enclave-switch";
+import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
 import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 
@@ -82,7 +85,14 @@ const devView = (id: string) => {
   return { center: [t.pos.lng, t.pos.lat] as [number, number], zoom: 14.6, pitch: 50, bearing: 0, padding: cameraPadding(true) };
 };
 
-const centres = Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)]));
+// the landed enclave's terrace rows, pairs and bungalows are selectable by their group id too
+// The landed enclave (260 m wide) in the free part of the screen, the township panel open.
+const enclaveView = () => {
+  const padding = cameraPadding(true);
+  const free = Math.max(200, window.innerWidth - padding.left - padding.right);
+  return { center: ZONE.centre as [number, number], zoom: Math.log2((free * 0.9 * M_PER_PX_Z0) / 300), pitch: 52, bearing: 0, padding };
+};
+const centres: Record<string, [number, number]> = { ...Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)])), ...Object.fromEntries(groups.map((g) => [g.id, [g.lng, g.lat]])) };
 const buildingsGeoJson = {
   type: "FeatureCollection" as const,
   features: township.buildings.map((b) => ({
@@ -99,6 +109,8 @@ const railGeoJson = {
 
 type Props = {
   selectedId?: string;
+  /** The picked house (a landed enclave group is `selectedId`). */
+  houseId?: string;
   onSelect: (buildingId: string | undefined) => void;
   /** The 3D building is showing over the map: stop the opening shot and any camera motion. */
   paused: boolean;
@@ -113,7 +125,7 @@ type Props = {
   onMapReady?: (map: MLMap) => void;
 };
 
-export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
+export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
   const hl = useHomeLander();
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const mapRef = useRef<MapRef>(null);
@@ -384,11 +396,21 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (wasPaused.current && !paused && map) {
-      if (reduced) map.jumpTo(townshipView());
-      else map.flyTo({ ...townshipView(), bearing: map.getBearing(), duration: 1200 });
+      const back = selectedId && groupById(selectedId) ? enclaveView() : townshipView(); // out of a house: back to the enclave
+      if (reduced) map.jumpTo(back);
+      else map.flyTo({ ...back, bearing: map.getBearing(), duration: 1200 });
     }
     wasPaused.current = paused;
+    // only the burst closing flies back; the selection is read when it does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused, reduced]);
+
+  const flyView = (v: ReturnType<typeof enclaveView>) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    if (reduced) map.jumpTo(v);
+    else map.flyTo({ ...v, bearing: map.getBearing(), duration: 1800 });
+  };
 
   // Fly to the focused development, or back out to the Klang Valley. The first run is skipped: initialView is already there.
   const firstDev = useRef(true);
@@ -427,7 +449,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         maxPitch={70}
         minZoom={8.5}
         maxBounds={withBasemap ? PMTILES_BOUNDS : undefined}
-        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected"]}
+        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected", ...LANDED_PICK_LAYERS]}
         cursor="auto"
         onError={(e) => {
           // Only a request that was really aborted (the view moved on) is quiet. Everything else stays loud, most of
@@ -444,6 +466,14 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         attributionControl={false}
         style={{ width: "100%", height: "100%" }}
       >
+        {showTownship &&
+          landedSources(colors, dark, houseId ?? "", false).map((s) => (
+            <Source key={s.id} id={s.id} type="geojson" data={s.data}>
+              {s.layers.map((l) => (
+                <Layer key={l.id} {...(l as unknown as LayerProps)} />
+              ))}
+            </Source>
+          ))}
         {!selectedId &&
           towns.map((x) => {
             const phone = !window.matchMedia("(min-width: 1024px)").matches; // ponytail: read at render, no resize listener
@@ -480,6 +510,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
           ))}
       </Map>
       )}
+      {showTownship && !selectedId && <EnclaveSwitch onTowers={() => flyView(townshipView())} onEnclave={() => flyView(enclaveView())} />}
     </div>
   );
 }

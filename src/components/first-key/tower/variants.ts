@@ -4,10 +4,9 @@ import type { Building } from "@/lib/first-key/types";
 import { parseVariant, type VariantType } from "@/lib/first-key/site-layout";
 import type { ThemeColors } from "../use-theme-colors";
 import { FLOOR_H } from "../burst/layout";
-import { ROLES, towerMaterials, towerParts, type Design, type Facade, type P, type TowerParts } from "./tower-model";
+import { ROLES, towerMaterials, towerParts, type Design, type Facade, type P, type Role, type TowerParts } from "./tower-model";
 import { mallParts, shoplotParts } from "./commercial-model";
-// The one-line swap when exec-fk-landed lands: "./landed-stub" -> "./landed-model" (same signature).
-import { landedParts } from "./landed-stub";
+import { landedParts, landedMaterials } from "./landed-model";
 
 /**
  * Spawned site buildings (ILLUSTRATIVE, see lib/first-key/site-layout.ts): one glb per variant key, shared by every
@@ -16,6 +15,7 @@ import { landedParts } from "./landed-stub";
  */
 
 type Size = { w: number; d: number; h: number };
+const LANDED: VariantType[] = ["terrace", "superlink", "link", "townhouse", "cluster", "semid", "bungalow", "clubhouse"];
 
 // Frontage per unit and depth for the row types; whole footprint for the single buildings. Typical Klang Valley sizes.
 const ROW: Partial<Record<VariantType, { unit: number; d: number; n: number }>> = {
@@ -124,7 +124,11 @@ export function variantGlb(key: string, colors: ThemeColors, night: boolean): Pr
 /** The glb itself (exported for size checks). */
 export async function variantBlob(key: string, colors: ThemeColors, night: boolean): Promise<{ blob: Blob; bytes: number; vertices: number }> {
   const parts = partsOf(key, colors, night);
-  const mats = towerMaterials({ id: key, floors: 1 } as Building, colors, night, false, night, designFor(key), 0.25); // 128 x 256 texture: panes are a few pixels at map distance
+  // Landed homes and the clubhouse have their own plain materials (no tower window texture); the rest use the tower set.
+  const landed = LANDED.includes(parseVariant(key).type);
+  const mats: Partial<Record<Role, THREE.Material>> = landed
+    ? landedMaterials(colors, night)
+    : towerMaterials({ id: key, floors: 1 } as Building, colors, night, false, night, designFor(key), 0.25); // 128 x 256 texture: panes are a few pixels at map distance
   const scene = new THREE.Scene();
   let vertices = 0;
   for (const r of ROLES) {

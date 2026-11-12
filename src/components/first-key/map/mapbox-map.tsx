@@ -16,6 +16,10 @@ import type { ControlMap } from "@/app/(homelander)/_landing/map-controls";
 import { useMapColors, useMapDusk } from "../use-map-colors";
 import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
+import { ZONE, groupById, groups } from "@/lib/first-key/landed";
+import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
+import { LandedModels } from "./landed-models";
+import { EnclaveSwitch } from "./enclave-switch";
 
 // Mapbox GL JS v3 + the Standard style (3D buildings, landmarks, building shadows, lightPreset). Used when
 // NEXT_PUBLIC_MAPBOX_TOKEN is set; neighbourhood-map.tsx (MapLibre) is the fallback. Same props, same camera helpers.
@@ -56,7 +60,14 @@ const devView = (id: string) => {
   return { center: [t.pos.lng, t.pos.lat] as [number, number], zoom: 14.6, pitch: 50, bearing: 0, padding: cameraPadding(true) };
 };
 
-const centres = Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)]));
+// the enclave's terrace rows, pairs and bungalows are selectable by their group id too
+const centres: Record<string, [number, number]> = { ...Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)])), ...Object.fromEntries(groups.map((g) => [g.id, [g.lng, g.lat]])) };
+// The landed enclave (260 m wide) in the free part of the screen.
+const enclaveView = () => {
+  const padding = cameraPadding(true); // the township panel is open
+  const free = Math.max(200, window.innerWidth - padding.left - padding.right);
+  return { center: ZONE.centre as [number, number], zoom: Math.log2((free * 0.9 * M_PER_PX_Z0) / 300), pitch: 52, bearing: 0, padding };
+};
 const buildingsGeoJson = {
   type: "FeatureCollection" as const,
   features: township.buildings.map((b) => ({
@@ -82,6 +93,8 @@ const railGeoJson = {
 
 type Props = {
   selectedId?: string;
+  /** The picked house (a landed enclave group is `selectedId`). */
+  houseId?: string;
   onSelect: (buildingId: string | undefined) => void;
   paused: boolean;
   onArrived: () => void;
@@ -107,11 +120,12 @@ const standardConfig = (dark: boolean, dusk: boolean) => ({
   showTransitLabels: false,
 });
 
-export default function MapboxMap({ selectedId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
+export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
   const hl = useHomeLander();
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const mapRef = useRef<MapRef>(null);
   const [loaded, setLoaded] = useState(false);
+  const [landedModels, setLandedModels] = useState(false); // the enclave's glTF models are in: until then its plain extrusions show
   const [initialView] = useState(() => {
     const o = startAtSelected ? townshipView() : devId && townshipById[devId] ? devView(devId) : klangView();
     return { longitude: o.center[0], latitude: o.center[1], zoom: o.zoom, pitch: o.pitch, bearing: o.bearing, padding: o.padding };
@@ -241,10 +255,13 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (wasPaused.current && !paused && map) {
-      if (reduced) map.jumpTo(townshipView());
-      else map.flyTo({ ...townshipView(), bearing: map.getBearing(), duration: 1200 });
+      const back = selectedId && groupById(selectedId) ? enclaveView() : townshipView(); // out of a house: back to the enclave
+      if (reduced) map.jumpTo(back);
+      else map.flyTo({ ...back, bearing: map.getBearing(), duration: 1200 });
     }
     wasPaused.current = paused;
+    // only the burst closing flies back; the selection is read when it does
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused, reduced]);
 
   const firstDev = useRef(true);
@@ -261,6 +278,12 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devId, loaded]);
 
+  const flyView = (v: ReturnType<typeof enclaveView>) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    if (reduced) map.jumpTo(v);
+    else map.flyTo({ ...v, bearing: map.getBearing(), duration: 1800 });
+  };
   const onClick = (e: MapMouseEvent) => {
     const id = (e as MapMouseEvent & { features?: { properties?: { id?: string } | null }[] }).features?.[0]?.properties?.id;
     if (id) onSelect(id);
@@ -392,7 +415,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
         mapStyle="mapbox://styles/mapbox/standard"
         maxPitch={70}
         minZoom={8.5}
-        interactiveLayerIds={["township-models", "township-buildings", "township-roofs", "township-selected"]}
+        interactiveLayerIds={["township-models", "township-buildings", "township-roofs", "township-selected", ...LANDED_PICK_LAYERS]}
         cursor="auto"
         onError={(e) => {
           const err = e.error as (Error & { name?: string }) | undefined;
@@ -426,6 +449,15 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
             <Layer {...towerModels} />
           </Source>
         )}
+        {showTownship &&
+          landedSources(colors, dark, houseId ?? "", landedModels).map((s) => (
+            <Source key={s.id} id={s.id} type="geojson" data={s.data}>
+              {s.layers.map((l) => (
+                <Layer key={l.id} {...({ ...l, slot: "middle", paint: { ...l.paint, [`${l.type}-emissive-strength`]: l.type === "fill-extrusion" ? 0.6 : 0.9 } } as unknown as LayerProps)} />
+              ))}
+            </Source>
+          ))}
+        {showTownship && <LandedModels loaded={loaded} colors={colors} dark={dark} night={night} onReady={setLandedModels} />}
         {!selectedId &&
           towns.map((x) => {
             const phone = !window.matchMedia("(min-width: 1024px)").matches; // ponytail: read at render, no resize listener
@@ -461,6 +493,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
             </Marker>
           ))}
       </Map>
+      {showTownship && !selectedId && <EnclaveSwitch onTowers={() => flyView(townshipView())} onEnclave={() => flyView(enclaveView())} />}
     </div>
   );
 }

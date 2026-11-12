@@ -52,7 +52,7 @@ const bbox = (u: Unit) => {
 
 /** Furniture in unit-local metres (x east, y towards the facade). */
 type LocalPiece = Omit<Piece, "x" | "z"> & { lx: number; ly: number };
-function furnish(id: string, rx: number, ry: number, rw: number, rh: number): LocalPiece[] {
+export function furnish(id: string, rx: number, ry: number, rw: number, rh: number): LocalPiece[] {
   const out: LocalPiece[] = [];
   const add = (lx: number, ly: number, y: number, sx: number, sy: number, sz: number, color: PaletteKey, r = 0.06) =>
     out.push({ lx, ly, y, sx, sy, sz, color, r });

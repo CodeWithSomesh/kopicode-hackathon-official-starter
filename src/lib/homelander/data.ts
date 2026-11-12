@@ -81,7 +81,7 @@ export const townships: Township[] = [
     // Gardens Park has no OpenStreetMap outline. It sits next to Gamuda Gardens (the official page
     // puts Gamuda Gardens 1 km away and AEON Rawang 3 km away), so we place it by hand at the
     // north-east edge of the Gamuda Gardens outline, towards Rawang. Accuracy about 1-2 km.
-    id: "gardens-park", name: "Gardens Park", area: "Sungai Buloh North, Selangor", pos: { lat: 3.3, lng: 101.553 },
+    id: "gardens-park", name: "Gardens Park", area: "Sungai Buloh North, Selangor", pos: { lat: 3.3004, lng: 101.5177 },
     state: "Selangor", region: "klang-valley", status: "selling", acres: 532, officialUrl: `${GL}gardens-park`,
     facilities: ["Freehold, individual title landed homes", "50-acre ring park", "AEON Rawang and Anggun City 3 km", "Lexel International School 3 km"],
   },
@@ -111,7 +111,7 @@ export const townships: Township[] = [
     facilities: ["Freehold township with 11 secured precincts", "18-hole par-72 golf course by Ross Watson", "Clubhouse with dining and lifestyle facilities"],
   },
   {
-    id: "bantayan", name: "Bukit Bantayan Residences", area: "Inanam, Sabah", pos: { lat: 5.973, lng: 116.136 },
+    id: "bantayan", name: "Bukit Bantayan Residences", area: "Inanam, Sabah", pos: { lat: 5.9778, lng: 116.1343 },
     state: "Sabah", region: "sabah", status: "selling", acres: 19, officialUrl: `${GL}bukit-bantayan`,
     facilities: ["Hilltop site overlooking Likas Bay", "Kota Kinabalu city 12 km", "24-hour multi-tiered security", "Curve 25 retail on site"],
   },

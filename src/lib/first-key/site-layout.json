@@ -1,0 +1,14 @@
+{
+  "buildings": [
+    { "site": "gardens", "variant": "terrace-2-gable-6", "lng": 101.5359, "lat": 3.2885, "rot": 30, "w": 39, "d": 20, "h": 9 },
+    { "site": "gardens", "variant": "semid-2-hip", "lng": 101.5368, "lat": 3.2885, "rot": 30, "w": 26, "d": 14, "h": 9 },
+    { "site": "jade", "variant": "bungalow-3-hip", "lng": 101.7541, "lat": 2.9955, "rot": 0, "w": 15, "d": 18, "h": 12 },
+    { "site": "tf7", "variant": "shoplot-3-flat-8", "lng": 101.5567, "lat": 2.9560, "rot": 90, "w": 52, "d": 24, "h": 13 },
+    { "site": "tf7", "variant": "tower-30-balcony", "lng": 101.5580, "lat": 2.9560, "rot": 90, "w": 40, "d": 22, "h": 93 }
+  ],
+  "labels": [
+    { "site": "gardens", "lng": 101.5363, "lat": 3.2885 },
+    { "site": "jade", "lng": 101.7541, "lat": 2.9955 },
+    { "site": "tf7", "lng": 101.5573, "lat": 2.9560 }
+  ]
+}

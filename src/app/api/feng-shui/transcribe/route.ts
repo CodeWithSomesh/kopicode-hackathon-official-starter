@@ -16,7 +16,7 @@ const MAX_BYTES = 4 * 1024 * 1024;
 
 // Hints the spelling of local words; the model still detects the language itself.
 const HINT =
-  "Malaysian home buyer giving a short command about furniture and rooms. They often mix English, Bahasa Melayu, Mandarin and Tamil in one sentence. Write every word in its own script: Chinese words in Chinese characters, Tamil words in Tamil script, never spelled out by sound. Examples: 'letak sofa kat ruang tamu', 'tolong 把沙发 move to the left', '镜子 pusing sikit lah', 'tutup langsir', 'panas tak', 'சோபாவை move left'.";
+  "Malaysian home buyer giving a short command about furniture and rooms. They often mix English, Bahasa Melayu, Mandarin and Tamil in one sentence. Write every word in its own script: Chinese words in Chinese characters, Tamil words in Tamil script, never spelled out by sound. Examples: 'letak sofa kat ruang tamu', 'tolong 把沙发 move to the left', '镜子 pusing sikit lah', 'tutup langsir', 'panas tak', 'betulkan', 'betulkan semua', 'fix all', 'சோபாவை move left'.";
 
 export async function POST(req: Request) {
   // Same credit guard as /api/chat and /api/feng-shui.

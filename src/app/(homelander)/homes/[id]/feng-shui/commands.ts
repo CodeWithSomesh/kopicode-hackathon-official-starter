@@ -120,6 +120,8 @@ const PHRASES: [string, string][] = [
   ["tingkat atas", "F:first"],
   ["tingkat 1", "F:first"],
   ["mula semula", "V:reset"],
+  // Speech-to-text often splits "betulkan" into "betul kan".
+  ["betul kan", "V:fix"],
   ["start over", "V:reset"],
   ["turn around", "V:rotate X:2"],
   ["pusing balik", "V:rotate X:2"],
@@ -272,6 +274,8 @@ const WORDS: Record<string, string> = {
   reset: "V:reset",
   fix: "V:fix",
   betulkan: "V:fix",
+  "betul-kan": "V:fix",
+  fixed: "V:fix",
   betulkn: "V:fix",
   baiki: "V:fix",
   repair: "V:fix",
@@ -347,14 +351,26 @@ const MONTH_WORDS: Record<string, number> = {
 };
 
 /** Split "alih sofa kiri 1, lepas tu pusing dia" into one command per clause. */
+/** Clauses that are only filler, e.g. the "lah" in "fix it, lah". */
+const FILLER =
+  /^(?:lah|la|leh|lor|ah|eh|ya|yah|ok|okay|please|pls|tolong|boleh|can|thanks|thank you|terima kasih)$/;
+/** Words that only make sense attached to the clause before ("fix, all" -> "fix all"). */
+const TAIL = /^(?:all|semua|sekali|everything|it|dia|itu|tu)$/;
+
 export function splitClauses(raw: string) {
-  return raw
+  const parts = raw
     .toLowerCase()
     .split(
       /\s*(?:;|,|\bthen\b|\blepas tu\b|\bpastu\b|\blepastu\b|\band then\b|\bdan\b|\band\b)\s*/,
     )
-    .map((s) => s.trim())
-    .filter(Boolean);
+    .map((s) => s.replace(/[?!.]+$/, "").trim())
+    .filter((s) => s && !FILLER.test(s));
+  const out: string[] = [];
+  for (const part of parts) {
+    if (out.length && TAIL.test(part)) out[out.length - 1] += ` ${part}`;
+    else out.push(part);
+  }
+  return out;
 }
 
 function tokens(clause: string) {

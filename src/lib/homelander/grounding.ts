@@ -39,6 +39,9 @@ const NUMBER_WORD =
 /** "No car loan", "takde", "没有", "இல்லை": a 0 needs one of these. */
 const NONE_WORD = /\b(no|none|nothing|zero|nil|don'?t|do not|never|tiada|takde|tak ada|tidak|bukan|kosong)\b|没有|没|无|不|இல்லை/i;
 
+const DAYS_WORD =
+  /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekdays?|every ?day|daily|hybrid|remote|wfh|work from home|isnin|selasa|rabu|khamis|jumaat|sabtu|ahad|hari-hari|setiap hari)\b|星期|周[一二三四五六日]|每天|天天|在家|திங்கள்|வெள்ளி|தினமும்/i;
+
 export function hasNumber(s: string) {
   return NUMBER_WORD.test(s);
 }
@@ -60,6 +63,11 @@ export function groundPatch<T extends Record<string, unknown>>(patch: T, evidenc
     const own = quotes.get(k) ?? [];
     const proof = own.length ? own : FOLLOWS[k] ? (quotes.get(FOLLOWS[k]) ?? []) : [];
     if (!proof.length) continue;
+    // Office days are often said as days, not numbers: "Monday to Friday", "every day", "hybrid".
+    if (k === "officeDays" && proof.some((q) => DAYS_WORD.test(q))) {
+      out[k] = v;
+      continue;
+    }
     if (NUMBER_FIELDS.has(k)) {
       const ok = v === 0 ? proof.some((q) => NONE_WORD.test(q) || hasNumber(q)) : proof.some(hasNumber);
       if (!ok) continue;

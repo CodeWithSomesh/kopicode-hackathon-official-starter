@@ -5,13 +5,14 @@ import {
   agoraStatus,
   joinLiveCall,
   MicDeniedError,
+  sayGoodbye,
   startAgoraSession,
   stopAgoraAgent,
   updateAgoraAgent,
   type LiveCall,
   type LiveTranscript,
 } from "@/lib/homelander/agora-client";
-import { filledKeys, type Profile } from "@/lib/homelander/profile";
+import { filledKeys, missingEssentials, type Profile } from "@/lib/homelander/profile";
 import { homelander } from "@/lib/homelander/store";
 import type { MochiLang } from "@/lib/homelander/mochi-brain";
 
@@ -41,10 +42,16 @@ const EXTRACT_MIN_GAP_MS = 4_000;
 /** Lines sent to the note-taker; the profile carries everything older. */
 const EXTRACT_LINES = 6;
 
+/** After the form is complete: how long Mochi gets to say goodbye before the call ends anyway. */
+const WRAP_UP_MAX_MS = 15_000;
+
 export function useAgoraCall({
   onPatch,
+  onComplete,
 }: {
   onPatch: (patch: Partial<Profile>) => void;
+  /** Every essential is filled and Mochi has said goodbye: the call is over, move on. */
+  onComplete: () => void;
 }) {
   const [status, setStatus] = useState<CallStatus>("checking");
   const [error, setError] = useState<string | null>(null);
@@ -62,9 +69,16 @@ export function useAgoraCall({
   const linesRef = useRef<CallLine[]>([]);
   const nextId = useRef(1);
   const onPatchRef = useRef(onPatch);
+  const onCompleteRef = useRef(onComplete);
   useEffect(() => {
     onPatchRef.current = onPatch;
-  }, [onPatch]);
+    onCompleteRef.current = onComplete;
+  }, [onPatch, onComplete]);
+  /** Language picked for this call (undefined on a mixed-language call), so updates keep it. */
+  const callLang = useRef<MochiLang | undefined>(undefined);
+  /** off → waiting (form complete, Mochi about to say goodbye) → speaking → done. */
+  const wrap = useRef<{ stage: "off" | "waiting" | "speaking" | "done"; timer: number; at: number }>({ stage: "off", timer: 0, at: 0 });
+  const finishCall = useRef(() => {});
 
   // Is Agora set up on the server?
   useEffect(() => {
@@ -130,9 +144,14 @@ export function useAgoraCall({
       const patch = data.patch ?? {};
       if (filledKeys(patch).length) {
         onPatchRef.current(patch);
-        // Tell Mochi what the form now knows, so it doesn't ask again.
-        if (agentId.current)
-          void updateAgoraAgent(agentId.current, homelander.snapshot().profile);
+        const profile = homelander.snapshot().profile;
+        // Tell Mochi what the form now knows, so it doesn't ask again (and, once nothing is missing, to say goodbye).
+        if (agentId.current) void updateAgoraAgent(agentId.current, profile, callLang.current);
+        if (!missingEssentials(profile).length && wrap.current.stage === "off") {
+          wrap.current = { stage: "waiting", at: Date.now(), timer: window.setTimeout(() => finishCall.current(), WRAP_UP_MAX_MS) };
+          // Cut off any next question and say goodbye in the buyer's language.
+          if (agentId.current) void sayGoodbye(agentId.current, lastUser.text);
+        }
       }
     } catch {
       // Missing one note is fine: the next answer carries the context again.
@@ -222,6 +241,9 @@ export function useAgoraCall({
       doneUpTo: 0,
     };
     try {
+      callLang.current = mixedLanguages ? undefined : lang;
+      window.clearTimeout(wrap.current.timer);
+      wrap.current = { stage: "off", timer: 0, at: 0 };
       const session = await startAgoraSession(homelander.snapshot().profile, lang);
       agentId.current = session.agentId;
       call.current = await joinLiveCall(session, {
@@ -247,7 +269,7 @@ export function useAgoraCall({
             : "Couldn't start the call with Mochi.",
       );
     }
-  }, [status, onTranscript, onInterrupt, teardown]);
+  }, [status, mixedLanguages, onTranscript, onInterrupt, teardown]);
 
   const hangUp = useCallback(async () => {
     if (!call.current && !agentId.current) return;
@@ -259,6 +281,30 @@ export function useAgoraCall({
     await teardown();
     setStatus("ready");
   }, [runExtract, teardown]);
+
+  // Form complete: let Mochi finish its goodbye line, then end the call and hand over.
+  useEffect(() => {
+    finishCall.current = () => {
+      if (wrap.current.stage === "done") return;
+      wrap.current.stage = "done";
+      window.clearTimeout(wrap.current.timer);
+      void hangUp().then(() => onCompleteRef.current());
+    };
+  }, [hangUp]);
+  useEffect(() => {
+    const w = wrap.current;
+    if (agentSpeaking && w.stage === "waiting") w.stage = "speaking";
+    else if (!agentSpeaking && w.stage === "speaking") {
+      // A line that stops within 2.5 s of the goodbye request is the one it cut off: keep waiting.
+      if (Date.now() - w.at < 2_500) {
+        w.stage = "waiting";
+        return;
+      }
+      // A short pause so the last word isn't cut off.
+      window.clearTimeout(w.timer);
+      w.timer = window.setTimeout(() => finishCall.current(), 1_200);
+    }
+  }, [agentSpeaking]);
 
   const toggleMute = useCallback(async () => {
     if (!call.current) return;

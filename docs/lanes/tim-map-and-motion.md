@@ -26,7 +26,7 @@ The part of First Key between the swipe and the floor plan:
 | 9 | **Only one heavy scene renders at a time** | The map and the 3D building each use the graphics card. Pausing one while the other shows keeps an ordinary laptop smooth on the venue projector |
 | 10 | **Colours come from the CSS tokens and are re-read when the theme changes** | Kopi O and Teh Susu must change the whole app, including the map and the building. The map style and 3D materials need real colour values, so they read the tokens at runtime instead of hard-coding colours. This bends the starter's "never raw hex" rule only inside the map style and the 3D scene |
 | 11 | **Exact pinned versions, each at least two weeks old; React stays on 19.3** | Brand-new releases break at the worst moment. MapLibre, Motion and GSAP all shipped new versions this week, so we stay one step back. React Three Fiber 9.8 only supports React 19.0 to 19.3 |
-| 12 | **The map tile file stays out of the repo** | It is large and slows every clone and deploy. A Protomaps key, or a file hosted elsewhere, is enough. Without a key the map still shows our township on a plain background, so the demo never depends on it |
+| 12 | **Our own map file, hosted outside the repo, no Protomaps key** (changed 12 Nov, 21:00) | Same approach as PAYGAP City: a 3 MB cut-out of the free Protomaps/OpenStreetMap build for our area, read with `pmtiles://`, its address in `NEXT_PUBLIC_PMTILES_URL`, the file in a public Supabase Storage bucket. The hosted Protomaps key was dropped: it is free only for non-commercial use and makes the demo depend on their server. Without the variable the map still shows our township on a plain background |
 | 13 | **A made-up township on open ground, every number labelled illustrative** | The rules allow made-up or public data only. Putting the made-up buildings on open ground stops them overlapping real buildings on the basemap |
 | 14 | **The shared contract goes in its own small branch, merged first** | Three people are building three pieces that must join up. Agreeing the `Unit` and township types first means the swipe, the map and Tengok Dulu all read the same data, and merges don't clash at 2am |
 | 15 | **I stay out of the themes, `PLAN.md`, the swipe and Tengok Dulu** | Clear ownership: each of us can work without waiting for or overwriting the others |
@@ -46,7 +46,7 @@ The part of First Key between the swipe and the floor plan:
 Shared files I will touch, in small separate commits:
 
 - `package.json` and `package-lock.json`: adding the map and 3D packages, at exact pinned versions (listed in `docs/FIRST-KEY.md`). Please don't bump React: React Three Fiber 9.8 needs React 19.0 to 19.3.
-- `.env.example`: adding `NEXT_PUBLIC_PROTOMAPS_KEY` (empty). Without a key, the map still shows the township on a plain background.
+- `.env.example`: `NEXT_PUBLIC_PMTILES_URL` (empty; replaced `NEXT_PUBLIC_PROTOMAPS_KEY`). Not a secret: it is the public address of the map file. Without it, the map still shows the township on a plain background.
 
 ## What I am NOT touching
 

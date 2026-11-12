@@ -1,20 +1,15 @@
 "use client";
 
-import { MoonIcon, SunIcon } from "lucide-react";
-import { useTheme } from "next-themes";
-import { Button } from "@/components/ui/button";
+import { ThemeSwitcher } from "@/components/homelander/theme-switcher";
+import { useHomeLanderTheme } from "@/lib/homelander/theme";
+import "@/app/(homelander)/themes.css";
 
+/** Header theme control for the non-HomeLander shells (admin): the same Teh Susu | Kopi O toggle. It sits in a small themed scope so its pixel frame follows the theme; ThemeBridge (providers.tsx) restyles the page itself. */
 export function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
+  const current = useHomeLanderTheme();
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label="Toggle theme"
-      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-    >
-      <SunIcon className="scale-100 rotate-0 transition-transform dark:scale-0 dark:-rotate-90" />
-      <MoonIcon className="absolute scale-0 rotate-90 transition-transform dark:scale-100 dark:rotate-0" />
-    </Button>
+    <div className="homelander-world !bg-transparent" data-jtheme={current} data-embedded>
+      <ThemeSwitcher />
+    </div>
   );
 }

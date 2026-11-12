@@ -68,7 +68,7 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
             >
               <PixPanel flat className="flex items-center gap-2 px-2.5 py-1.5">
                 <Sprite art="heart" scale={3} className="text-raya" />
-                <span className="font-pixel text-xl leading-none font-bold tracking-wide">
+                <span className="font-pixel text-xl leading-none font-bold tracking-wide max-sm:hidden">
                   HOMELANDER
                 </span>
               </PixPanel>

@@ -1,151 +1,69 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { setMapDusk, setMapNight } from "@/components/first-key/use-map-colors";
 import { useT } from "@/lib/homelander/i18n/client";
-import { setTheme, themes, useHomeLanderTheme } from "@/lib/homelander/theme";
+import { setTheme, useHomeLanderTheme, type ThemeId } from "@/lib/homelander/theme";
 import { DARK_THEMES } from "@/lib/homelander/theme-config";
 import { cn } from "@/lib/utils";
 import { PixPanel } from "./pixel";
 
-function Swatches({
-  colors,
-  size = "sm",
-}: {
-  colors: readonly string[];
-  size?: "sm" | "md";
-}) {
+/** Teh Susu: a tall glass of milky tea, tan drink, cream foam. */
+function TehSusuIcon() {
   return (
-    <span aria-hidden className="flex">
-      {colors.map((c, i) => (
-        <span
-          key={c}
-          className={cn(
-            "rounded-full ring-2 ring-white",
-            size === "sm" ? "size-3.5" : "size-5",
-            i > 0 && (size === "sm" ? "-ml-1" : "-ml-1.5"),
-          )}
-          style={{ background: c }}
-        />
-      ))}
-    </span>
+    <svg aria-hidden viewBox="0 0 16 16" className="size-4 shrink-0" shapeRendering="crispEdges">
+      <path d="M3 3h10l-1 11H4z" fill="#fffaf0" stroke="#17332a" strokeWidth="1" />
+      <path d="M3.6 6h8.8l-.7 7.5H4.3z" fill="#c9954f" />
+      <path d="M3.3 4h9.4v2H3.3z" fill="#f3e3c3" />
+      <path d="M9 1l1 2" stroke="#d8452f" strokeWidth="1" />
+    </svg>
   );
 }
 
-// Only the Kopitiam pair (Teh Susu, Kopi O) for now; the other themes come back once every feature is done.
-const groups = ["Kopitiam"];
+/** Kopi O: a small cup of black coffee with a handle and steam. */
+function KopiOIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" className="size-4 shrink-0" shapeRendering="crispEdges">
+      <path d="M2 6h9v5a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3z" fill="#fffaf0" stroke="#17332a" strokeWidth="1" />
+      <path d="M2.5 6.5h8v1.5h-8z" fill="#17100c" />
+      <path d="M11 7h1.5a1.5 1.5 0 0 1 0 3H11" fill="none" stroke="#17332a" strokeWidth="1" />
+      <path d="M5 4V2M8 4V2" stroke="#17332a" strokeWidth="1" />
+    </svg>
+  );
+}
 
-/** Lets the team flip between design themes on the real screens. */
-export function ThemeSwitcher({
-  align = "right",
-}: {
-  align?: "left" | "right";
-}) {
+const options: { id: ThemeId; name: string; Icon: () => React.JSX.Element }[] = [
+  { id: "kopitiam", name: "Teh Susu", Icon: TehSusuIcon },
+  { id: "kopio", name: "Kopi O", Icon: KopiOIcon },
+];
+
+/** "Teh Susu | Kopi O" light/dark toggle for the header, same shape as the language toggle. */
+export function ThemeSwitcher() {
   const current = useHomeLanderTheme();
   const tr = useT();
-  const active = themes.find((t) => t.id === current) ?? themes[0];
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
   return (
-    <div ref={root} className="pointer-events-auto relative">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-label={tr("Design theme: {name}. Change theme", { name: active.name })}
-        onClick={() => setOpen((o) => !o)}
-        className="block"
-      >
-        <PixPanel flat className="flex h-8 items-center gap-2 px-2.5 max-sm:px-2">
-          <span className="max-sm:hidden">
-            <Swatches colors={active.swatches} />
-          </span>
-          {/* Phones have no room for four swatches: one dot in the theme's accent. */}
-          <span aria-hidden className="size-4 rounded-full ring-2 ring-white sm:hidden" style={{ background: active.swatches[2] }} />
-          <span className="hidden font-pixel text-sm leading-none sm:inline">
-            {active.name}
-          </span>
-        </PixPanel>
-      </button>
-
-      {open ? (
-        <div
-          role="dialog"
-          aria-label={tr("Choose a design theme")}
+    <PixPanel flat className="pointer-events-auto flex h-8 items-center gap-0.5 p-0.5" role="group" aria-label={tr("Design theme")}>
+      {options.map(({ id, name, Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={current === id}
+          aria-label={name}
+          onClick={() => {
+            if (current === id) return;
+            setTheme(id);
+            // The map follows the theme: Kopi O opens it at night. Its own button overrides.
+            setMapNight(DARK_THEMES.includes(id));
+            setMapDusk(false);
+          }}
           className={cn(
-            "z-50 max-sm:fixed max-sm:inset-x-4 max-sm:top-16 sm:absolute sm:top-full sm:mt-3 sm:w-[360px]",
-            align === "right" ? "sm:right-0" : "sm:left-0",
+            "flex h-full items-center gap-1.5 rounded-[inherit] px-2 font-pixel text-xs leading-none whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring max-sm:px-1.5 max-sm:text-[11px]",
+            current === id ? "bg-kaya text-ink" : "text-ink-soft hover:bg-cloud",
           )}
         >
-          <PixPanel className="grid max-h-[min(640px,calc(100svh-7rem))] gap-1 overflow-y-auto p-2">
-            <p className="px-2 pt-1.5 pb-1 text-xs text-ink-soft">
-              {tr("Pick a look. Same screens, same data.")}
-            </p>
-            {groups.map((g) => (
-              <div key={g} className="grid gap-1">
-                <p className="px-2 pt-2 font-pixel-label text-[11px] text-ink-soft uppercase">
-                  {g}
-                </p>
-                {themes
-                  .filter((t) => t.group === g)
-                  .map((t) => {
-                    const on = t.id === current;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() => {
-                          setTheme(t.id);
-                          // The map follows the theme: dark themes (Kopi O, Night Market) open it at night. Its own button overrides.
-                          setMapNight(DARK_THEMES.includes(t.id));
-                          setMapDusk(false);
-                          setOpen(false);
-                        }}
-                        className={cn(
-                          "grid grid-cols-[auto_1fr] items-start gap-3 rounded-[inherit] p-2.5 text-left transition-colors",
-                          on ? "bg-cloud" : "hover:bg-cloud/60",
-                        )}
-                      >
-                        <span className="pt-0.5">
-                          <Swatches colors={t.swatches} size="md" />
-                        </span>
-                        <span className="grid gap-0.5">
-                          <span className="flex items-center gap-2 font-pixel text-base leading-tight font-bold">
-                            {t.name}
-                            {on ? (
-                              <span className="text-xs font-normal text-ink-soft">
-                                {tr("Current")}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="text-[13px] leading-snug text-ink-soft">
-                            {t.blurb}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-              </div>
-            ))}
-          </PixPanel>
-        </div>
-      ) : null}
-    </div>
+          <Icon />
+          <span className="max-sm:hidden">{name}</span>
+        </button>
+      ))}
+    </PixPanel>
   );
 }

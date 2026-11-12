@@ -1,0 +1,674 @@
+/*
+ * HomeLander design themes. Every screen is built from the same pieces (pix-frame, pix-btn, PixMeter,
+ * PixTag, the colour tokens and two font slots), so each theme re-skins those pieces here.
+ *
+ *   arcade    fully 8-bit (the defaults in globals.css)
+ *   ledger    professional banking app; play lives only in pixel badges and XP bars
+ *   quest     friendly and chunky (Duolingo-like): rounded, pressable, bold rounded type
+ *   kopitiam  Malaysian kopitiam: white wall tile, jade band, enamel-pill buttons
+ */
+
+/* ---------------------------------------------------------------- shared */
+
+.homelander-world {
+  --font-pixel: var(--font-pixelify), ui-monospace, monospace;
+  --font-pixel-label: var(--font-silkscreen), ui-monospace, monospace;
+  --j-body: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--j-body);
+}
+
+.homelander-world .pix-btn {
+  white-space: nowrap;
+}
+
+/* Frames with no explicit fill (selects, inputs) take the theme's surface colour. */
+.homelander-world :is(.pix-frame, .pix-btn):not([style*="--pix-fill"]) {
+  --pix-fill: var(--j-surface, #ffffff);
+}
+
+.homelander-world:not([data-jtheme="arcade"]) {
+  .j-sky {
+    display: none;
+  }
+  .pix-img {
+    image-rendering: auto;
+  }
+  /* Pixel-art sprites stay crisp in every theme: they are the game layer. */
+}
+
+/* ================================================================ LEDGER */
+
+.homelander-world[data-jtheme="ledger"] {
+  --color-ink: #101828;
+  --color-ink-soft: #556074;
+  --color-sky: #f4f5f7;
+  --color-sky-deep: #3b6ff5;
+  --color-cloud: #eef0f4;
+  --color-pandan: #17a061;
+  --color-pandan-deep: #0d6e41;
+  --color-raya: #e5484d;
+  --color-raya-deep: #b4262b;
+  --color-kaya: #f5b301;
+  --color-kaya-deep: #a87500;
+  --color-teh: #8a5a33;
+  --color-lilac: #e9e5ff;
+  --color-lilac-deep: #6d5dfc;
+  --j-line: #e3e6ec;
+  --font-pixel: var(--font-geist-sans), system-ui, sans-serif;
+  --font-pixel-label: var(--font-geist-mono), ui-monospace, monospace;
+  background:
+    radial-gradient(1200px 380px at 50% -120px, #e7ecf7 0%, transparent 70%),
+    var(--color-sky);
+
+  .font-pixel {
+    letter-spacing: -0.02em;
+  }
+  .font-pixel-label {
+    letter-spacing: 0.04em;
+    font-weight: 500;
+  }
+
+  .pix-frame {
+    border-radius: 14px;
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--pix-fill), #101828 11%),
+      0 1px 2px rgb(16 24 40 / 0.05),
+      0 calc(var(--pix-drop) * 2) calc(var(--pix-drop) * 4) calc(var(--pix-drop) * -1) rgb(16 24 40 / 0.08);
+  }
+  .pix-btn {
+    border-radius: 10px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--pix-fill), #101828 14%),
+      0 1px 2px rgb(16 24 40 / 0.08),
+      inset 0 1px 0 rgb(255 255 255 / 0.25);
+    transition:
+      transform 120ms ease-out,
+      filter 120ms;
+  }
+  .pix-btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  [class~="border-ink"],
+  [class*="border-ink/"] {
+    border-color: var(--j-line);
+  }
+  [class~="border-2"],
+  [class~="border-[3px]"],
+  [class~="border-4"] {
+    border-width: 1px;
+  }
+  [class~="border-b-[3px]"] {
+    border-bottom-width: 1px;
+  }
+  [class~="border-t-2"] {
+    border-top-width: 1px;
+  }
+  [class~="border-l-3"] {
+    border-left-width: 1px;
+  }
+
+  /* Tags become soft pills, like status chips in a banking app. */
+  span[class*="font-pixel-label"][class*="border-2"] {
+    border-radius: 999px;
+    padding: 3px 8px;
+    border-color: transparent;
+  }
+  span[class*="font-pixel-label"][class~="bg-white"] {
+    border-color: var(--j-line);
+  }
+  span[class*="font-pixel-label"][class~="bg-pandan"] {
+    background: #dcf4e8;
+    color: #0d6e41;
+  }
+  span[class*="font-pixel-label"][class~="bg-raya"] {
+    background: #fde4e4;
+    color: #b4262b;
+  }
+  span[class*="font-pixel-label"][class~="bg-kaya"] {
+    background: #fff1c7;
+    color: #7a5600;
+  }
+
+  /* XP bars: segmented but quiet. */
+  [role="meter"] {
+    background: var(--color-cloud);
+    border-radius: 999px;
+    gap: 2px;
+    padding: 2px;
+  }
+  [role="meter"] > span {
+    border-radius: 999px;
+    height: 8px;
+  }
+}
+
+/* ================================================================ QUEST */
+
+.homelander-world[data-jtheme="quest"] {
+  --color-ink: #1d2433;
+  --color-ink-soft: #5a6478;
+  --color-sky: #f4f6fb;
+  --color-sky-deep: #1cb0f6;
+  --color-cloud: #e9eef7;
+  --color-pandan: #58cc02;
+  --color-pandan-deep: #3e8f02;
+  --color-raya: #ff4b4b;
+  --color-raya-deep: #c62828;
+  --color-kaya: #ffc800;
+  --color-kaya-deep: #b08800;
+  --color-teh: #a0612f;
+  --color-lilac: #ce82ff;
+  --color-lilac-deep: #9a4dd6;
+  --j-line: #e1e6ef;
+  --j-body: var(--font-nunito), system-ui, sans-serif;
+  --font-pixel: var(--font-nunito), system-ui, sans-serif;
+  --font-pixel-label: var(--font-nunito), system-ui, sans-serif;
+  background:
+    radial-gradient(circle at 1px 1px, #dde3ee 1.2px, transparent 1.3px) 0 0 / 22px 22px,
+    var(--color-sky);
+
+  .font-pixel {
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .font-pixel-label {
+    font-weight: 900;
+    letter-spacing: 0.06em;
+  }
+
+  .pix-frame {
+    border-radius: 20px;
+    box-shadow:
+      0 0 0 2px color-mix(in oklab, var(--pix-fill), #1d2433 13%),
+      0 calc(var(--pix-drop) * 0.7) 0 2px color-mix(in oklab, var(--pix-fill), #1d2433 13%);
+  }
+  .pix-btn {
+    border-radius: 16px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    box-shadow:
+      0 0 0 2px color-mix(in oklab, var(--pix-fill), #1d2433 16%),
+      0 calc(var(--pix-drop) * 0.9) 0 2px color-mix(in oklab, var(--pix-fill), #1d2433 22%);
+    transition:
+      transform 80ms ease-out,
+      box-shadow 80ms ease-out,
+      filter 120ms;
+  }
+
+  [class~="border-ink"],
+  [class*="border-ink/"] {
+    border-color: var(--j-line);
+  }
+  [class~="border-[3px]"],
+  [class~="border-4"] {
+    border-width: 2px;
+  }
+  [class~="border-b-[3px]"] {
+    border-bottom-width: 2px;
+  }
+
+  span[class*="font-pixel-label"][class*="border-2"] {
+    border-radius: 999px;
+    padding: 4px 9px;
+    border-color: transparent;
+  }
+  span[class*="font-pixel-label"][class~="bg-white"] {
+    border-color: var(--j-line);
+  }
+
+  [role="meter"] {
+    background: var(--color-cloud);
+    border-radius: 999px;
+    gap: 3px;
+    padding: 3px;
+  }
+  [role="meter"] > span {
+    border-radius: 999px;
+    height: 12px;
+  }
+}
+
+/* ================================================================ KOPITIAM */
+
+.homelander-world[data-jtheme="kopitiam"] {
+  --color-ink: #17332a;
+  --color-ink-soft: #4a6359;
+  --color-sky: #f4f8f5;
+  --color-sky-deep: #3f8fb5;
+  --color-cloud: #e4efe8;
+  --color-pandan: #1f9d6b;
+  --color-pandan-deep: #12704b;
+  --color-raya: #d8452f;
+  --color-raya-deep: #a52f1d;
+  --color-kaya: #f2b632;
+  --color-kaya-deep: #a97a0c;
+  --color-teh: #8a5a33;
+  --color-lilac: #d6ebf3;
+  --color-lilac-deep: #3f8fb5;
+  --j-line: #c9dbd1;
+  --font-pixel: var(--font-bricolage), system-ui, sans-serif;
+  --font-pixel-label: var(--font-bricolage), system-ui, sans-serif;
+  /* White glazed wall tiles with faint jade grout. */
+  background:
+    linear-gradient(#e2ede6 1px, transparent 1px) 0 0 / 34px 34px,
+    linear-gradient(90deg, #e2ede6 1px, transparent 1px) 0 0 / 34px 34px,
+    var(--color-sky);
+
+  /* The jade tile band every kopitiam wall has at waist height. */
+  &::before {
+    content: "";
+    position: fixed;
+    inset: auto 0 0 0;
+    height: 16vh;
+    z-index: 0;
+    pointer-events: none;
+    border-top: 6px solid #12704b;
+    background:
+      linear-gradient(rgb(255 255 255 / 0.18) 1.5px, transparent 1.5px) 0 0 / 34px 34px,
+      linear-gradient(90deg, rgb(255 255 255 / 0.18) 1.5px, transparent 1.5px) 0 0 / 34px 34px,
+      #1f9d6b;
+  }
+
+  .font-pixel {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  .font-pixel-label {
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .pix-frame {
+    border-radius: 14px;
+    box-shadow:
+      0 0 0 1.5px var(--color-ink),
+      0 calc(var(--pix-drop) * 0.5 + 1.5px) 0 0 var(--color-ink);
+  }
+  .pix-btn {
+    border-radius: 999px;
+    font-weight: 700;
+    box-shadow:
+      0 0 0 1.5px var(--color-ink),
+      0 calc(var(--pix-drop) * 0.6 + 1.5px) 0 0 var(--color-ink);
+    transition:
+      transform 90ms ease-out,
+      box-shadow 90ms ease-out,
+      filter 120ms;
+  }
+
+  [class~="border-[3px]"],
+  [class~="border-4"] {
+    border-width: 1.5px;
+  }
+  [class~="border-b-[3px]"] {
+    border-bottom-width: 1.5px;
+  }
+  [class~="border-2"] {
+    border-width: 1.5px;
+  }
+
+  span[class*="font-pixel-label"][class*="border-2"] {
+    border-radius: 999px;
+    padding: 3px 9px;
+  }
+
+  [role="meter"] {
+    background: var(--color-cloud);
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1.5px var(--color-ink);
+    gap: 2px;
+    padding: 3px;
+  }
+  [role="meter"] > span {
+    border-radius: 999px;
+  }
+}
+
+/* ---------------------------------------------------------------- per-theme chrome
+   The active nav item is where each theme's character shows first. */
+
+.homelander-world[data-jtheme="ledger"] {
+  /* Banking-app top bar: white, hairline, the nav as a quiet segmented control. */
+  > div > header {
+    background: rgb(255 255 255 / 0.86);
+    backdrop-filter: saturate(1.4) blur(10px);
+    box-shadow: 0 1px 0 var(--j-line);
+    padding-bottom: 12px;
+  }
+  header .pix-frame {
+    --pix-drop: 0px;
+  }
+  [aria-current="page"] {
+    background: var(--color-ink);
+    color: #fff;
+    border-radius: 9px;
+  }
+  [aria-current="page"] svg {
+    color: #fff;
+  }
+  h1.font-pixel {
+    font-weight: 650;
+    letter-spacing: -0.035em;
+  }
+}
+
+.homelander-world[data-jtheme="quest"] {
+  /* Duolingo-style nav: the current item is a bright outlined tile. */
+  [aria-current="page"] {
+    background: #ddf4ff;
+    color: #1899d6;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 2px #84d8ff;
+  }
+  [aria-current="page"] svg {
+    color: #1cb0f6;
+  }
+  h1.font-pixel {
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+}
+
+.homelander-world[data-jtheme="kopitiam"] {
+  /* The current item is a jade enamel pill, like a kopitiam menu-board tab. */
+  [aria-current="page"] {
+    background: var(--color-pandan-deep);
+    color: #fff;
+    border-radius: 999px;
+  }
+  [aria-current="page"] svg {
+    color: #fff;
+  }
+  h1.font-pixel {
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+}
+
+/* ================================================================ BRUTAL (neo-brutalist) */
+
+.homelander-world[data-jtheme="brutal"] {
+  --color-ink: #000000;
+  --color-ink-soft: #2e2e2e;
+  --color-sky: #ffe66d;
+  --color-sky-deep: #3a86ff;
+  --color-cloud: #fff6c2;
+  --color-pandan: #2ee59d;
+  --color-pandan-deep: #0a8f5a;
+  --color-raya: #ff5470;
+  --color-raya-deep: #c4163a;
+  --color-kaya: #ff90e8;
+  --color-kaya-deep: #b8329f;
+  --color-teh: #8a5a33;
+  --color-lilac: #b9a3ff;
+  --color-lilac-deep: #6b45ff;
+  --font-pixel: var(--font-archivo-black), system-ui, sans-serif;
+  --font-pixel-label: var(--font-geist-mono), ui-monospace, monospace;
+  background:
+    radial-gradient(circle at 1px 1px, rgb(0 0 0 / 0.16) 1.2px, transparent 1.4px) 0 0 / 18px 18px,
+    var(--color-sky);
+
+  .font-pixel {
+    letter-spacing: -0.01em;
+  }
+  .font-pixel-label {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+
+  .pix-frame {
+    border-radius: 6px;
+    box-shadow:
+      0 0 0 3px #000,
+      calc(var(--pix-drop) * 0.9 + 3px) calc(var(--pix-drop) * 0.9 + 3px) 0 0 #000;
+  }
+  .pix-btn {
+    border-radius: 6px;
+    font-weight: 400;
+    box-shadow:
+      0 0 0 3px #000,
+      calc(var(--pix-drop) + 2px) calc(var(--pix-drop) + 2px) 0 0 #000;
+    transition:
+      transform 70ms ease-out,
+      box-shadow 70ms ease-out;
+  }
+  .pix-btn:active:not(:disabled) {
+    transform: translate(4px, 4px);
+  }
+  [class~="border-ink"],
+  [class*="border-ink/"] {
+    border-color: #000;
+  }
+  span[class*="font-pixel-label"][class*="border-2"] {
+    border-radius: 4px;
+    box-shadow: 2px 2px 0 0 #000;
+  }
+  [role="meter"] {
+    background: #fff;
+    border: 3px solid #000;
+    padding: 2px;
+    gap: 2px;
+  }
+  [role="meter"] > span[class*="bg-ink-soft"] {
+    background: #fff6c2;
+  }
+  [aria-current="page"] {
+    background: #000;
+    color: #fff;
+    border-radius: 4px;
+  }
+  [aria-current="page"] svg {
+    color: var(--color-kaya);
+  }
+}
+
+/* ================================================================ BUBBLEGUM (playful pastel) */
+
+.homelander-world[data-jtheme="bubblegum"] {
+  --color-ink: #3b1f4a;
+  --color-ink-soft: #77588a;
+  --color-sky: #ffeef6;
+  --color-sky-deep: #5aa9ff;
+  --color-cloud: #ffe2ef;
+  --color-pandan: #3ccf91;
+  --color-pandan-deep: #13895a;
+  --color-raya: #ff5c8a;
+  --color-raya-deep: #d1265a;
+  --color-kaya: #ffd166;
+  --color-kaya-deep: #b8860b;
+  --color-teh: #a0612f;
+  --color-lilac: #d9c8ff;
+  --color-lilac-deep: #8a63f0;
+  --j-body: var(--font-fredoka), system-ui, sans-serif;
+  --font-pixel: var(--font-fredoka), system-ui, sans-serif;
+  --font-pixel-label: var(--font-fredoka), system-ui, sans-serif;
+  background:
+    radial-gradient(520px 420px at 8% 12%, #ffd3e8 0%, transparent 70%),
+    radial-gradient(560px 460px at 92% 30%, #e3d6ff 0%, transparent 70%),
+    radial-gradient(620px 420px at 40% 100%, #c9f5e2 0%, transparent 70%),
+    var(--color-sky);
+  background-attachment: fixed;
+
+  .font-pixel {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .font-pixel-label {
+    font-weight: 600;
+    letter-spacing: 0.06em;
+  }
+
+  .pix-frame {
+    border-radius: 28px;
+    box-shadow:
+      0 0 0 1.5px color-mix(in oklab, var(--pix-fill), #ff5c8a 18%),
+      0 calc(var(--pix-drop) * 2.5) calc(var(--pix-drop) * 5) calc(var(--pix-drop) * -1.5) rgb(209 38 90 / 0.28);
+  }
+  .pix-btn {
+    border-radius: 999px;
+    font-weight: 600;
+    box-shadow:
+      0 0 0 1.5px color-mix(in oklab, var(--pix-fill), #3b1f4a 14%),
+      0 calc(var(--pix-drop) * 0.8) 0 0 color-mix(in oklab, var(--pix-fill), #3b1f4a 24%);
+    transition:
+      transform 90ms ease-out,
+      box-shadow 90ms ease-out;
+  }
+  [class~="border-ink"],
+  [class*="border-ink/"] {
+    border-color: #ffc4dc;
+  }
+  [class~="border-[3px]"],
+  [class~="border-4"] {
+    border-width: 2px;
+  }
+  [class~="border-b-[3px]"] {
+    border-bottom-width: 2px;
+  }
+  span[class*="font-pixel-label"][class*="border-2"] {
+    border-radius: 999px;
+    border-color: transparent;
+    padding: 4px 10px;
+  }
+  span[class*="font-pixel-label"][class~="bg-white"] {
+    border-color: #ffc4dc;
+  }
+  [role="meter"] {
+    background: #ffe2ef;
+    border-radius: 999px;
+    padding: 3px;
+    gap: 3px;
+  }
+  [role="meter"] > span {
+    border-radius: 999px;
+  }
+  [aria-current="page"] {
+    background: #ff5c8a;
+    color: #fff;
+    border-radius: 999px;
+  }
+  [aria-current="page"] svg {
+    color: #fff;
+  }
+}
+
+/* ================================================================ NIGHT MARKET (dark) */
+
+.homelander-world[data-jtheme="night"] {
+  --color-ink: #f3efff;
+  --color-ink-soft: #ada6ca;
+  --color-sky: #12101c;
+  --color-sky-deep: #38bdf8;
+  --color-cloud: #26223a;
+  --color-pandan: #2dd4a7;
+  --color-pandan-deep: #5ee9c3;
+  --color-raya: #ff5d73;
+  --color-raya-deep: #ff8a9b;
+  --color-kaya: #ffb547;
+  --color-kaya-deep: #ffc56e;
+  --color-teh: #d39a63;
+  --color-lilac: #8b7cff;
+  --color-lilac-deep: #a99dff;
+  --j-surface: #1d1a2b;
+  --j-on-light: #14111f;
+  --font-pixel: var(--font-unbounded), system-ui, sans-serif;
+  --font-pixel-label: var(--font-geist-mono), ui-monospace, monospace;
+  color-scheme: dark;
+  background:
+    radial-gradient(700px 420px at 12% -6%, rgb(255 181 71 / 0.16) 0%, transparent 70%),
+    radial-gradient(640px 480px at 96% 18%, rgb(45 212 167 / 0.12) 0%, transparent 70%),
+    radial-gradient(600px 420px at 50% 110%, rgb(139 124 255 / 0.14) 0%, transparent 70%),
+    var(--color-sky);
+  background-attachment: fixed;
+
+  .font-pixel {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .font-pixel-label {
+    letter-spacing: 0.06em;
+  }
+
+  .pix-frame {
+    border-radius: 16px;
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--pix-fill), #ffffff 12%),
+      0 calc(var(--pix-drop) * 3) calc(var(--pix-drop) * 6) calc(var(--pix-drop) * -2) rgb(0 0 0 / 0.6);
+  }
+  .pix-btn {
+    border-radius: 12px;
+    font-weight: 600;
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--pix-fill), #ffffff 14%),
+      0 6px 18px -8px color-mix(in oklab, var(--pix-fill), transparent 30%);
+    transition:
+      transform 120ms ease-out,
+      filter 120ms;
+  }
+  .pix-btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  /* Light fills (lantern orange, teal, lilac) take dark text. */
+  :is(.pix-btn, .pix-frame)[style*="--color-kaya"],
+  :is(.pix-btn, .pix-frame)[style*="--color-pandan"],
+  :is(.pix-btn, .pix-frame)[style*="--color-lilac"],
+  :is(.pix-btn, .pix-frame)[style*="--color-kaya"] .text-ink,
+  :is(.pix-btn, .pix-frame)[style*="--color-pandan"] .text-ink,
+  :is(.pix-btn, .pix-frame)[style*="--color-lilac"] .text-ink,
+  [class~="bg-kaya"],
+  [class~="bg-pandan"],
+  [class~="bg-lilac"],
+  [aria-current="page"] {
+    color: var(--j-on-light);
+  }
+  [class~="bg-white"] {
+    background-color: var(--j-surface);
+  }
+  [class~="bg-ink"][class~="text-white"] {
+    background-color: #f3efff;
+    color: var(--j-on-light);
+  }
+  [class~="border-ink"],
+  [class*="border-ink/"] {
+    border-color: #3a3553;
+  }
+  [class~="border-[3px]"],
+  [class~="border-4"],
+  [class~="border-2"] {
+    border-width: 1px;
+  }
+  [class~="border-b-[3px]"] {
+    border-bottom-width: 1px;
+  }
+  span[class*="font-pixel-label"][class*="border-2"] {
+    border-radius: 999px;
+    padding: 3px 8px;
+  }
+  [role="meter"] {
+    background: #0e0c16;
+    border-radius: 999px;
+    padding: 2px;
+    gap: 2px;
+  }
+  [role="meter"] > span {
+    border-radius: 999px;
+  }
+  [aria-current="page"] {
+    background: var(--color-kaya);
+    border-radius: 10px;
+    box-shadow: 0 0 22px -4px rgb(255 181 71 / 0.7);
+  }
+  [aria-current="page"] svg {
+    color: var(--j-on-light);
+  }
+  /* The light basemap, turned to night. */
+  .maplibregl-canvas {
+    filter: invert(0.92) hue-rotate(180deg) saturate(0.7) brightness(0.9);
+  }
+}
+

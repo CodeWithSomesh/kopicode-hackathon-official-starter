@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     ".claude/**",
+    // Vendored MapLibre worker, served as-is.
+    "public/homelander/maplibre/**",
   ]),
 ]);
 

@@ -4,6 +4,13 @@
 
 This file is loaded by Claude Code for **everyone** who works in this repo. It is the team's shared memory. Keep it short and true. When a decision is made, write it down here or in `docs/PLAN.md` and commit it, so every teammate's Claude picks it up on the next `git pull`.
 
+## HomeLander (our project): read `docs/homelander-spec.md` first
+
+- The app is **HomeLander**. Its routes live in `src/app/(homelander)/`: `/` landing map, `/onboarding` Uncle, `/swipe`, `/battle`, `/bank`, `/profile`, `/admin`, `/homes/[id]/feng-shui`.
+- Owners: landing = teammate A (`src/app/(homelander)/_landing/CLAUDE.md`); Feng Shui = teammate B (`src/app/(homelander)/homes/[id]/feng-shui/CLAUDE.md`); everything else and all shared code = Somesh.
+- **Kopitiam theme only** until every feature works. Use the shared pieces in `src/components/homelander/` and the theme colour classes. Don't touch the locked themes or `LOCKED_THEME`.
+- Every screen needs a desktop web layout and a phone layout.
+
 ## Read these first, in this order
 
 1. `docs/PLAN.md` — problem statement, the 3 must-have features, who owns what, the shared data contract, the timeline and the decision log. **Source of truth for scope.**

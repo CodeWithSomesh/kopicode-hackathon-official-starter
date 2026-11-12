@@ -14,8 +14,6 @@ export const profile: Dict = {
   "Bank estimate": "Anggaran bank",
   "Up to {amount}": "Sampai {amount}",
   "Not checked yet": "Belum check",
-  "Office days": "Hari masuk office",
-  "{n} a week": "{n} hari seminggu",
   "Gets to work by": "Pergi kerja naik",
   "Chat with Uncle again": "Chat dengan Uncle lagi",
   "Shortlist": "Shortlist",

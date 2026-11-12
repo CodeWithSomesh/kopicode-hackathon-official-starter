@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { parseVariant, siteLayout, type SiteBuilding } from "@/lib/first-key/site-layout";
+import { parseVariant, siteKind, siteLayout, type SiteBuilding } from "@/lib/first-key/site-layout";
 import type { ThemeColors } from "../use-theme-colors";
 
 // Shared by the Mapbox (site-buildings.tsx) and the MapLibre (neighbourhood-map.tsx) map: the spawned site buildings'
@@ -35,12 +35,15 @@ function typeOf(variant: string): string {
   }
 }
 
+/** `sid` on the buildings that open up (towers and landed homes): "sb<n>", n = index in site-layout.json. */
+export const sidOf = (b: SiteBuilding, i: number) => (siteKind(b) ? { sid: `sb${i}` } : {});
+
 /** One rectangle per building: click target and stand-in extrusion on Mapbox, the building itself on MapLibre. */
 export const siteFootprints = {
   type: "FeatureCollection" as const,
-  features: siteLayout.buildings.map((b) => ({
+  features: siteLayout.buildings.map((b, i) => ({
     type: "Feature" as const,
-    properties: { site: b.site, variant: b.variant, type: typeOf(b.variant), h: b.h },
+    properties: { site: b.site, variant: b.variant, type: typeOf(b.variant), h: b.h, ...sidOf(b, i) },
     geometry: { type: "Polygon" as const, coordinates: [ring(b)] },
   })),
 };

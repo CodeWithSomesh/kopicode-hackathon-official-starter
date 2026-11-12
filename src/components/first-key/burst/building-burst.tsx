@@ -20,8 +20,10 @@ import {
   towerMaterials,
   towerParts,
   wholeTower,
+  type Design,
   type Role,
 } from "../tower/tower-model";
+import { designFor } from "../tower/variants";
 import type { MapView } from "./map-view";
 
 const END_PITCH = 50; // the three-quarter view, degrees from straight down
@@ -295,6 +297,20 @@ function Scene({
   );
   const sx = fp.w / plan.w;
   const sz = fp.d / plan.d;
+  // A tower spawned at another site is drawn turned by `rot` (clockwise degrees; three.js turns the other way) and in the design the map gives it.
+  // The plan and its walls live in the tower's own frame, the world's turned by the same angle.
+  const heading = -(building.rot ?? 0) * D2R;
+  const toCamPlate = useMemo<[number, number]>(
+    () => [
+      toCam[0] * Math.cos(heading) - toCam[1] * Math.sin(heading),
+      toCam[0] * Math.sin(heading) + toCam[1] * Math.cos(heading),
+    ],
+    [toCam, heading],
+  );
+  const design = useMemo<Design | undefined>(
+    () => (building.variant ? { ...designFor(building.variant), lod: false, decks: building.decks } : undefined),
+    [building],
+  );
 
   // A built-in studio (no HDR download) for the glass and clearcoat to reflect.
   const gl = useThree((s) => s.gl);
@@ -311,7 +327,7 @@ function Scene({
   }, [gl, scene]);
   // The same tower the map draws (tower/tower-model.ts), split at the cut: the floors above lift away and fade.
   const mats = useMemo(() => {
-    const solid = towerMaterials(building, colors, dark, true);
+    const solid = towerMaterials(building, colors, dark, true, dark, design);
     const fading = Object.fromEntries(
       ROLES.map((r) => {
         const m = solid[r].clone();
@@ -326,15 +342,15 @@ function Scene({
       fadingList: Object.values(fading),
       plate: plateMaterial(colors, dark),
     };
-  }, [building, colors, dark]);
+  }, [building, colors, dark, design]);
   const lower = useMemo(
     () =>
-      floor > 1 ? towerParts(building, fp.outline, 0, floor - 1, false) : {},
-    [building, fp, floor],
+      floor > 1 ? towerParts(building, fp.outline, 0, floor - 1, false, design) : {},
+    [building, fp, floor, design],
   );
   const upperParts = useMemo(
-    () => towerParts(building, fp.outline, floor - 1, building.floors, true),
-    [building, fp, floor],
+    () => towerParts(building, fp.outline, floor - 1, building.floors, true, design),
+    [building, fp, floor, design],
   );
   // The map draws the picked block flat in the primary colour: the 3D block starts in that colour too and clears to glass.
   const tint = useMemo(
@@ -350,8 +366,8 @@ function Scene({
   // The whole tower in one geometry, drawn over itself in the tint (same depth, drawn last), so the first frame is the map's picked tower.
   const tintGeom = useMemo(
     () =>
-      wholeTower(towerParts(building, fp.outline, 0, building.floors, true)),
-    [building, fp],
+      wholeTower(towerParts(building, fp.outline, 0, building.floors, true, design)),
+    [building, fp, design],
   );
   const plateGeom = useMemo(
     () => slabGeom(fp.w + 0.5, 0.3, fp.d + 0.5, 0.15),
@@ -557,17 +573,21 @@ function Scene({
         <circleGeometry args={[3000, 64]} />
       </mesh>
 
-      {tintGeom && <mesh geometry={tintGeom} material={tint} renderOrder={3} />}
+      {tintGeom && (
+        <group rotation-y={heading}>
+          <mesh geometry={tintGeom} material={tint} renderOrder={3} />
+        </group>
+      )}
 
       {/* Floors below the cut: a glass shell with balconies. */}
       {floor > 1 && (
-        <group>
+        <group rotation-y={heading}>
           <TowerMeshes parts={lower} mats={mats.solid} />
         </group>
       )}
 
       {/* The revealed floor. */}
-      <group position-y={floorY}>
+      <group position-y={floorY} rotation-y={heading}>
         <mesh
           position-y={-0.13}
           geometry={plateGeom}
@@ -577,7 +597,7 @@ function Scene({
         <group scale={[sx, 1, sz]} position-y={0.02}>
           <InteriorMeshes
             plan={plan}
-            toCam={toCam}
+            toCam={toCamPlate}
             dark={dark}
             colors={colors}
           />
@@ -674,7 +694,9 @@ function Scene({
 
       {/* Everything above the revealed floor (and its own facade): lifts, slides off and fades. */}
       <group ref={upper}>
-        <TowerMeshes parts={upperParts} mats={mats.fading} />
+        <group rotation-y={heading}>
+          <TowerMeshes parts={upperParts} mats={mats.fading} />
+        </group>
       </group>
     </>
   );

@@ -7,4 +7,5 @@ import type { Dict } from "./types";
  * Keep {placeholders}, digits and RM amounts identical. Read ../GLOSSARY.md first.
  */
 export const map: Dict = {
+  "Illustrative, made-up units and prices": "Contoh sahaja lah, unit dan harga rekaan",
 };

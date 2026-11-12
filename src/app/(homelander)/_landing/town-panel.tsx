@@ -27,7 +27,7 @@ const statusTone: Record<Availability["status"], "pandan" | "kaya" | "raya" | "i
 /**
  * The township's units: bottom sheet on phones (above the tab bar), side panel on desktop.
  */
-export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: Anchor; onClose: () => void }) {
+export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownInfo; anchor: Anchor; onClose: () => void; illustrative?: boolean }) {
   const s = useHomeLander();
   const { t } = info;
   const drive = driveMinutes(t.pos, anchor.pos);
@@ -62,6 +62,17 @@ export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: A
         <PixButton size="sm" className="size-9 shrink-0 px-0" onClick={onClose} aria-label="Close township panel">
           <Sprite art="cross" scale={2} />
         </PixButton>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b-[3px] border-ink px-3 py-2">
+        <PixButton asChild size="sm" tone="raya">
+          <Link href="/login">Start with Uncle</Link>
+        </PixButton>
+        {illustrative && (
+          <span className="text-xs text-ink-soft">
+            The glass block on the map is an illustrative block at Gamuda Cove (made-up units and prices). Tap a block to open it up.
+          </span>
+        )}
       </div>
 
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-[3px] border-ink bg-cloud px-3 py-2 text-sm">
@@ -133,6 +144,9 @@ export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: A
                 >
                   <Sprite art="bars" scale={2} />
                   {inBattle ? "In battle" : battleFull ? "Battle full" : "Add to battle"}
+                </PixButton>
+                <PixButton asChild size="sm" tone="lilac">
+                  <Link href={`/homes/${u.id}/feng-shui`}>Feng Shui</Link>
                 </PixButton>
               </div>
             </li>

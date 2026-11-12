@@ -3,46 +3,62 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Map, { Marker, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
-import { addProtocol, setWorkerUrl, type LayerSpecification, type StyleSpecification } from "maplibre-gl";
+import { addProtocol, setWorkerUrl, type LayerSpecification, type Map as MLMap, type StyleSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { gsap } from "gsap";
 import { layers as basemapLayers, namedFlavor } from "@protomaps/basemaps";
-import { Building2, Coffee, GraduationCap, HeartPulse, Landmark, ShoppingBasket, TrainFront, Trees, type LucideIcon } from "lucide-react";
+import { Coffee, GraduationCap, HeartPulse, Landmark, ShoppingBasket, TrainFront, Trees, type LucideIcon } from "lucide-react";
 import { township } from "@/lib/first-key/township";
 import { bearingDeg, centroid, compassOf, distanceM, walkingMinutes } from "@/lib/first-key/geo";
-import { developments, onMap } from "@/lib/first-key/developments";
-import type { Development, PlaceKind } from "@/lib/first-key/types";
+import type { PlaceKind } from "@/lib/first-key/types";
+import { anchorOptions, townshipById } from "@/lib/homelander/data";
+import { useHomeLander } from "@/lib/homelander/store";
+import { pillLean, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
+import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import { useThemeColors } from "../use-theme-colors";
 import { drawGlassTexture } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 
-// Turbopack rewrites import.meta.url, so MapLibre can't find its own worker: point it at the packaged file.
-setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).href);
+// Turbopack can't resolve MapLibre's module worker next to the bundle, so it is served from /public (a copy of
+// node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs; re-copy it if MapLibre is upgraded). The only worker setup in the app.
+setWorkerUrl("/homelander/maplibre/maplibre-gl-worker.mjs");
+
+// No PMTiles file configured (or it can't be fetched): OpenFreeMap's free Liberty style, no key, with our layers on top.
+const LIBERTY_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 const PMTILES_URL = process.env.NEXT_PUBLIC_PMTILES_URL; // our own basemap file; unset = plain background
 let registered = false;
 const NIGHT_STEPS = 5;
 
-export const COVE_ID = "gamuda-cove"; // the illustrative block sits inside this development
-const pins = developments.filter(onMap);
+export const COVE_ID = "cove"; // the illustrative block sits inside this township (id in src/lib/homelander/data.ts)
 
-// The township view fits the 12 buildings to 70% of the screen width (any screen size), not a fixed zoom.
+// Camera padding that keeps the focus clear of the floating header, township list, panel, sheet and tab bar.
+function cameraPadding(panelOpen: boolean) {
+  if (window.matchMedia("(min-width: 1024px)").matches) return { top: 110, bottom: 60, left: 340, right: panelOpen ? 440 : 110 };
+  const h = window.innerHeight;
+  return { top: 150, bottom: panelOpen ? Math.min(h * 0.52, 460) + 150 : 140, left: 30, right: 70 };
+}
+
+// The township view fits the 12 buildings into the free part of the screen (any screen size), not a fixed zoom.
 const LNGS = township.buildings.flatMap((b) => b.footprint.map((p) => p[0]));
 const SPAN_M = (Math.max(...LNGS) - Math.min(...LNGS)) * 111_320 * Math.cos((township.center[1] * Math.PI) / 180);
 const M_PER_PX_Z0 = 78_271.5 * Math.cos((township.center[1] * Math.PI) / 180); // MapLibre 512px tiles
-const townshipView = () => ({
-  center: township.center as [number, number],
-  zoom: Math.log2((window.innerWidth * 0.7 * M_PER_PX_Z0) / SPAN_M),
-  pitch: 52,
-  bearing: 0,
-});
-// Klang Valley overview: all on-map developments (101.51-101.75 E, 2.88-3.30 N) inside the screen, pins and pills included.
-const klangView = () => {
-  const mpp = Math.max(78_000 / (window.innerHeight * 0.8), 40_000 / (window.innerWidth * 0.8)); // metres per pixel
-  return { center: [101.63, 3.09] as [number, number], zoom: Math.log2(M_PER_PX_Z0 / mpp), pitch: 0, bearing: 0 };
+const townshipView = () => {
+  const padding = cameraPadding(true);
+  const free = Math.max(200, window.innerWidth - padding.left - padding.right);
+  return { center: township.center as [number, number], zoom: Math.log2((free * 0.9 * M_PER_PX_Z0) / SPAN_M), pitch: 52, bearing: 0, padding };
 };
-const devView = (d: Development) =>
-  d.id === COVE_ID ? townshipView() : { center: [d.lng!, d.lat!] as [number, number], zoom: 14.6, pitch: 50, bearing: 0 };
+// Klang Valley overview: every township (101.51-101.79 E, 2.88-3.29 N) inside the free part of the screen, pills included.
+const klangView = () => {
+  const padding = cameraPadding(false);
+  const mpp = Math.max(62_000 / (window.innerHeight - padding.top - padding.bottom), 36_000 / (window.innerWidth - padding.left - padding.right));
+  return { center: [101.65, 3.09] as [number, number], zoom: Math.log2(M_PER_PX_Z0 / mpp), pitch: 0, bearing: 0, padding };
+};
+const devView = (id: string) => {
+  const t = townshipById[id];
+  if (id === COVE_ID) return townshipView();
+  return { center: [t.pos.lng, t.pos.lat] as [number, number], zoom: 14.6, pitch: 50, bearing: 0, padding: cameraPadding(true) };
+};
 const ICONS: Record<PlaceKind, LucideIcon> = {
   school: GraduationCap,
   clinic: HeartPulse,
@@ -76,12 +92,16 @@ type Props = {
   onArrived: () => void;
   /** Start already at the selected building, no fly-in (a `?building=` link). */
   startAtSelected?: boolean;
-  /** The focused development (a pin was clicked, or a `?dev=` link). Undefined = the Klang Valley overview. */
+  /** The focused township (a pill was clicked, or a `?dev=` link). Undefined = the Klang Valley overview. */
   devId?: string;
   onSelectDev: (id: string) => void;
+  /** The MapLibre map, once it has loaded (for the zoom / compass / 2D-3D buttons). */
+  onMapReady?: (map: MLMap) => void;
 };
 
-export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev }: Props) {
+export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArrived, startAtSelected, devId, onSelectDev, onMapReady }: Props) {
+  const hl = useHomeLander();
+  const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const mapRef = useRef<MapRef>(null);
   const [loaded, setLoaded] = useState(false);
   // Cap the device pixel ratio: the demo laptop / projector draws about 600 extrusions.
@@ -96,16 +116,27 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   });
   const withBasemap = !!PMTILES_URL && protocolReady;
   const [initialView] = useState(() => {
-    const dev = developments.find((d) => d.id === devId);
-    const o = startAtSelected ? townshipView() : dev && onMap(dev) ? devView(dev) : klangView();
-    return { longitude: o.center[0], latitude: o.center[1], zoom: o.zoom, pitch: o.pitch, bearing: o.bearing };
+    const o = startAtSelected ? townshipView() : devId && townshipById[devId] ? devView(devId) : klangView();
+    return { longitude: o.center[0], latitude: o.center[1], zoom: o.zoom, pitch: o.pitch, bearing: o.bearing, padding: o.padding };
   });
   const reduced = usePrefersReducedMotion();
   const colors = useThemeColors();
   // Dark = the theme's background is dark: works for any theme (Kopi O, Teh Susu...) and for a class flip.
   const dark = (colors.background.match(/\d+/g) ?? ["255"]).slice(0, 3).reduce((t, v) => t + Number(v), 0) / 3 < 128;
-  // Mount the map only once the PMTiles protocol is registered: one style set at load.
-  const ready = !PMTILES_URL || protocolReady;
+  // Without our PMTiles file, fetch OpenFreeMap's Liberty style once ("failed" = offline: plain background, never blank).
+  const [liberty, setLiberty] = useState<StyleSpecification | "loading" | "failed">(PMTILES_URL ? "failed" : "loading");
+  useEffect(() => {
+    if (PMTILES_URL) return;
+    const ctl = new AbortController();
+    fetch(LIBERTY_URL, { signal: ctl.signal })
+      .then((r) => r.json())
+      .then((j: StyleSpecification) => setLiberty(j))
+      .catch((e) => e?.name !== "AbortError" && setLiberty("failed"));
+    return () => ctl.abort();
+  }, []);
+  // Mount the map once its basemap style is known: one style set at load.
+  const ready = PMTILES_URL ? protocolReady : liberty !== "loading";
+  const libertyStyle = !withBasemap && typeof liberty === "object" ? liberty : undefined;
 
   // Night reveal: when the theme flips light to dark while open, `lit` runs 0..NIGHT_STEPS and the windows come on.
   const [lit, setLit] = useState(NIGHT_STEPS);
@@ -135,65 +166,95 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     ],
     [dark, colors.muted],
   );
-  const style = useMemo<StyleSpecification>(
-    () => ({
+  const style = useMemo<StyleSpecification>(() => {
+    const overlays: LayerSpecification[] = [
+      {
+        id: "homelander-rail-casing",
+        type: "line",
+        source: "homelander-rail",
+        layout: { "line-join": "miter", "line-cap": "square" },
+        paint: { "line-color": colors.foreground, "line-width": ["interpolate", ["linear"], ["zoom"], 8, 5, 14, 10] },
+      },
+      {
+        id: "homelander-rail",
+        type: "line",
+        source: "homelander-rail",
+        layout: { "line-join": "miter", "line-cap": "square" },
+        paint: { "line-color": ["get", "color"], "line-width": ["interpolate", ["linear"], ["zoom"], 8, 2.5, 14, 6] },
+      },
+      {
+        id: "homelander-stations",
+        type: "circle",
+        source: "homelander-stations",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 2.5, 14, 6],
+          "circle-color": colors.card,
+          "circle-stroke-color": colors.foreground,
+          "circle-stroke-width": 2,
+          "circle-pitch-alignment": "map",
+        },
+      },
+      {
+        id: "rail",
+        type: "line",
+        minzoom: 14,
+        source: "rail",
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": colors["chart-3"], "line-width": 4 },
+      },
+      {
+        // Glass towers: the window texture. fill-extrusion-pattern and -color can't share a layer,
+        // so the selected building is left out here and drawn tinted by the layer below.
+        id: "township-buildings",
+        type: "fill-extrusion",
+        source: "buildings",
+        minzoom: 14,
+        filter: ["!=", ["get", "id"], selectedId ?? ""],
+        paint: {
+          "fill-extrusion-height": ["get", "height"],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 1,
+          "fill-extrusion-pattern": glassId,
+        },
+      },
+      {
+        id: "township-selected",
+        type: "fill-extrusion",
+        source: "buildings",
+        minzoom: 14,
+        filter: ["==", ["get", "id"], selectedId ?? ""],
+        paint: {
+          "fill-extrusion-height": ["get", "height"],
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 0.92,
+          "fill-extrusion-color": colors.primary,
+        },
+      },
+    ];
+    const ours = {
+      buildings: { type: "geojson" as const, data: buildingsGeoJson },
+      rail: { type: "geojson" as const, data: railGeoJson },
+      "homelander-rail": { type: "geojson" as const, data: railGeoJSON },
+      "homelander-stations": { type: "geojson" as const, data: stationGeoJSON },
+    };
+    if (libertyStyle) return { ...libertyStyle, sources: { ...libertyStyle.sources, ...ours }, layers: [...libertyStyle.layers, ...overlays] };
+    return {
       version: 8,
       glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
       sprite: `https://protomaps.github.io/basemaps-assets/sprites/v4/${dark ? "dark" : "light"}`,
       sources: {
         ...(withBasemap && {
           protomaps: {
-            type: "vector",
+            type: "vector" as const,
             url: `pmtiles://${new URL(PMTILES_URL!, window.location.origin).href}`,
             attribution: '<a href="https://protomaps.com">Protomaps</a> © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
           },
         }),
-        buildings: { type: "geojson", data: buildingsGeoJson },
-        rail: { type: "geojson", data: railGeoJson },
+        ...ours,
       },
-      layers: [
-        { id: "bg", type: "background", paint: { "background-color": colors.background } },
-        ...(withBasemap ? basemap : []),
-        {
-          id: "rail",
-          type: "line",
-          minzoom: 14,
-          source: "rail",
-          layout: { "line-cap": "round", "line-join": "round" },
-          paint: { "line-color": colors["chart-3"], "line-width": 4 },
-        },
-        {
-          // Glass towers: the window texture. fill-extrusion-pattern and -color can't share a layer,
-          // so the selected building is left out here and drawn tinted by the layer below.
-          id: "township-buildings",
-          type: "fill-extrusion",
-          source: "buildings",
-          minzoom: 14,
-          filter: ["!=", ["get", "id"], selectedId ?? ""],
-          paint: {
-            "fill-extrusion-height": ["get", "height"],
-            "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 1,
-            "fill-extrusion-pattern": glassId,
-          },
-        },
-        {
-          id: "township-selected",
-          type: "fill-extrusion",
-          source: "buildings",
-          minzoom: 14,
-          filter: ["==", ["get", "id"], selectedId ?? ""],
-          paint: {
-            "fill-extrusion-height": ["get", "height"],
-            "fill-extrusion-base": 0,
-            "fill-extrusion-opacity": 0.92,
-            "fill-extrusion-color": colors.primary,
-          },
-        },
-      ],
-    }),
-    [colors, dark, selectedId, glassId, withBasemap, basemap],
-  );
+      layers: [{ id: "bg", type: "background", paint: { "background-color": colors.background } }, ...(withBasemap ? basemap : []), ...overlays],
+    };
+  }, [colors, dark, selectedId, glassId, withBasemap, basemap, libertyStyle]);
 
   // Draw the window texture for the current theme. MapLibre may ask before or after this runs, so register it now,
   // on every style change, and when the style asks for it by name. In dark all night-reveal frames are drawn up
@@ -289,8 +350,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     firstDev.current = false;
     const map = mapRef.current?.getMap();
     if (isFirst || !map || selectedId) return;
-    const dev = developments.find((d) => d.id === devId);
-    const target = dev && onMap(dev) ? devView(dev) : klangView();
+    const target = devId && townshipById[devId] ? devView(devId) : klangView();
     if (reduced) map.jumpTo(target);
     else map.flyTo({ ...target, duration: 2200, essential: false });
     // selectedId has its own fly-in above
@@ -302,8 +362,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     if (id) onSelect(id);
   };
   const showTownship = devId === COVE_ID || !!selectedId;
-  const overviewShot = !devId && !selectedId;
-  const narrow = typeof window !== "undefined" && window.innerWidth < 640; // phone: compact, differently fanned pills
+
 
   const from = selectedId ? centres[selectedId] : undefined;
 
@@ -326,21 +385,34 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
           (aborted ? console.warn : console.error)(err);
         }}
         onClick={onClick}
-        onLoad={() => setLoaded(true)}
+        onLoad={(e) => {
+          onMapReady?.(e.target as MLMap);
+          setLoaded(true);
+        }}
+        attributionControl={false}
         style={{ width: "100%", height: "100%" }}
       >
-        {overviewShot &&
-          pins.map((d) => (
-            <Marker
-              key={d.id}
-              longitude={d.lng}
-              latitude={d.lat}
-              anchor={(narrow ? PILL_ANCHOR_NARROW : PILL_ANCHOR)[d.id] ?? "bottom"}
-              offset={(narrow ? PILL_OFFSET_NARROW : PILL_OFFSET)[d.id]}
-            >
-              <DevPill dev={d} compact={narrow} onClick={() => onSelectDev(d.id)} />
-            </Marker>
-          ))}
+        {!selectedId &&
+          towns.map((x) => {
+            const lean = pillLean[x.t.id] ?? "center";
+            return (
+              <Marker
+                key={x.t.id}
+                longitude={x.t.pos.lng}
+                latitude={x.t.pos.lat}
+                anchor={lean === "left" ? "bottom-right" : lean === "right" ? "bottom-left" : "bottom"}
+                offset={lean === "left" ? [8, 0] : lean === "right" ? [-8, 0] : [0, 0]}
+                style={{ zIndex: devId === x.t.id ? 3 : 1 }}
+              >
+                <TownPill info={x} selected={devId === x.t.id} onPick={() => onSelectDev(x.t.id)} />
+              </Marker>
+            );
+          })}
+        {!selectedId && (
+          <Marker longitude={workAnchor.pos.lng} latitude={workAnchor.pos.lat} anchor="bottom">
+            <WorkMarker name={workAnchor.name} />
+          </Marker>
+        )}
         {showTownship && !selectedId && (
           <Marker longitude={township.center[0]} latitude={township.center[1] - 80 / 110_574} anchor="top">
             <p className="pointer-events-none max-w-[16rem] rounded-lg border-2 border-primary bg-card px-3 py-1.5 text-center text-xs text-card-foreground shadow-md sm:max-w-none">
@@ -370,33 +442,6 @@ function detail(from: [number, number] | undefined, lng: number, lat: number) {
   if (!from) return undefined;
   const m = distanceM(from, [lng, lat]);
   return `${Math.round(m)} m, ${walkingMinutes(m)} min walk, ${compassOf(bearingDeg(from, [lng, lat]))}`;
-}
-
-// The Gardens Park / Gamuda Gardens / Kundang pins sit about 2 km apart (tens of pixels at this zoom): fan the pills out.
-type Anchor = "left" | "right" | "top-right" | "top-left" | "top" | "bottom";
-const PILL_ANCHOR: Record<string, Anchor> = { "gamuda-gardens": "left", "gardens-park": "right", "kundang-estates": "top-right" };
-const PILL_ANCHOR_NARROW: Record<string, Anchor> = { "gamuda-gardens": "left", "gardens-park": "bottom", "kundang-estates": "top-left" };
-const PILL_OFFSET: Record<string, [number, number]> = { "kundang-estates": [0, 22] };
-const PILL_OFFSET_NARROW: Record<string, [number, number]> = { "kundang-estates": [-4, 20] };
-
-function DevPill({ dev, compact, onClick }: { dev: Development; compact: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="flex items-center gap-1.5 rounded-full border bg-card p-1 pr-3 text-left text-card-foreground shadow-md transition hover:border-primary focus-visible:outline-2 focus-visible:outline-primary"
-      aria-label={`${dev.name}, ${dev.town}${dev.launch ? `, from RM${dev.launch.fromPrice.toLocaleString()}` : ""}`}
-    >
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-        <Building2 className="size-4" aria-hidden />
-      </span>
-      <span className="flex flex-col text-[11px] leading-tight">
-        <span className="whitespace-nowrap text-xs font-semibold">{dev.name}</span>
-        {!compact && <span className="whitespace-nowrap text-muted-foreground">{dev.town.replace(", Selangor", "").replace(", Johor", "")}</span>}
-        {dev.launch && <span className="whitespace-nowrap font-medium text-primary">From RM{dev.launch.fromPrice.toLocaleString()}</span>}
-      </span>
-    </button>
-  );
 }
 
 // White rounded pill: icon, name and (once a building is picked) the walk from it.

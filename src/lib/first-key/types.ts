@@ -56,20 +56,3 @@ export type Township = {
   rail: RailLine;
   places: Place[];
 };
-
-/** A real Gamuda Land development (public facts from gamudaland.com.my). Unit numbers elsewhere stay made up. */
-export type Development = {
-  id: string;
-  name: string;
-  town: string;
-  state: string;
-  acres?: number;
-  blurb: string;
-  url: string;
-  launch?: { name: string; type: string; fromPrice: number };
-  /** Absent = no coordinate found, so it is not drawn on the map. */
-  lng?: number;
-  lat?: number;
-  /** Where the point came from (OpenStreetMap object), or why there is none. */
-  coordSource: string;
-};

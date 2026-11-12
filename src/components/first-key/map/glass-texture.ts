@@ -18,15 +18,23 @@ const noise = (x: number, y: number) => {
   return n - Math.floor(n);
 };
 
-/** `lit` (0..1) is how much of the night-time window glow is on: 0 = all dark panes, 1 = full. Light variant ignores it. */
-export function drawGlassTexture(colors: ThemeColors, dark: boolean, lit = 1): ImageData {
+// Lit windows at night: warm yellow, brighter and more of them on our township, a quieter variant on the neighbours.
+const LIT_TOWNSHIP = { colour: "rgb(255,214,115)", share: 0.4 };
+const LIT_QUIET = { colour: "rgb(222,176,92)", share: 0.25 };
+
+/**
+ * `lit` (0..1) is how much of the night-time window glow is on: 0 = all dark panes, 1 = full. Light variant ignores it.
+ * `quiet` is the variant for the surrounding basemap buildings (fewer, dimmer lit windows, darker glass).
+ */
+export function drawGlassTexture(colors: ThemeColors, dark: boolean, lit = 1, quiet = false): ImageData {
+  const night = quiet ? LIT_QUIET : LIT_TOWNSHIP;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
   const ctx = canvas.getContext("2d")!;
   const tint = colors["chart-3"];
   // Light: pale blue-green glass. Dark: deep glass with a few warm lit windows.
   const tones = dark
-    ? [0.25, 0.37, 0.5, 0.62].map((t) => mix(tint, colors.background, t))
+    ? (quiet ? [0.45, 0.55, 0.65, 0.75] : [0.25, 0.37, 0.5, 0.62]).map((t) => mix(tint, colors.background, t))
     : [0.1, 0.2, 0.3, 0.42].map((t) => mix(tint, colors.background, t));
   const frame = dark ? mix(colors.background, colors.foreground, 0.22) : mix(colors.foreground, colors.background, 0.82);
   ctx.fillStyle = frame;
@@ -34,8 +42,8 @@ export function drawGlassTexture(colors: ThemeColors, dark: boolean, lit = 1): I
   for (let r = 0; r < CELLS; r++) {
     for (let c = 0; c < CELLS; c++) {
       const n = noise(c, r);
-      const isLit = dark && n > 1 - 0.22 * lit; // windows come on in a fixed random order as `lit` rises
-      ctx.fillStyle = isLit ? mix(colors.primary, colors.foreground, 0.25) : tones[Math.floor(n * tones.length) % tones.length];
+      const isLit = dark && n > 1 - night.share * lit; // windows come on in a fixed random order as `lit` rises
+      ctx.fillStyle = isLit ? night.colour : tones[Math.floor(n * tones.length) % tones.length];
       // 2px mullions either side, a thicker spandrel band under every fourth floor
       const spandrel = r % 4 === 3 ? 4 : 2;
       ctx.fillRect(c * CELL + 2, r * CELL + 2, CELL - 3, CELL - spandrel - 1);

@@ -15,7 +15,7 @@ import { anchorOptions, townshipById } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
 import { pillLean, pillLeanPhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
-import { useThemeColors } from "../use-theme-colors";
+import { cssColor, useThemeColors, type ThemeColors } from "../use-theme-colors";
 import { drawGlassTexture } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 
@@ -27,8 +27,55 @@ setWorkerUrl("/homelander/maplibre/maplibre-gl-worker.mjs");
 const LIBERTY_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 const PMTILES_URL = process.env.NEXT_PUBLIC_PMTILES_URL; // our own basemap file; unset = plain background
+// The file covers 101.35-101.85 E, 2.75-3.40 N; a viewer can pan 0.6 degrees past it (Liberty paints the rest), not further.
+const PMTILES_BOUNDS: [number, number, number, number] = [100.75, 2.15, 102.45, 4.0];
 let registered = false;
 const NIGHT_STEPS = 5;
+
+type Flavor = ReturnType<typeof namedFlavor>;
+
+// The app's night signal: the HomeLander theme on the page (data-jtheme="night"), the same one the header, panels and
+// pills follow. Not the OS setting: that flips the shadcn tokens on <html> and would darken only the map.
+const appTheme = () => document.querySelector("[data-jtheme]");
+const readNight = () => {
+  const el = appTheme();
+  return el ? el.getAttribute("data-jtheme") === "night" : null;
+};
+function useAppNight(): boolean | null {
+  const [night, setNight] = useState(readNight);
+  useEffect(() => {
+    const el = appTheme();
+    if (!el) return;
+    const mo = new MutationObserver(() => setNight(readNight()));
+    mo.observe(el, { attributes: true, attributeFilter: ["data-jtheme"] });
+    return () => mo.disconnect();
+  }, []);
+  return night;
+}
+// The app theme's own colours, for when the <html> tokens disagree with it (OS dark under the light Kopitiam theme, or the reverse).
+function appColors(base: ThemeColors): ThemeColors {
+  const el = appTheme();
+  if (!el) return base;
+  const cs = getComputedStyle(el);
+  const v = (n: string) => cssColor(cs.getPropertyValue(n).trim() || "#888");
+  return { ...base, background: v("--color-sky"), card: v("--j-surface"), muted: v("--color-cloud"), foreground: v("--color-ink"), primary: v("--color-kaya"), "chart-3": v("--color-pandan") };
+}
+
+/** Repaint one OpenFreeMap (Liberty) layer in our Protomaps flavour. Fills always; lines, labels and 3D only at night. */
+function recolor(l: LayerSpecification, f: Flavor, dark: boolean, id = l.id): LayerSpecification {
+  const sl = "source-layer" in l ? l["source-layer"] : undefined;
+  const p = ("paint" in l ? l.paint : {}) as Record<string, unknown>;
+  if (l.type === "fill") {
+    const c = sl === "water" ? f.water : sl === "landcover" || sl === "park" ? f.park_a : f.earth;
+    return { ...l, id, paint: { ...p, "fill-color": c } };
+  }
+  if (!dark) return { ...l, id };
+  if (l.type === "line") return { ...l, id, paint: { ...p, "line-color": sl === "water" || sl === "waterway" ? f.water : sl === "boundary" ? f.boundaries : f.minor_a } };
+  if (l.type === "symbol") return { ...l, id, paint: { ...p, "text-color": f.city_label, "text-halo-color": f.city_label_halo } };
+  if (l.type === "fill-extrusion") return { ...l, id, paint: { ...p, "fill-extrusion-color": f.buildings } };
+  if (l.type === "background") return { ...l, id, paint: { ...p, "background-color": f.earth } };
+  return { ...l, id };
+}
 
 export const COVE_ID = "cove"; // the illustrative block sits inside this township (id in src/lib/homelander/data.ts)
 
@@ -52,7 +99,10 @@ const townshipView = () => {
 const klangView = () => {
   const padding = cameraPadding(false);
   const mpp = Math.max(62_000 / (window.innerHeight - padding.top - padding.bottom), 36_000 / (window.innerWidth - padding.left - padding.right));
-  return { center: [101.65, 3.09] as [number, number], zoom: Math.log2(M_PER_PX_Z0 / mpp), pitch: 0, bearing: 0, padding };
+  // Tilted like PayGap (pitch 52, a slight turn). Zoom and centre were tuned with a probe so all seven pills stay on screen,
+  // the far northern ones included: wide screens sit a little closer and further south than phones.
+  const wide = window.matchMedia("(min-width: 1024px)").matches;
+  return { center: (wide ? [101.65, 3.06] : [101.6, 3.1]) as [number, number], zoom: Math.log2(M_PER_PX_Z0 / mpp) + (wide ? 0.4 : 0.2), pitch: 52, bearing: -12, padding };
 };
 const devView = (id: string) => {
   const t = townshipById[id];
@@ -120,9 +170,12 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
     return { longitude: o.center[0], latitude: o.center[1], zoom: o.zoom, pitch: o.pitch, bearing: o.bearing, padding: o.padding };
   });
   const reduced = usePrefersReducedMotion();
-  const colors = useThemeColors();
-  // Dark = the theme's background is dark: works for any theme (Kopi O, Teh Susu...) and for a class flip.
-  const dark = (colors.background.match(/\d+/g) ?? ["255"]).slice(0, 3).reduce((t, v) => t + Number(v), 0) / 3 < 128;
+  const tokens = useThemeColors();
+  // Dark = the app is in its night theme. Pages with no HomeLander theme fall back to the <html> tokens' brightness.
+  const tokenDark = (tokens.background.match(/\d+/g) ?? ["255"]).slice(0, 3).reduce((t, v) => t + Number(v), 0) / 3 < 128;
+  const appNight = useAppNight();
+  const dark = appNight ?? tokenDark;
+  const colors = useMemo(() => (dark !== tokenDark ? appColors(tokens) : tokens), [tokens, dark, tokenDark]);
   // Without our PMTiles file, fetch OpenFreeMap's Liberty style once ("failed" = offline: plain background, never blank).
   const [liberty, setLiberty] = useState<StyleSpecification | "loading" | "failed">("loading");
   useEffect(() => {
@@ -146,6 +199,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   const idFor = (step: number) =>
     `glass-${dark ? "d" : "l"}-${colors["chart-3"]}-${colors.background}-${colors.primary}-${colors.foreground}${dark ? `-L${step}` : ""}`;
   const glassId = idFor(lit);
+  const quietId = `quiet-${idFor(0).slice(6)}`; // the basemap buildings' own night texture (dark only)
   // Protomaps layers for the theme, with its flat `buildings` fill swapped for soft, plain extrusions: the real
   // neighbourhood stands up quietly around ours (the township is the only textured thing). Height from the data, else 6 m.
   const basemap = useMemo<LayerSpecification[]>(
@@ -161,14 +215,15 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         paint: {
           "fill-extrusion-height": ["coalesce", ["to-number", ["get", "height"], 0], 6],
           "fill-extrusion-base": ["coalesce", ["to-number", ["get", "min_height"], 0], 0],
-          "fill-extrusion-opacity": 0.7,
-          "fill-extrusion-color": colors.muted,
+          "fill-extrusion-opacity": dark ? 0.9 : 0.7,
+          ...(dark ? { "fill-extrusion-pattern": quietId } : { "fill-extrusion-color": colors.muted }),
         },
       },
     ],
-    [dark, colors.muted],
+    [dark, colors.muted, quietId],
   );
   const style = useMemo<StyleSpecification>(() => {
+    const flavor = namedFlavor(dark ? "dark" : "light");
     const overlays: LayerSpecification[] = [
       {
         id: "homelander-rail-casing",
@@ -239,7 +294,10 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
       "homelander-rail": { type: "geojson" as const, data: railGeoJSON },
       "homelander-stations": { type: "geojson" as const, data: stationGeoJSON },
     };
-    if (libertyStyle) return { ...libertyStyle, sources: { ...libertyStyle.sources, ...ours }, layers: [...libertyStyle.layers, ...overlays] };
+    if (libertyStyle) {
+      const base = dark ? libertyStyle.layers.filter((l) => l.type !== "raster").map((l) => recolor(l, flavor, true)) : libertyStyle.layers;
+      return { ...libertyStyle, sources: { ...libertyStyle.sources, ...ours }, layers: [...base, ...overlays] };
+    }
     return {
       version: 8,
       glyphs: "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
@@ -256,8 +314,10 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         ...ours,
       },
       layers: [
-        { id: "bg", type: "background", paint: { "background-color": colors.background } },
-        ...(underlay?.layers.filter((l) => l.type !== "symbol" && l.type !== "fill-extrusion" && l.type !== "background" && !JSON.stringify(l.paint ?? {}).includes("pattern")).map((l) => ({ ...l, id: `ol-${l.id}` })) ?? []),
+        { id: "bg", type: "background", paint: { "background-color": underlay ? flavor.earth : colors.background } },
+        ...(underlay?.layers
+          .filter((l) => l.type !== "symbol" && l.type !== "fill-extrusion" && l.type !== "raster" && l.type !== "background" && !JSON.stringify("paint" in l ? l.paint : {}).includes("pattern"))
+          .map((l) => recolor(l, flavor, dark, `ol-${l.id}`)) ?? []),
         ...(withBasemap ? basemap : []),
         ...overlays,
       ],
@@ -277,6 +337,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
           map.addImage(id, drawGlassTexture(colors, dark, step / NIGHT_STEPS), { pixelRatio: window.innerWidth < 640 ? 3.5 : 2 });
         }
       }
+      if (dark && !map.hasImage(quietId)) map.addImage(quietId, drawGlassTexture(colors, true, 1, true), { pixelRatio: window.innerWidth < 640 ? 3.5 : 2 });
     };
     ensure();
     map.on("styledata", ensure);
@@ -375,7 +436,8 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   const from = selectedId ? centres[selectedId] : undefined;
 
   return (
-    <div className="absolute inset-0">
+    // Night Market's themes.css inverts the map canvas with a CSS filter (it assumed one light basemap). We draw a real night map, so switch it off here.
+    <div className="absolute inset-0 [&_.maplibregl-canvas]:!filter-none">
       {ready && (
       <Map
         ref={mapRef}
@@ -383,6 +445,8 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         initialViewState={initialView}
         mapStyle={style}
         maxPitch={70}
+        minZoom={8.5}
+        maxBounds={withBasemap ? PMTILES_BOUNDS : undefined}
         interactiveLayerIds={["township-buildings", "township-selected"]}
         cursor="auto"
         onError={(e) => {

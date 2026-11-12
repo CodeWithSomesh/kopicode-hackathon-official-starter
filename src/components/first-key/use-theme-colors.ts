@@ -29,6 +29,11 @@ function toRgb(ctx: CanvasRenderingContext2D, css: string): string {
   return `rgb(${r},${g},${b})`;
 }
 
+/** Any CSS colour (hex, oklch, ...) as rgb(): MapLibre and three.js can't parse the rest. */
+export function cssColor(css: string): string {
+  return toRgb(document.createElement("canvas").getContext("2d", { willReadFrequently: true })!, css);
+}
+
 export function readThemeColors(): ThemeColors {
   const ctx = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
   const style = getComputedStyle(document.documentElement);

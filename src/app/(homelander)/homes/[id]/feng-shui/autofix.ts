@@ -1,6 +1,7 @@
 import { ongScore, type Note } from "./fengshui";
 import { CATALOG, type Item, type Kind, type Rot } from "./furniture";
 import { check, snap } from "./layout-ops";
+import { kindMs, roomEn, roomMs } from "./names";
 import type { Plan } from "./plans";
 
 /**
@@ -18,9 +19,6 @@ export type FixOutcome =
 
 const problems = (notes: Note[]) => notes.filter((n) => n.tone !== "good");
 const label = (k: Kind) => CATALOG[k].label.toLowerCase();
-const roomName = (id: string, fallback: string) =>
-  ({ living: "living room", dining: "dining area" })[id] ??
-  fallback.toLowerCase();
 
 /** Problems the layout can't change: they're built into the plan. */
 const BUILT_IN = ["bath-centre-", "stove-sink-"];
@@ -116,8 +114,8 @@ export function fixOne(
           note,
           uid,
           did: {
-            en: `put a plant in the ${roomName(c.room.id, c.room.label)} to break the line from the main door`,
-            mg: `letak pokok kat ${c.room.label.toLowerCase()} untuk halang laluan dari pintu depan`,
+            en: `put a plant in the ${roomEn(c.room.id, c.room.label)} to break the line from the main door`,
+            mg: `letak pokok kat ${roomMs(c.room.id, c.room.label)} untuk halang laluan dari pintu depan`,
           },
         };
     }
@@ -161,13 +159,14 @@ export function fixOne(
       if (!better(before, evaluate(next), note.id)) continue;
       const dist = Math.round(Math.hypot(c.dx, c.dy) * 10) / 10;
       const name = label(target.kind);
+      const nameMs = kindMs(target.kind);
       const turnEn = c.turns ? `turned the ${name} ${c.turns * 90}°` : "";
-      const turnMg = c.turns ? `pusing ${name} ${c.turns * 90} darjah` : "";
+      const turnMg = c.turns ? `pusing ${nameMs} ${c.turns * 90} darjah` : "";
       const moveEn = dist
         ? `${turnEn ? "and moved it" : `moved the ${name}`} ${dist} m`
         : "";
       const moveMg = dist
-        ? `${turnMg ? "dan alih" : `alih ${name}`} ${dist} meter`
+        ? `${turnMg ? "dan alih" : `alih ${nameMs}`} ${dist} meter`
         : "";
       return {
         ok: true,

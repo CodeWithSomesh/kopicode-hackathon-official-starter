@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
-import { cn } from "@/lib/utils";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
 import { CommandConsole, type LogEntry } from "./command-console";
 import {
@@ -19,6 +18,8 @@ import {
 import { ongScore, readFengShui, type Note } from "./fengshui";
 import { FengShuiPanel } from "./fengshui-panel";
 import { FurniturePanel } from "./furniture-panel";
+import { SunPanel } from "./sun-panel";
+import { fixOne, type FixState } from "./autofix";
 import {
   describe,
   moveBy,
@@ -32,7 +33,6 @@ import dynamic from "next/dynamic";
 import { PlanCanvas } from "./plan-canvas";
 import { planBounds, plans, type Plan } from "./plans";
 import {
-  FACINGS,
   MONTHS,
   bearingLabel,
   dayStrip,
@@ -233,7 +233,6 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       return next;
     });
 
-  const facingName = FACINGS.find((f) => f.deg === facing)!;
   const tag = heatTag[livingHeat.level];
   const sunnyHours = strip.filter((s) => s.share >= 0.05).length / 2;
 
@@ -482,6 +481,40 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     }
   };
 
+  /** "Fix it for me" on one Ong meter note: same search as the "fix" command, logged in the console. */
+  const fixNote = (n: Note) => {
+    const evaluate = (st: FixState) =>
+      ctx.notes({ ...world, items: st.items, curtains: st.curtains });
+    const r = fixOne(plan, { items, curtains }, evaluate, n);
+    if (!r.ok) {
+      addLog({ said: `Fix: ${n.title}`, replies: [{ ok: false, ...r.why }] });
+      toast.error(r.why.en, { id: "feng-shui-layout" });
+      return;
+    }
+    const moved = r.uid
+      ? r.state.items.find((i) => i.uid === r.uid)
+      : undefined;
+    const fi = moved ? plan.floors.findIndex((f) => f.id === moved.floor) : -1;
+    applyWorld({
+      ...world,
+      items: r.state.items,
+      curtains: r.state.curtains,
+      selected: r.uid ?? selected,
+      floorIdx: fi >= 0 ? fi : floorIdx,
+    });
+    const s = ongScore(evaluate(r.state));
+    addLog({
+      said: `Fix: ${n.title}`,
+      replies: [
+        {
+          ok: true,
+          en: `${r.did.en[0].toUpperCase()}${r.did.en.slice(1)}. Ong meter now ${s}.`,
+          mg: `${r.did.mg[0].toUpperCase()}${r.did.mg.slice(1)}. Ong meter sekarang ${s}.`,
+        },
+      ],
+    });
+  };
+
   const pickNote = (n: Note) => {
     const idx = plan.floors.findIndex((f) => f.id === n.floor);
     if (idx >= 0 && idx !== floorIdx) setFloorIdx(idx);
@@ -622,81 +655,9 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           floorLabel={(id) => plan.floors.find((f) => f.id === id)?.label ?? id}
           currentFloor={floor.id}
           onPick={pickNote}
+          onFix={fixNote}
+          onFixAll={() => void runCommand("fix all")}
         />
-
-        <PixPanel className="grid gap-4 p-4">
-          <fieldset className="grid gap-2">
-            <legend className="mb-2 text-sm font-semibold">
-              Front faces <span className="font-pixel">{facingName.name}</span>{" "}
-              <span className="text-ink-soft">({facingName.malay})</span>
-            </legend>
-            <div className="grid grid-cols-4 gap-2">
-              {FACINGS.map((f) => (
-                <PixButton
-                  key={f.deg}
-                  size="sm"
-                  tone={f.deg === facing ? "ink" : "white"}
-                  aria-pressed={f.deg === facing}
-                  aria-label={`${f.name} (${f.malay})`}
-                  onClick={() => setFacing(f.deg)}
-                  className="font-pixel"
-                >
-                  {f.short}
-                </PixButton>
-              ))}
-            </div>
-            <p className="text-xs text-ink-soft">
-              The top of the plan is the front of the home.
-            </p>
-          </fieldset>
-
-          <div className="grid gap-2">
-            <label
-              htmlFor="fs-time"
-              className="flex items-baseline justify-between text-sm font-semibold"
-            >
-              Time of day <span className="font-pixel">{timeLabel(time)}</span>
-            </label>
-            <input
-              id="fs-time"
-              type="range"
-              min={7}
-              max={19}
-              step={0.25}
-              value={time}
-              onChange={(e) => setTime(Number(e.target.value))}
-              className="w-full accent-pandan"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <span className="text-sm font-semibold" id="fs-month-label">
-              Month
-            </span>
-            <div
-              className="grid grid-cols-6 gap-1.5"
-              role="group"
-              aria-labelledby="fs-month-label"
-            >
-              {MONTHS.map((m, i) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={month === i + 1}
-                  onClick={() => setMonth(i + 1)}
-                  className={cn(
-                    "border-2 border-ink py-1 text-xs font-semibold",
-                    month === i + 1
-                      ? "bg-ink text-white"
-                      : "bg-white text-ink hover:bg-cloud",
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          </div>
-        </PixPanel>
 
         <FurniturePanel
           floor={floor}
@@ -710,83 +671,20 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           onReset={reset}
         />
 
-        <PixPanel className="grid gap-3 p-4">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="font-pixel text-lg font-bold">
-              Living room sun, 7 am to 7 pm
-            </h2>
-          </div>
-          <div className="flex h-8 gap-[2px] bg-ink p-[2px]" aria-hidden="true">
-            {strip.map((s) => (
-              <span
-                key={s.time}
-                title={`${timeLabel(s.time)}: ${Math.round(s.share * 100)}%`}
-                className={cn(
-                  "flex-1",
-                  s.share >= 0.2
-                    ? "bg-raya"
-                    : s.share >= 0.05
-                      ? "bg-kaya"
-                      : "bg-cloud",
-                  time >= s.time &&
-                    time < s.time + 0.5 &&
-                    "outline-2 outline-white",
-                )}
-              />
-            ))}
-          </div>
-          <div
-            className="flex justify-between text-[11px] text-ink-soft"
-            aria-hidden="true"
-          >
-            <span>7 am</span>
-            <span>1 pm</span>
-            <span>7 pm</span>
-          </div>
-          <p className="text-sm">
-            {sunnyHours === 0
-              ? "No direct sun on the living room floor this month. Cool all day."
-              : `About ${sunnyHours} ${sunnyHours === 1 ? "hour" : "hours"} of direct sun on the living room floor in ${MONTHS[month - 1]}.`}
-          </p>
-        </PixPanel>
-
-        <PixPanel className="grid gap-3 p-4">
-          <h2 className="font-pixel text-lg font-bold">
-            {floor.label}: sun now
-          </h2>
-          {sunnyRooms.length ? (
-            <ul className="grid gap-1 text-sm">
-              {sunnyRooms.map(({ room, share }) => (
-                <li key={room.id} className="flex justify-between">
-                  <span>{room.label}</span>
-                  <span className="font-pixel">{Math.round(share * 100)}%</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-ink-soft">
-              No direct sun on this floor right now.
-            </p>
-          )}
-          {windowRooms.length > 0 && (
-            <div className="grid gap-2">
-              <span className="text-sm font-semibold">Curtains</span>
-              <div className="flex flex-wrap gap-2">
-                {windowRooms.map((r) => (
-                  <PixButton
-                    key={r.id}
-                    size="sm"
-                    tone={curtains.has(r.id) ? "pandan" : "white"}
-                    aria-pressed={curtains.has(r.id)}
-                    onClick={() => toggleCurtain(r.id)}
-                  >
-                    {r.label}
-                  </PixButton>
-                ))}
-              </div>
-            </div>
-          )}
-        </PixPanel>
+        <SunPanel
+          facing={facing}
+          onFacing={setFacing}
+          time={time}
+          onTime={setTime}
+          month={month}
+          onMonth={setMonth}
+          strip={strip}
+          sunnyHours={sunnyHours}
+          sunnyRooms={sunnyRooms}
+          windowRooms={windowRooms}
+          curtains={curtains}
+          onCurtain={toggleCurtain}
+        />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { fixAll, fixOne, pickNote } from "./autofix";
+import { kindMs, roomEn, roomMs } from "./names";
 import type { Note } from "./fengshui";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
 import {
@@ -440,47 +441,6 @@ export function parse(clause: string): Command | null {
 const say = (ok: boolean, en: string, mg: string): Reply => ({ ok, en, mg });
 const low = (k: Kind) => CATALOG[k].label.toLowerCase();
 
-/** Malay names for the Manglish replies. */
-const KIND_MS: Record<Kind, string> = {
-  sofa: "sofa",
-  tv: "kabinet TV",
-  coffee: "meja kopi",
-  dining: "meja makan",
-  bed: "katil",
-  wardrobe: "almari",
-  desk: "meja tulis",
-  shoerack: "rak kasut",
-  stove: "dapur gas",
-  sink: "sinki",
-  altar: "altar",
-  mirror: "cermin",
-  plant: "pokok",
-};
-const ROOM_MS: Record<string, string> = {
-  living: "ruang tamu",
-  dining: "ruang makan",
-  kitchen: "dapur",
-  wet: "dapur basah",
-  master: "bilik utama",
-  bed2: "bilik 2",
-  bed3: "bilik 3",
-  bed4: "bilik 4",
-  guest: "bilik tetamu",
-  study: "bilik bacaan",
-  foyer: "foyer",
-  hall: "ruang keluarga",
-  hallway: "lorong",
-  corridor: "koridor",
-  store: "stor",
-  walkin: "walk-in",
-  balcony: "balkoni",
-  porch: "porch",
-  yard: "laman belakang",
-  bath1: "bilik air",
-  bath2: "bilik air",
-  mbath: "bilik air",
-  stairs: "tangga",
-};
 const MONTHS_MS = [
   "Januari",
   "Februari",
@@ -500,9 +460,7 @@ const FLOOR_MS: Record<string, string> = {
   first: "tingkat atas",
   unit: "unit",
 };
-const ms = (k: Kind) => KIND_MS[k];
-const roomMs = (id: string, fallback: string) =>
-  ROOM_MS[id] ?? fallback.toLowerCase();
+const ms = kindMs;
 
 function findRoom(
   plan: Plan,
@@ -606,13 +564,6 @@ function applyResult(w: World, r: Result, plan: Plan): World {
   };
 }
 
-/** English room names that read well after "in the". */
-const ROOM_EN: Record<string, string> = {
-  living: "living room",
-  dining: "dining area",
-};
-const roomEn = (id: string, label: string) =>
-  ROOM_EN[id] ?? label.toLowerCase();
 const roomName = (plan: Plan, it: Item) =>
   roomEn(
     it.room,

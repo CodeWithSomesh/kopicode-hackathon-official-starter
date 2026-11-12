@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
-import { cn } from "@/lib/utils";
 import { ADDABLE, CATALOG, type Item, type Kind } from "./furniture";
 import type { Floor } from "./plans";
 
@@ -41,6 +40,7 @@ export function FurniturePanel({
   onReset,
 }: Props) {
   const [room, setRoom] = useState("");
+  const [kind, setKind] = useState<Kind>(ADDABLE[0]);
   const rooms = floor.rooms.filter((r) => r.kind !== "stairs");
   const roomLabel = (id: string) =>
     floor.rooms.find((r) => r.id === id)?.label ?? id;
@@ -128,75 +128,69 @@ export function FurniturePanel({
             Done
           </button>
         </div>
-      ) : (
-        <p className="text-sm text-ink-soft">
-          Tap a piece on the plan to pick it up, then drag it or use the arrows.
-          Keyboard: arrows move, R turns, Delete removes.
-        </p>
-      )}
+      ) : null}
 
-      <div className="grid gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-semibold">Add</span>
-          <label className="flex items-center gap-2 text-xs text-ink-soft">
-            to
-            <select
-              value={target}
-              onChange={(e) => setRoom(e.target.value)}
-              className="border-2 border-ink bg-white px-2 py-1 text-sm text-ink"
-            >
-              <option value="">Best spot</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-2">
-          {ADDABLE.map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => onAdd(k, target || undefined)}
-              className="border-2 border-ink bg-white px-2 py-1.5 text-left text-sm font-semibold hover:bg-cloud"
-            >
-              + {CATALOG[k].label}
-            </button>
+      <div className="grid gap-1">
+        <label htmlFor="fs-pick" className="text-sm font-semibold">
+          Pick a piece
+        </label>
+        <select
+          id="fs-pick"
+          value={selected?.uid ?? ""}
+          onChange={(e) => onSelect(e.target.value || null)}
+          className="border-2 border-ink bg-white px-2 py-1.5 text-sm text-ink"
+        >
+          <option value="">Or tap one on the plan</option>
+          {items.map((it) => (
+            <option key={it.uid} value={it.uid}>
+              {CATALOG[it.kind].label} · {roomLabel(it.room)}
+            </option>
           ))}
-        </div>
+        </select>
+        <p className="text-xs text-ink-soft">
+          Drag to move. Keys: arrows move, R turns, Delete removes.
+        </p>
       </div>
 
-      {items.length > 0 && (
-        <div className="grid gap-2">
-          <span className="text-sm font-semibold">
-            On the {floor.label.toLowerCase()}
-          </span>
-          <ul className="flex flex-wrap gap-1.5">
-            {items.map((it) => (
-              <li key={it.uid}>
-                <button
-                  type="button"
-                  aria-pressed={selected?.uid === it.uid}
-                  onClick={() =>
-                    onSelect(selected?.uid === it.uid ? null : it.uid)
-                  }
-                  className={cn(
-                    "border-2 border-ink px-2 py-0.5 text-xs font-semibold",
-                    selected?.uid === it.uid
-                      ? "bg-ink text-white"
-                      : "bg-white hover:bg-cloud",
-                  )}
-                >
-                  {CATALOG[it.kind].label}
-                  <span className="sr-only"> in the {roomLabel(it.room)}</span>
-                </button>
-              </li>
+      <div className="grid gap-1">
+        <span id="fs-add-label" className="text-sm font-semibold">
+          Add
+        </span>
+        <div
+          className="flex flex-wrap gap-1.5"
+          role="group"
+          aria-labelledby="fs-add-label"
+        >
+          <select
+            aria-label="Piece to add"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as Kind)}
+            className="min-w-0 flex-1 border-2 border-ink bg-white px-2 py-1.5 text-sm text-ink"
+          >
+            {ADDABLE.map((k) => (
+              <option key={k} value={k}>
+                {CATALOG[k].label}
+              </option>
             ))}
-          </ul>
+          </select>
+          <select
+            aria-label="Room to add it to"
+            value={target}
+            onChange={(e) => setRoom(e.target.value)}
+            className="min-w-0 flex-1 border-2 border-ink bg-white px-2 py-1.5 text-sm text-ink"
+          >
+            <option value="">Best spot</option>
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+          <PixButton size="sm" onClick={() => onAdd(kind, target || undefined)}>
+            Add
+          </PixButton>
         </div>
-      )}
+      </div>
     </PixPanel>
   );
 }

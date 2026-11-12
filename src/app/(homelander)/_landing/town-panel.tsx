@@ -76,7 +76,7 @@ export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownI
 
       <div className="flex flex-wrap items-center gap-2 border-b-[3px] border-ink px-3 py-2">
         <PixButton asChild size="sm" tone="raya" className="text-white" style={{ "--pix-fill": "var(--color-raya-deep)" } as React.CSSProperties}>
-          <Link href="/login">Start with Uncle</Link>
+          <Link href="/login">Chat with Mochi</Link>
         </PixButton>
         {illustrative && (
           <span className="text-xs text-ink-soft">

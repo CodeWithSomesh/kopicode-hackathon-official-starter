@@ -42,7 +42,7 @@ export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelO
   const animate = !reduced();
   // phones: two columns, so the stack ends above the township sheet (which starts ~280 px down) and Night / 2D stay tappable
   return (
-    <div className={cn("absolute top-[120px] right-4 z-10 grid grid-cols-2 gap-2 lg:top-[92px] lg:grid-cols-1 lg:gap-3", panelOpen ? "lg:right-[436px]" : "lg:right-6")}>
+    <div data-obstacle className={cn("absolute top-[120px] right-4 z-10 grid grid-cols-2 gap-2 lg:top-[92px] lg:grid-cols-1 lg:gap-3", panelOpen ? "lg:right-[436px]" : "lg:right-6")}>
       <PixButton size="sm" className="size-10 px-0" onClick={() => map.zoomIn({ animate })} aria-label="Zoom in">
         <Sprite art={mapSprites.plus} scale={3} />
       </PixButton>
@@ -63,7 +63,7 @@ export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelO
       <PixButton
         size="sm"
         tone={night ? "kaya" : "white"}
-        className="size-10 px-0 font-pixel-label text-[9px] uppercase"
+        className="size-10 px-0 font-pixel-label text-[11px] uppercase"
         onClick={() => setMapNight(!night)}
         aria-pressed={night}
         aria-label="Night view of the map and the building"

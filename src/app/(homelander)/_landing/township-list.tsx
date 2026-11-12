@@ -20,7 +20,7 @@ export function TownshipList({
 }) {
   return (
     <>
-      <PixPanel className="absolute top-[92px] left-6 z-10 hidden max-h-[calc(100svh-140px)] w-72 flex-col lg:flex">
+      <PixPanel data-obstacle className="absolute top-[92px] left-6 z-10 hidden max-h-[calc(100svh-140px)] w-72 flex-col lg:flex">
         <div className="grid gap-1.5 border-b-[3px] border-ink p-3">
           <h2 className="font-pixel text-xl leading-tight font-bold">Gamuda Land map</h2>
           <p className="text-sm leading-snug text-ink-soft">
@@ -58,11 +58,11 @@ export function TownshipList({
                 <Sprite art="house" scale={2} className={x.left ? "shrink-0 text-pandan-deep" : "shrink-0 text-ink-soft"} />
                 <span className="grid min-w-0 flex-1">
                   <span className="truncate font-pixel text-base leading-tight font-bold">{x.t.name}</span>
-                  <span className="truncate text-xs text-ink-soft">{x.t.area}</span>
+                  <span className={cn("truncate text-xs", selected === x.t.id ? "text-ink" : "text-ink-soft")}>{x.t.area}</span>
                 </span>
                 <span className="grid shrink-0 justify-items-end gap-0.5">
                   <span className="font-pixel text-sm leading-none tabular-nums">{rmShort(x.from)}</span>
-                  <span className="font-pixel-label text-[10px] leading-none uppercase">{x.left} left</span>
+                  <span className="font-pixel-label text-[11px] leading-none uppercase">{x.left} left</span>
                 </span>
               </button>
             </li>
@@ -73,22 +73,22 @@ export function TownshipList({
 
       <nav
         aria-label="Townships"
-        className="absolute inset-x-0 top-[68px] z-10 flex gap-3 overflow-x-auto px-4 pt-2 pb-4 [scrollbar-width:none] lg:hidden"
+        className="absolute inset-x-0 top-[68px] pointer-events-none z-10 flex gap-3 overflow-x-auto px-4 pt-2 pb-4 [scrollbar-width:none] lg:hidden"
       >
-        <PixButton size="sm" className="shrink-0" onClick={onShowAll} tone={selected ? "white" : "kaya"}>
+        <PixButton size="sm" className="pointer-events-auto shrink-0" onClick={onShowAll} tone={selected ? "white" : "kaya"}>
           All
         </PixButton>
         {towns.map((x) => (
           <PixButton
             key={x.t.id}
             size="sm"
-            className="shrink-0 whitespace-nowrap"
+            className="pointer-events-auto shrink-0 whitespace-nowrap"
             tone={selected === x.t.id ? "kaya" : "white"}
             aria-pressed={selected === x.t.id}
             onClick={() => onPick(x.t.id)}
           >
             {x.t.name}
-            <span className="font-pixel-label text-[10px] uppercase">{rmShort(x.from)}</span>
+            <span className="font-pixel-label text-[11px] uppercase">{rmShort(x.from)}</span>
           </PixButton>
         ))}
       </nav>

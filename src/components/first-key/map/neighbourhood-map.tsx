@@ -7,10 +7,9 @@ import { addProtocol, setWorkerUrl, type ExpressionSpecification, type LayerSpec
 import { Protocol } from "pmtiles";
 import { gsap } from "gsap";
 import { layers as basemapLayers, namedFlavor } from "@protomaps/basemaps";
-import { Coffee, GraduationCap, HeartPulse, Landmark, ShoppingBasket, TrainFront, Trees, type LucideIcon } from "lucide-react";
 import { township } from "@/lib/first-key/township";
-import { bearingDeg, centroid, compassOf, distanceM, walkingMinutes } from "@/lib/first-key/geo";
-import type { PlaceKind } from "@/lib/first-key/types";
+import { centroid } from "@/lib/first-key/geo";
+import { Pin, POI_ICONS, poiDetail, poiHidden, poiRank, TrainFront, useNamedPois } from "./poi-pin";
 import { anchorOptions, townshipById } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
 import { pillLean, pillLeanPhone, pillNudgePhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
@@ -81,14 +80,6 @@ const devView = (id: string) => {
   const t = townshipById[id];
   if (id === COVE_ID) return townshipView();
   return { center: [t.pos.lng, t.pos.lat] as [number, number], zoom: 14.6, pitch: 50, bearing: 0, padding: cameraPadding(true) };
-};
-const ICONS: Record<PlaceKind, LucideIcon> = {
-  school: GraduationCap,
-  clinic: HeartPulse,
-  grocery: ShoppingBasket,
-  kopitiam: Coffee,
-  worship: Landmark,
-  park: Trees,
 };
 
 const centres = Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)]));
@@ -422,6 +413,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
 
 
   const from = selectedId ? centres[selectedId] : undefined;
+  const poiFit = useNamedPois(() => mapRef.current?.getMap(), loaded && showTownship, from);
 
   return (
     // Night Market's themes.css inverts the map canvas with a CSS filter (it assumed one light basemap). We draw a real night map, so switch it off here.
@@ -474,55 +466,20 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
             <WorkMarker name={workAnchor.name} />
           </Marker>
         )}
-        {showTownship && !selectedId && (
-          <Marker longitude={township.center[0]} latitude={township.center[1] - 80 / 110_574} anchor="top">
-            <p className="pointer-events-none max-w-[16rem] rounded-lg border-2 border-primary bg-card px-3 py-1.5 text-center text-xs text-card-foreground shadow-md sm:max-w-none">
-              <strong>{township.name}</strong>: an illustrative block at Gamuda Cove; made-up units and prices
-            </p>
-          </Marker>
-        )}
         {showTownship &&
           township.rail.stations.map((s) => (
             <Marker key={s.id} longitude={s.lng} latitude={s.lat} anchor="bottom">
-              <Pin label={s.name} detail={detail(from, s.lng, s.lat)} Icon={TrainFront} tone="station" />
+              <Pin id={s.id} d={poiRank(from, s.lng, s.lat)} label={s.name} detail={poiDetail(from, s.lng, s.lat)} Icon={TrainFront} tone="station" named={poiFit.named.has(s.id)} hidden={poiHidden(poiFit, s.id)} />
             </Marker>
           ))}
         {showTownship &&
           township.places.map((p) => (
             <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
-              <Pin label={p.name} detail={detail(from, p.lng, p.lat)} Icon={ICONS[p.kind]} />
+              <Pin id={p.id} d={poiRank(from, p.lng, p.lat)} label={p.name} detail={poiDetail(from, p.lng, p.lat)} Icon={POI_ICONS[p.kind]} named={poiFit.named.has(p.id)} hidden={poiHidden(poiFit, p.id)} />
             </Marker>
           ))}
       </Map>
       )}
-    </div>
-  );
-}
-
-function detail(from: [number, number] | undefined, lng: number, lat: number) {
-  if (!from) return undefined;
-  const m = distanceM(from, [lng, lat]);
-  return `${Math.round(m)} m, ${walkingMinutes(m)} min walk, ${compassOf(bearingDeg(from, [lng, lat]))}`;
-}
-
-// White rounded pill: icon, name and (once a building is picked) the walk from it.
-function Pin({ label, detail, Icon, tone }: { label: string; detail?: string; Icon: LucideIcon; tone?: "station" }) {
-  return (
-    <div
-      className="pointer-events-none flex items-center gap-1.5 rounded-full border bg-card p-1 text-card-foreground shadow-md sm:pr-3"
-      title={detail ? `${label}: ${detail}` : label}
-    >
-      <span
-        className={`flex size-6 shrink-0 items-center justify-center rounded-full ${
-          tone === "station" ? "bg-chart-3 text-background" : "bg-primary/10 text-primary"
-        }`}
-      >
-        <Icon className="size-3.5" aria-hidden />
-      </span>
-      <span className={`${detail ? "" : "sr-only sm:not-sr-only"} flex flex-col text-[11px] leading-tight`}>
-        <span className="whitespace-nowrap font-medium">{label}</span>
-        {detail && <span className="whitespace-nowrap text-muted-foreground">{detail}</span>}
-      </span>
     </div>
   );
 }

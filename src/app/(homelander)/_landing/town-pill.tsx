@@ -56,11 +56,11 @@ export function TownPill({
             <span className="font-pixel text-xs leading-none tabular-nums max-lg:hidden">From {rmShort(info.from)}</span>
             <span
               className={cn(
-                "px-1 py-px font-pixel-label text-[9px] leading-none uppercase",
-                done ? "bg-ink-soft text-white" : info.left ? "bg-pandan text-ink" : "bg-ink text-white",
+                "px-1 py-px font-pixel-label text-[11px] leading-none uppercase",
+                done ? "bg-ink-soft text-white" : info.left ? "bg-pandan-deep text-white" : "bg-ink text-white",
               )}
             >
-              {done ? "Resale" : info.left ? `${info.left} left` : "Sold out"}
+              {done ? "Completed, resale only" : info.left ? `${info.left} left` : "Sold out"}
             </span>
           </span>
         </span>
@@ -83,7 +83,7 @@ export function WorkMarker({ name }: { name: string }) {
         style={{ "--pix-fill": "var(--color-lilac)", "--pix-drop": "3px" } as React.CSSProperties}
       >
         <Sprite art={mapSprites.office} scale={2} className="text-ink" />
-        <span className="font-pixel-label text-[9px] leading-none uppercase">Work</span>
+        <span className="font-pixel-label text-[11px] leading-none uppercase">Work</span>
       </div>
       <Sprite art={mapSprites.tail} scale={2} className="mt-[3px] text-ink" />
     </div>

@@ -12,6 +12,7 @@ import { anchorOptions } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
 import { townInfoById } from "@/app/(homelander)/_landing/map-data";
 import { MapControls, type ControlMap } from "@/app/(homelander)/_landing/map-controls";
+import { PitchCard } from "@/app/(homelander)/_landing/pitch-card";
 import { TownPanel } from "@/app/(homelander)/_landing/town-panel";
 import { TownshipList } from "@/app/(homelander)/_landing/township-list";
 import { useMapView } from "@/components/first-key/burst/map-view";
@@ -100,6 +101,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-sky text-ink">
+      <div inert={burstOpen} className="contents">
       <NeighbourhoodMap
         selectedId={selectedId}
         onSelect={(id) => {
@@ -118,41 +120,48 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
         onArrived={open}
         startAtSelected={valid}
       />
+      </div>
 
       <h1 className="sr-only lg:hidden">Gamuda Land map</h1>
 
-      <TownshipList
-        selected={devId}
-        anchorName={workAnchor.name}
-        onPick={(id) => {
-          setSelectedId(undefined);
-          setUnitId(undefined);
-          setDevId(id);
-        }}
-        onShowAll={() => {
-          setSelectedId(undefined);
-          setUnitId(undefined);
-          setDevId(undefined);
-        }}
-      />
-      <MapControls map={map} panelOpen={!!info && !burstOpen} />
-      {info && !burstOpen && (
-        <TownPanel
-          key={info.t.id}
-          info={info}
-          anchor={workAnchor}
-          illustrative={info.t.id === COVE_ID}
-          onClose={() => {
+      {/* The tower view covers all of this: keep it out of the Tab order and the accessibility tree while it is open */}
+      <div inert={burstOpen}>
+        <TownshipList
+          selected={devId}
+          anchorName={workAnchor.name}
+          onPick={(id) => {
+            setSelectedId(undefined);
+            setUnitId(undefined);
+            setDevId(id);
+          }}
+          onShowAll={() => {
             setSelectedId(undefined);
             setUnitId(undefined);
             setDevId(undefined);
           }}
         />
-      )}
+        <MapControls map={map} panelOpen={!!info && !burstOpen} />
+        {info && !burstOpen && (
+          <TownPanel
+            key={info.t.id}
+            info={info}
+            anchor={workAnchor}
+            illustrative={info.t.id === COVE_ID}
+            onClose={() => {
+              setSelectedId(undefined);
+              setUnitId(undefined);
+              setDevId(undefined);
+            }}
+          />
+        )}
+
+        {!info && !burstOpen && <PitchCard />}
+      </div>
 
       {/* Map credit: always visible (above the tab bar on phones) */}
       {!HAS_MAPBOX && (
       <p
+        inert={burstOpen}
         className="absolute right-3 bottom-[104px] z-10 px-1.5 py-0.5 text-[10px] leading-tight text-ink lg:right-2 lg:bottom-2"
         style={{ background: "color-mix(in srgb, var(--j-surface, white) 90%, transparent)" }} // the theme's surface, so night is not a white box
       >

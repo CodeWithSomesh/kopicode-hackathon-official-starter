@@ -7,11 +7,12 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { township } from "@/lib/first-key/township";
 import { groupById, groupOfHouse } from "@/lib/first-key/landed";
+import { siteOf, siteTower } from "@/lib/first-key/site-interiors";
+import { useT } from "@/lib/homelander/i18n/client";
 import type { Unit } from "@/lib/first-key/types";
 import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
 import { anchorOptions } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
-import { useT } from "@/lib/homelander/i18n/client";
 import { townInfoById } from "@/app/(homelander)/_landing/map-data";
 import { MapControls, type ControlMap } from "@/app/(homelander)/_landing/map-controls";
 import { PitchCard } from "@/app/(homelander)/_landing/pitch-card";
@@ -52,12 +53,13 @@ export function FindClient(props: Props) {
 
 function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   // a building is a tower, or a landed enclave group (terrace row, pair, bungalow) whose house is the `unit`
-  const valid = township.buildings.some((b) => b.id === initialBuilding) || !!(initialBuilding && groupById(initialBuilding));
+  // A spawned tower or landed building at another site is "sb<n>" (site-interiors.ts, landed.ts): it opens like the Cove ones, in its own township.
+  const valid = township.buildings.some((b) => b.id === initialBuilding) || !!(initialBuilding && (groupById(initialBuilding) || siteTower(initialBuilding)));
   const [selectedId, setSelectedId] = useState<string | undefined>(valid ? initialBuilding : undefined);
   const [unitId, setUnitId] = useState<string | undefined>(valid ? initialUnit : undefined);
-  // A building always belongs to Gamuda Cove; otherwise ?dev= picks the township.
+  // A building belongs to Gamuda Cove unless it is a spawned one (its own site); otherwise ?dev= picks the township.
   const wanted = initialDev && (DEV_ALIAS[initialDev] ?? initialDev);
-  const [devId, setDevId] = useState<string | undefined>(valid ? COVE_ID : wanted && townInfoById[wanted] ? wanted : undefined);
+  const [devId, setDevId] = useState<string | undefined>(valid ? (initialBuilding && siteOf(initialBuilding)) || COVE_ID : wanted && townInfoById[wanted] ? wanted : undefined);
   const [map, setMap] = useState<ControlMap | null>(null);
   const hl = useHomeLander();
   const t = useT();
@@ -69,7 +71,8 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   const overlay = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
 
-  const building = township.buildings.find((b) => b.id === selectedId);
+  const building = township.buildings.find((b) => b.id === selectedId) ?? (selectedId ? siteTower(selectedId) : undefined);
+  const spawned = !!selectedId && !!siteOf(selectedId);
   const group = selectedId ? groupById(selectedId) : undefined;
 
   // Keep the URL shareable: /?building=c&unit=12-03 or /?dev=cove
@@ -129,7 +132,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
           const g = id ? groupOfHouse(id) : undefined; // a click on a landed house opens its group with that house picked
           setSelectedId(g ? g.id : id);
           setUnitId(g ? id : undefined);
-          if (id) setDevId(COVE_ID);
+          if (id) setDevId(siteOf(id) ?? COVE_ID);
         }}
         devId={devId}
         onMapReady={setMap}
@@ -223,6 +226,11 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
             <X />
           </Button>
         </div>
+        {spawned && (
+          <p className="absolute top-[126px] left-4 z-10 rounded-full bg-card/90 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+            {t("Illustrative, made-up units and prices")}
+          </p>
+        )}
         <div className="absolute inset-0">
           {building && burstMounted && (
             <BuildingBurst

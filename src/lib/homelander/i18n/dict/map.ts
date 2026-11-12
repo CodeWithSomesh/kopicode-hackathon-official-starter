@@ -49,4 +49,5 @@ export const map: Dict = {
   "2-storey terrace, end lot": "Teres 2 tingkat, lot hujung",
   "2-storey semi-D, prairie style": "Semi-D 2 tingkat, gaya prairie",
   "3-level bungalow with roof terrace": "Bungalow 3 tingkat dengan teres bumbung",
+  "Illustrative, made-up units and prices": "Contoh sahaja lah, unit dan harga rekaan",
 };

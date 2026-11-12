@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Marker, Source, useMap } from "react-map-gl/mapbox";
 import type { LayerProps } from "react-map-gl/mapbox";
-import { siteLayout } from "@/lib/first-key/site-layout";
+import { siteIndexOf, siteKind, siteLayout } from "@/lib/first-key/site-layout";
 import type { ThemeColors } from "../use-theme-colors";
 import { variantGlb } from "../tower/variants";
-import { SITE_MIN_ZOOM, W_BEARING, SiteChip, siteFootprints, siteLabels, typeFill, useZoomGate } from "./site-shared";
+import { SITE_MIN_ZOOM, W_BEARING, SiteChip, siteFootprints, siteLabels, sidOf, typeFill, useZoomGate } from "./site-shared";
 
 // Illustrative buildings at the Gamuda sites on the Mapbox map (layout: site-layout.json, models: tower/variants.ts).
 // Per site in view only: one glb per variant is built lazily and cached per day/night; a variant that fails to build is drawn
@@ -33,7 +33,10 @@ for (const [site, bs] of BY_SITE) {
 
 const modelId = (variant: string, night: boolean) => `site-${variant}-${night ? "n" : "d"}`;
 
-export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeColors; dark: boolean; dusk: boolean }) {
+const BUILDING_INDEX = new Map(BUILDINGS.map((b, i) => [b, i]));
+
+/** `selectedId`: the opened building ("sb<n>"); a picked tower turns the primary colour, as the Cove towers do, so the burst's first frame (also primary) matches. */
+export default function SiteBuildings({ colors, dark, dusk, selectedId }: { colors: ThemeColors; dark: boolean; dusk: boolean; selectedId?: string }) {
   const { current } = useMap();
   const map = current?.getMap();
   const zoomed = useZoomGate(() => map, !!map);
@@ -112,7 +115,7 @@ export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeCol
       type: "FeatureCollection" as const,
       features: BUILDINGS.filter((b) => NEAR.get(b)! < cap && ready.has(modelId(b.variant, dark))).map((b) => ({
         type: "Feature" as const,
-        properties: { site: b.site, model: modelId(b.variant, dark), rotation: [0, 0, b.rot - W_BEARING] },
+        properties: { site: b.site, model: modelId(b.variant, dark), rotation: [0, 0, b.rot - W_BEARING], ...sidOf(b, BUILDING_INDEX.get(b)!) },
         geometry: { type: "Point" as const, coordinates: [b.lng, b.lat] },
       })),
     }),
@@ -120,6 +123,8 @@ export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeCol
   );
 
   const night = dark ? 0.9 : dusk ? 0.35 : 0;
+  const pi = selectedId ? siteIndexOf(selectedId) : undefined;
+  const picked = pi !== undefined && siteKind(BUILDINGS[pi]) === "tower" ? (selectedId as string) : "";
   const models = {
     id: "site-models",
     type: "model",
@@ -132,7 +137,9 @@ export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeCol
       "model-rotation": ["get", "rotation"],
       "model-cast-shadows": false,
       "model-receive-shadows": true,
-      "model-emissive-strength": night,
+      "model-emissive-strength": ["case", ["==", ["get", "sid"], picked], 0.5, night],
+      "model-color": colors.primary,
+      "model-color-mix-intensity": ["case", ["==", ["get", "sid"], picked], 1, 0],
     },
   } as unknown as LayerProps;
   const boxes = {

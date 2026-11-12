@@ -76,7 +76,7 @@ const chamfered = (w: number, d: number, c: number): P[] => {
 
 const FACADES: Record<string, Facade> = { balcony: "balcony", column: "columns", columns: "columns", curtain: "curtain", fins: "fins", retail: "balcony" };
 
-function designFor(key: string): Design {
+export function designFor(key: string): Design {
   const v = parseVariant(key);
   const hash = [...key].reduce((a, c) => a + c.charCodeAt(0), 0);
   if (v.type === "office") return { facade: v.style === "fins" ? "fins" : "curtain", crown: "frame", setback: v.storeys > 15, podium: "plain", lod: true };

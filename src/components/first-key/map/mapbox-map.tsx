@@ -18,6 +18,8 @@ import { useMapColors, useMapDusk } from "../use-map-colors";
 import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 import { ZONE, groupById, groups } from "@/lib/first-key/landed";
+import { siteKind, siteLayout } from "@/lib/first-key/site-layout";
+import { siteOf } from "@/lib/first-key/site-interiors";
 import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
 import { LandedModels } from "./landed-models";
 import { EnclaveSwitch } from "./enclave-switch";
@@ -63,7 +65,12 @@ const devView = (id: string) => {
 };
 
 // the enclave's terrace rows, pairs and bungalows are selectable by their group id too
-const centres: Record<string, [number, number]> = { ...Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)])), ...Object.fromEntries(groups.map((g) => [g.id, [g.lng, g.lat]])) };
+// and so are the other sites' spawned towers and landed buildings ("sb<n>", site-layout.json)
+const centres: Record<string, [number, number]> = {
+  ...Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)])),
+  ...Object.fromEntries(groups.map((g) => [g.id, [g.lng, g.lat]])),
+  ...Object.fromEntries(siteLayout.buildings.flatMap((b, i) => (siteKind(b) ? [[`sb${i}`, [b.lng, b.lat]]] : []))),
+};
 // The landed enclave (260 m wide) in the free part of the screen.
 const enclaveView = () => {
   const padding = cameraPadding(true); // the township panel is open
@@ -258,7 +265,8 @@ export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArr
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (wasPaused.current && !paused && map) {
-      const back = selectedId && groupById(selectedId) ? enclaveView() : townshipView(); // out of a house: back to the enclave
+      const site = selectedId ? siteOf(selectedId) : undefined;
+      const back = site ? devView(site) : selectedId && groupById(selectedId) ? enclaveView() : townshipView(); // out of a spawned building: back to its site; out of an enclave house: back to the enclave
       if (reduced) map.jumpTo(back);
       else map.flyTo({ ...back, bearing: map.getBearing(), duration: 1200 });
     }
@@ -288,11 +296,12 @@ export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArr
     else map.flyTo({ ...v, bearing: map.getBearing(), duration: 1800 });
   };
   const onClick = (e: MapMouseEvent) => {
-    const p = (e as MapMouseEvent & { features?: { properties?: { id?: string; site?: string } | null }[] }).features?.[0]?.properties;
+    const p = (e as MapMouseEvent & { features?: { properties?: { id?: string; sid?: string; site?: string } | null }[] }).features?.[0]?.properties;
     if (p?.id) onSelect(p.id);
+    else if (p?.sid) onSelect(p.sid); // a spawned tower or landed building opens up
     else if (p?.site) onSelectDev(p.site); // a spawned site building or its footprint: open that township
   };
-  const showTownship = devId === COVE_ID || !!selectedId;
+  const showTownship = devId === COVE_ID || (!!selectedId && !siteOf(selectedId)); // the Cove block and enclave; not while a building at another site is open
   const from = selectedId ? centres[selectedId] : undefined;
   const poiFit = useNamedPois(() => mapRef.current?.getMap(), loaded && showTownship, from);
   const sel = selectedId ?? "";
@@ -462,7 +471,7 @@ export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArr
             </Source>
           ))}
         {showTownship && <LandedModels loaded={loaded} colors={colors} dark={dark} night={night} onReady={setLandedModels} />}
-        {loaded && <SiteBuildings colors={colors} dark={dark} dusk={dusk} />}
+        {loaded && <SiteBuildings colors={colors} dark={dark} dusk={dusk} selectedId={selectedId} />}
         {!selectedId &&
           towns.map((x) => {
             const phone = !window.matchMedia("(min-width: 1024px)").matches; // ponytail: read at render, no resize listener

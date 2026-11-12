@@ -128,13 +128,13 @@ function Scene({ group, spec, houses, colors, storey, reduced, open, view, onClo
   const kx = 111_320 * Math.cos(group.lat * D2R);
   const kz = 110_574;
   const floorY = (storey - 1) * FLOOR_H;
-  const heading = group.rot * D2R;
+  const heading = -group.rot * D2R; // group.rot is clockwise on the map; three.js turns counter-clockwise for a positive y rotation
 
   const b0 = view?.bearing ?? -20;
   const b1 = Math.round((b0 - 45) / 90) * 90 + 45;
   const toCamWorld = useMemo<[number, number]>(() => [-Math.sin(b1 * D2R), Math.cos(b1 * D2R)], [b1]);
   // the plan and the walls live in the model's frame, which is the world's turned by the group's heading
-  const toCam = useMemo<[number, number]>(() => (group.rot === 180 ? [-toCamWorld[0], -toCamWorld[1]] : toCamWorld), [group.rot, toCamWorld]);
+  const toCam = useMemo<[number, number]>(() => [toCamWorld[0] * Math.cos(heading) - toCamWorld[1] * Math.sin(heading), toCamWorld[0] * Math.sin(heading) + toCamWorld[1] * Math.cos(heading)], [heading, toCamWorld]);
 
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);

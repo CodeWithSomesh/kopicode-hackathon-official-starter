@@ -6,8 +6,8 @@ import { WALL_T, furnish, type FloorPlan, type PlacedRoom, type PlacedUnit, type
  * One storey of a landed group (a terrace row, a pair, a bungalow) as the FloorPlan the burst's InteriorMeshes already
  * draws. Frame = the model's: metres, origin at the centre of the group's w x d footprint, x along the row, z south (the
  * front, porch and street at +z). House plans are in their own lot frame, whose x runs the same way as the model's
- * (see landed.ts), so a house's body maps by a plain shift; house i of the group sits at the east end first when the
- * group's heading is 0 and at the west end first when it is 180.
+ * (see landed.ts), so a house's body maps by a plain shift; house i of the group sits at the west end first, or at the east end first when the
+ * group is `reversed` (the enclave's heading-180 groups).
  */
 export function landedPlan(spec: LandedSpec, group: Group, houses: House[], storey: number): FloorPlan {
   const { bd, front } = landedFrame(spec);
@@ -18,12 +18,12 @@ export function landedPlan(spec: LandedSpec, group: Group, houses: House[], stor
   houses.forEach((h, i) => {
     const g0 = h.storeys[0].body;
     const st = h.storeys[Math.min(storey, h.storeys.length - 1)];
-    const xW = group.rot === 0 ? -spec.w / 2 + i * g0.w : spec.w / 2 - (i + 1) * g0.w; // west edge of this house's body
+    const xW = !group.reversed ? -spec.w / 2 + i * g0.w : spec.w / 2 - (i + 1) * g0.w; // west edge of this house's body
     const X = (x: number) => xW + (x - g0.x);
     const Z = (y: number) => zN + (y - g0.y);
     // neighbours (party walls) on the model's west / east side
-    const west = group.rot === 0 ? i > 0 : i < n - 1;
-    const east = group.rot === 0 ? i < n - 1 : i > 0;
+    const west = !group.reversed ? i > 0 : i < n - 1;
+    const east = !group.reversed ? i < n - 1 : i > 0;
     const rooms: PlacedRoom[] = [];
     const furniture: Piece[] = [];
     const u = units.length;

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { ROOF, STOREY_H, type Group, type RoofStyle } from "@/lib/first-key/landed";
+import { DEFAULT_N, MAX_BODY, PORCH_OF, ROOF, STOREY_H, type Group, type LandedType, type RoofStyle } from "@/lib/first-key/landed";
 import { parseVariant } from "@/lib/first-key/site-layout";
 import type { ThemeColors } from "../use-theme-colors";
 import { Mesher } from "./tower-model";
@@ -17,17 +17,13 @@ import { Mesher } from "./tower-model";
 
 export type LRole = "glass" | "frame" | "wall" | "tile" | "water" | "green" | "roof" | "rail";
 export const LROLES: LRole[] = ["glass", "frame", "wall", "tile", "green", "water", "roof", "rail"]; // rail last: it is see-through
-export type LandedType = "terrace" | "superlink" | "link" | "townhouse" | "cluster" | "semid" | "bungalow" | "clubhouse";
+export type { LandedType };
 /** `n` units along the row; `w` the whole building's width along the row and `d` its body depth (the porch comes on top). */
 export type LandedSpec = { type: LandedType; storeys: number; style?: string; n?: number; w: number; d: number };
 export type LandedRange = { from: number; to: number; roof: boolean };
 
 type V = number[];
 const DEFAULT_STYLE: Record<LandedType, RoofStyle> = { terrace: "gable", superlink: "hip", link: "gable", townhouse: "flat", cluster: "hip", semid: "prairie", bungalow: "hip", clubhouse: "flat" };
-const DEFAULT_N: Record<LandedType, number> = { terrace: 6, superlink: 4, link: 4, townhouse: 6, cluster: 4, semid: 2, bungalow: 1, clubhouse: 1 };
-const PORCH: Record<LandedType, number> = { terrace: 6, superlink: 6, link: 6, townhouse: 0, cluster: 0, semid: 6, bungalow: 6, clubhouse: 0 };
-/** Deepest body a type builds; a deeper footprint is rear garden. */
-const MAX_BODY: Record<LandedType, number> = { terrace: 13.5, superlink: 15, link: 13.5, townhouse: 15, cluster: 20, semid: 14, bungalow: 14, clubhouse: 16 };
 const ROW: LandedType[] = ["terrace", "superlink", "townhouse", "cluster"]; // one continuous body and roof; the others get a roof per unit
 const U0 = [0, 0], U1 = [1, 0], U2 = [1, 1], U3 = [0, 1];
 
@@ -163,7 +159,7 @@ export function groupSpec(g: Pick<Group, "variant" | "w" | "d"> & { houses?: str
 
 /** Where the body sits inside the w x d footprint (front-aligned): porch or deck depth, body depth, body centre z. */
 export function landedFrame(spec: LandedSpec) {
-  const front = spec.type === "clubhouse" ? Math.min(12, 0.45 * spec.d) : Math.min(PORCH[spec.type], 0.4 * spec.d);
+  const front = spec.type === "clubhouse" ? Math.min(12, 0.45 * spec.d) : Math.min(PORCH_OF[spec.type], 0.4 * spec.d);
   const bd = Math.min(spec.d - front, MAX_BODY[spec.type]);
   return { front, bd, zc: spec.d / 2 - front - bd / 2 };
 }

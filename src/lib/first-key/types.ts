@@ -45,6 +45,11 @@ export type Building = {
   style: "serviced" | "residence";
   /** Floors with no flats besides floor 1 (lobby) and floor 2 (car park): facilities decks with pool, gym and function room. */
   decks: number[];
+  /** Floors of podium (lobby, car park) when not the default for the height. Set on spawned site towers. */
+  podium?: number;
+  /** Spawned site towers only: the variant key (tower/variants.ts draws the same tower on the map) and the model's turn, degrees clockwise (0 = long side east-west). */
+  variant?: string;
+  rot?: number;
   /** Flats: none on floor 1 (lobby), floor 2 (car park) or a deck floor. */
   units: Unit[];
 };

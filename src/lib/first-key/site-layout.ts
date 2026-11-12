@@ -35,3 +35,14 @@ export function parseVariant(key: string): { type: VariantType; storeys: number;
   const n = rest.length && /^\d+$/.test(rest[rest.length - 1]) ? Number(rest.pop()) : undefined;
   return { type: type as VariantType, storeys: Number(storeys), style: rest[0], n };
 }
+
+/** Spawned buildings you can open up: a tower (a condo or serviced-apartment block) gets the tower burst, landed homes the landed burst. Shops, offices, malls and clubhouses only open their township. */
+export const siteKind = (b: SiteBuilding): "tower" | "landed" | undefined => {
+  const type = parseVariant(b.variant).type;
+  return type === "tower" ? "tower" : (["terrace", "superlink", "link", "townhouse", "cluster", "semid", "bungalow"] as const).includes(type as "terrace") ? "landed" : undefined;
+};
+/** An openable building's id is "sb<n>", n = its index in site-layout.json; the township panel and the URL use it like the Cove block ids. */
+export const siteIndexOf = (id: string): number | undefined => {
+  const m = /^sb(\d+)$/.exec(id);
+  return m && Number(m[1]) < siteLayout.buildings.length ? Number(m[1]) : undefined;
+};

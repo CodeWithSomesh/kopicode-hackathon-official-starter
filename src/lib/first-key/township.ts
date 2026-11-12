@@ -40,8 +40,8 @@ const rect = (e: number, n: number, w: number, d: number): LngLat[] => {
 const podiumFloors = (floors: number) => (floors >= 15 ? 2 : 0);
 export type FloorKind = "lobby" | "carpark" | "deck" | "units";
 /** Floor 1 is the lobby (shops too on a serviced tower), floor 2 the car park, deck floors the pool and gym; none hold flats. */
-export const floorKind = (b: Pick<Building, "floors" | "decks">, floor: number): FloorKind =>
-  floor === 1 ? "lobby" : floor <= podiumFloors(b.floors) ? "carpark" : b.decks.includes(floor) ? "deck" : "units";
+export const floorKind = (b: Pick<Building, "floors" | "decks" | "podium">, floor: number): FloorKind =>
+  floor === 1 ? "lobby" : floor <= (b.podium ?? podiumFloors(b.floors)) ? "carpark" : b.decks.includes(floor) ? "deck" : "units";
 export const floorLabel = (b: Pick<Building, "floors" | "decks" | "style">, floor: number) =>
   ({ lobby: b.style === "serviced" ? "Lobby and shops" : "Lobby", carpark: "Car park", deck: "Facilities deck", units: "" })[floorKind(b, floor)];
 
@@ -91,10 +91,14 @@ function fillRow(r: () => number, t: number, top: boolean, target: number, pentC
 
 const rowsOf = (w: number, d: number): 1 | 2 => (w / d > 2.3 ? 1 : 2);
 
-function makeUnits(buildingId: string, block: string, floors: number, perFloor: number, rows: 1 | 2, serviced: boolean, decks: number[], centre: LngLat, seed: number): Unit[] {
+/** What a spawned site tower changes: its project name, podium floors (default by height), and `priceK`, a multiplier on RM per sqft and on the price limits (1 = the Cove block's prices). */
+export type UnitOpts = { project?: string; podium?: number; priceK?: number };
+export function makeUnits(buildingId: string, block: string, floors: number, perFloor: number, rows: 1 | 2, serviced: boolean, decks: number[], centre: LngLat, seed: number, opts: UnitOpts = {}): Unit[] {
   const units: Unit[] = [];
-  const first = podiumFloors(floors) + (podiumFloors(floors) ? 1 : 2); // floors 1-2 podium (or floor 1 alone) hold no flats
-  const tower = podiumFloors(floors) > 0;
+  const pod = opts.podium ?? podiumFloors(floors);
+  const k = opts.priceK ?? 1;
+  const first = pod + (pod ? 1 : 2); // floors 1-2 podium (or floor 1 alone) hold no flats
+  const tower = pod > 0;
   const view: Compass = seed % 2 ? "N" : "S"; // the side of the block with the better outlook (park or lake)
   const target = (perFloor / rows) * 8;
   const pentPerRow = Math.ceil(perFloor / rows / 3);
@@ -114,12 +118,12 @@ function makeUnits(buildingId: string, block: string, floors: number, perFloor: 
         // RM per sqft: base plus a rise per floor, times the type factor; corners +4%, the outlook side +3%.
         const base = tower ? 600 + f * 7 : 480 + f * 6;
         const premium = 1 + (end ? 0.04 : 0) + (facing.includes(view) ? 0.03 : 0) + (((f * 7 + n * 13 + seed * 5) % 5) - 2) * 0.004;
-        const raw = sp.sqft * base * sp.psf * premium;
-        const price = Math.min(type === "Penthouse" ? 1_500_000 : 1_200_000, Math.max(350_000, Math.round(raw / 5000) * 5000));
+        const raw = sp.sqft * base * sp.psf * premium * k;
+        const price = Math.round(Math.min((type === "Penthouse" ? 1_500_000 : 1_200_000) * k, Math.max(350_000 * k, Math.round(raw / 5000) * 5000)) / 5000) * 5000;
         n++;
         const mirror = left;
         units.push({
-          project: PROJECT,
+          project: opts.project ?? PROJECT,
           block,
           buildingId,
           floor: f,

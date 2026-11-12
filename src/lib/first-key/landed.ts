@@ -1,5 +1,7 @@
 import type { Compass, LngLat, Room, XY } from "./types";
 import { PROJECT, monthlyInstalment, township } from "./township";
+import { parseVariant, siteIndexOf, siteKind, siteLayout } from "./site-layout";
+import { townshipById, units as products } from "../homelander/data";
 
 // ILLUSTRATIVE ONLY. A made-up gated landed enclave inside Gamuda Cove, "Seri Kopi Heights". Every plan, lot, price
 // and street below is invented; only the two anchors are real Gamuda Cove products (src/lib/homelander/data.ts):
@@ -13,6 +15,11 @@ import { PROJECT, monthlyInstalment, township } from "./township";
 //           turned half a circle on the ground (front faces north). Room.windows are true compass points.
 
 export const STOREY_H = 3.1; // = FLOOR_H in burst/layout.ts
+export type LandedType = "terrace" | "superlink" | "link" | "townhouse" | "cluster" | "semid" | "bungalow" | "clubhouse";
+/** Units in a row when the variant key has no count; car porch depth (front of the footprint); deepest body a type builds (the rest is rear garden). Shared with tower/landed-model.ts. */
+export const DEFAULT_N: Record<LandedType, number> = { terrace: 6, superlink: 4, link: 4, townhouse: 6, cluster: 4, semid: 2, bungalow: 1, clubhouse: 1 };
+export const PORCH_OF: Record<LandedType, number> = { terrace: 6, superlink: 6, link: 6, townhouse: 0, cluster: 0, semid: 6, bungalow: 6, clubhouse: 0 };
+export const MAX_BODY: Record<LandedType, number> = { terrace: 13.5, superlink: 15, link: 13.5, townhouse: 15, cluster: 20, semid: 14, bungalow: 14, clubhouse: 16 };
 export type RoofStyle = "gable" | "hip" | "prairie" | "flat";
 /** Roof geometry shared by the plans (height) and the model: pitch in degrees, eave overhang in metres. */
 export const ROOF: Record<RoofStyle, { pitch: number; ov: number }> = {
@@ -98,7 +105,9 @@ export type Group = {
   houses: string[];
   lng: number;
   lat: number;
-  rot: number; // heading: 0 = front faces south, 180 = front faces north
+  rot: number; // heading, degrees clockwise: 0 = front faces south, 180 = front faces north (enclave: 0 or 180; a site building: any)
+  /** Houses are listed east to west in the model's frame (the enclave's heading-180 groups, listed west to east on the ground). */
+  reversed?: boolean;
   w: number; // along the row
   d: number; // body depth + the 6 m car porch in front, as landedParts takes it; lng/lat is the centre of that w x d rectangle
   h: number;
@@ -189,6 +198,30 @@ function bungalow(): Storey[] {
   ];
 }
 
+/** A 3-storey terrace or semi-D: the first floor's master moves to Bedroom 4 and a master-suite floor goes on top (stairs where the lower ones are). */
+function withTop(raw: Storey[], w: number, d: number, stairs: [number, number, number, number]): Storey[] {
+  const [g, f] = raw;
+  const f2: Storey = { ...f, rooms: f.rooms.map((r) => (r.id === "bilik_utama" ? { ...r, id: "bilik_4", name: "Bedroom 4" } : r.id === "tandas_utama" ? { ...r, id: "tandas_4", name: "Bath" } : r)) };
+  const [sx0, sy0, sx1, sy1] = stairs;
+  const rooms =
+    d < 13
+      ? [R("bilik_utama", "Master bedroom", 0, 0, w, 4.0), R("tangga", "Stairs", sx0, sy0, sx1, sy1), R("keluarga", "Family lounge", sx1, 4.0, w, 8.0), R("tandas_utama", "Ensuite", 0, 6.0, sx1, 8.0), R("walk_in", "Walk-in", 0, 8.0, 3.0, d), R("kajian", "Study", 3.0, 8.0, w, d)]
+      : [R("bilik_utama", "Master bedroom", 0, 0, w, 5.0), R("walk_in", "Walk-in", 0, 5.0, 3.0, 8.0), R("tandas_utama", "Ensuite", 3.0, 5.0, w, 8.0), R("tangga", "Stairs", sx0, sy0, sx1, sy1), R("kajian", "Study", 0, 11.0, sx1, d), R("keluarga", "Family lounge", sx1, 8.0, w, d)];
+  return [g, f2, { level: 3, label: "Second floor: master suite", body: f.body, rooms }];
+}
+
+/** The plans the layout uses for one typology and storey count, stretched to the body (bw x bd) the model draws; the enclave's own sizes stretch by 1. */
+const BASE: Record<Typology, { w: number; d: number }> = { terrace: { w: 6.5, d: 12.8 }, semid: { w: 9.0, d: 13.4 }, bungalow: { w: 15, d: 12 } };
+function recipe(typology: Typology, storeys: number, bw: number, bd: number): Storey[] {
+  const raw = typology === "terrace" ? terrace() : typology === "semid" ? semid() : bungalow();
+  const { w, d } = BASE[typology];
+  const plans = storeys >= 3 && typology !== "bungalow" ? withTop(raw, w, d, typology === "terrace" ? [0, 4.0, 2.4, 6.0] : [0, 8.0, 2.8, 11.0]) : typology === "bungalow" && storeys < 3 ? raw.slice(0, 2) : raw;
+  const [fx, fy] = [bw / w, bd / d];
+  if (fx === 1 && fy === 1) return plans;
+  const sc = (r: Room): Room => ({ ...r, polygon: r.polygon.map(([x, y]) => [x * fx, y * fy] as XY) });
+  return plans.map((s) => ({ ...s, body: { x: s.body.x * fx, y: s.body.y * fy, w: s.body.w * fx, d: s.body.d * fy }, rooms: s.rooms.map(sc) }));
+}
+
 const flipX = (rooms: Room[], w: number): Room[] =>
   rooms.map((r) => ({ ...r, polygon: r.polygon.map(([x, y]) => [w - x, y] as XY) }));
 const shift = (rooms: Room[], dx: number, dy: number): Room[] =>
@@ -224,7 +257,12 @@ function glaze(storey: Storey, party: ("E" | "W")[], heading: 0 | 180): Storey {
 }
 
 // ---- placing houses ----
-type Spec = { typology: Typology; roof: RoofStyle; bodyW: number; bodyD: number; lotW: number; lotD: number; porchEnd: number; priceOf: (kind: House["kind"], i: number) => number };
+type Spec = {
+  typology: Typology; roof: RoofStyle; bodyW: number; bodyD: number; lotW: number; lotD: number; porchEnd: number;
+  priceOf: (kind: House["kind"], i: number, builtUpSqft: number) => number;
+  /** Beyond the enclave's: storeys (default 2, a bungalow 3), car porch depth (default 6), the group's variant key, the house label. */
+  storeys?: number; porch?: number; variant?: string; label?: (kind: House["kind"], storeys: number) => string;
+};
 
 const SPEC: Record<Typology, Spec> = {
   // Mori Pines anchor: RM849,800 for the intermediate; an end lot has 3 m more land and side windows: +RM80,000.
@@ -238,14 +276,19 @@ const SPEC: Record<Typology, Spec> = {
 const houses: House[] = [];
 const groups: Group[] = [];
 const pools: { house: string; ring: LngLat[] }[] = [];
-const PORCH_D = PORCH; // the model puts the car porch in front of the body; a group's footprint is body + porch
+/** Where layBuilding puts its output and how it turns zone metres into coordinates: the enclave by default, a site building's own sink when it spawns one. */
+type Ctx = { zone: (x: number, y: number) => LngLat; project: string; houses: House[]; groups: Group[]; pools: { house: string; ring: LngLat[] }[] };
+const ENCLAVE: Ctx = { zone, project: PROJECT, houses, groups, pools };
 
 /**
  * Lay one building (a terrace row, a semi-D pair or one bungalow) of `n` lots side by side from zone x `x0`, lots spanning zone
  * y `y0`..`y1`. Heading 0 puts the street on the lots' south side (house frame turned 0 degrees, y1 is the street edge's
  * opposite... the lot's north edge), heading 180 puts it on the north side.
  */
-function layBuilding(spec: Spec, gid: string, n: number, heading: 0 | 180, x0: number, y0: number, y1: number, prefix: string, first: number) {
+function layBuilding(spec: Spec, gid: string, n: number, heading: 0 | 180, x0: number, y0: number, y1: number, prefix: string, first: number, ctx: Ctx = ENCLAVE) {
+  const zone = ctx.zone;
+  const porch = spec.porch ?? PORCH;
+  const storeyN = spec.storeys ?? (spec.typology === "bungalow" ? 3 : 2);
   const row = spec.typology === "terrace";
   const widths = Array.from({ length: n }, (_, i) => spec.lotW + (row && (i === 0 || i === n - 1) ? SIDE : 0));
   const flip = (s: "E" | "W") => (heading === 0 ? s : s === "E" ? "W" : "E"); // zone side -> house-frame side
@@ -265,10 +308,10 @@ function layBuilding(spec: Spec, gid: string, n: number, heading: 0 | 180, x0: n
     const party: ("E" | "W")[] =
       spec.typology === "bungalow" ? [] : row ? [...(i > 0 ? [flip("W")] : []), ...(i < n - 1 ? [flip("E")] : [])] : [flip(i === 0 ? "E" : "W")];
     const ox = spec.typology === "bungalow" ? 2 : gardenLocal === "W" ? sideW : 0;
-    const oy = spec.typology === "bungalow" ? 10 : spec.lotD - PORCH - spec.bodyD;
+    const oy = spec.typology === "bungalow" ? 10 : spec.lotD - porch - spec.bodyD;
     // Plans are drawn with the party wall on the east: the semi-D whose party wall is on the west is the mirror image.
     const mirror = spec.typology === "semid" && party[0] === "W";
-    const raw = spec.typology === "terrace" ? terrace() : spec.typology === "semid" ? semid() : bungalow();
+    const raw = recipe(spec.typology, storeyN, spec.bodyW, spec.bodyD);
     const storeys = raw.map((s) => {
       const placed: Storey = {
         ...s,
@@ -283,28 +326,29 @@ function layBuilding(spec: Spec, gid: string, n: number, heading: 0 | 180, x0: n
     storeys[0].rooms.push(R("yard", "Back yard", 0, 0, wLot, oy), R("porch", "Car porch (2 cars)", px0, fy1, px1, spec.porchEnd));
     if (spec.typology === "bungalow") storeys[0].rooms.push(R("garden", "Side garden and pool", ox + spec.bodyW, oy, wLot, spec.porchEnd));
     else if (gardenLocal) storeys[0].rooms.push(gardenLocal === "W" ? R("garden", "Side garden", 0, oy, sideW, fy1) : R("garden", "Side garden", ox + spec.bodyW, oy, wLot, fy1));
-    const [b0, b1] = spec.typology === "terrace" ? [0, 4.3] : spec.typology === "semid" ? [2.8, 6.6] : [0, 8.5];
+    const fx = spec.bodyW / BASE[spec.typology].w;
+    const [b0, b1] = (spec.typology === "terrace" ? [0, 4.3] : spec.typology === "semid" ? [2.8, 6.6] : [0, 8.5]).map((v) => v * fx);
     const [m0, m1] = mirror ? [spec.bodyW - b1, spec.bodyW - b0] : [b0, b1];
     storeys[1].rooms.push(R("balkoni", "Balcony", ox + m0, fy1, ox + m1, fy1 + 1.5));
-    if (spec.typology === "bungalow") pools.push({ house: `${prefix}${first + i}`, ring: ([[18, 13], [23, 13], [23, 23], [18, 23]] as [number, number][]).map(toZone) });
+    if (spec.typology === "bungalow") ctx.pools.push({ house: `${prefix}${first + i}`, ring: ([[18, 13], [23, 13], [23, 23], [18, 23]] as [number, number][]).map(toZone) });
 
     const all = storeys.flatMap((s) => s.rooms);
     const builtUp = Math.round((all.filter((r) => !isOpenAir(r) && r.id !== "balkoni").reduce((t, r) => t + area(r), 0) * SQFT) / 5) * 5;
     const kind: House["kind"] = spec.typology === "semid" ? "semi-d" : spec.typology === "bungalow" ? "detached" : gardenLocal ? "end lot" : "intermediate";
-    const price = spec.priceOf(kind, i);
+    const price = spec.priceOf(kind, i, builtUp);
     const corners = ([[ox, oy], [ox + spec.bodyW, oy], [ox + spec.bodyW, fy1], [ox, fy1]] as [number, number][]).map(toZone);
     const plot = ([[0, 0], [wLot, 0], [wLot, spec.lotD], [0, spec.lotD]] as [number, number][]).map(toZone);
     const topBody = storeys[storeys.length - 1].body;
     const id = `${prefix}${first + i}`;
     ids.push(id);
-    centres.push(toZone([ox + spec.bodyW / 2, oy + (spec.bodyD + PORCH_D) / 2]));
-    houses.push({
+    centres.push(toZone([ox + spec.bodyW / 2, oy + (spec.bodyD + porch) / 2]));
+    ctx.houses.push({
       id,
       lotNo: id.toUpperCase(),
-      project: PROJECT,
+      project: ctx.project,
       typology: spec.typology,
       kind,
-      label: spec.typology === "terrace" ? `2-storey terrace, ${kind}` : spec.typology === "semid" ? "2-storey semi-D, prairie style" : "3-level bungalow with roof terrace",
+      label: spec.label ? spec.label(kind, storeyN) : spec.typology === "terrace" ? `2-storey terrace, ${kind}` : spec.typology === "semid" ? "2-storey semi-D, prairie style" : "3-level bungalow with roof terrace",
       group: gid,
       unit: i,
       heading,
@@ -325,18 +369,21 @@ function layBuilding(spec: Spec, gid: string, n: number, heading: 0 | 180, x0: n
       roof: spec.roof,
     });
   }
-  const mine = houses.filter((h) => ids.includes(h.id));
-  groups.push({
+  const mine = ctx.houses.filter((h) => ids.includes(h.id));
+  const group: Group = {
     id: gid,
-    variant: spec.typology === "terrace" ? `terrace-2-gable-${n}` : spec.typology === "semid" ? "semid-2-prairie" : "bungalow-3-hip",
+    variant: spec.variant ?? (spec.typology === "terrace" ? `terrace-2-gable-${n}` : spec.typology === "semid" ? "semid-2-prairie" : "bungalow-3-hip"),
     houses: ids,
     lng: centres.reduce((t, c) => t + c[0], 0) / n,
     lat: centres.reduce((t, c) => t + c[1], 0) / n,
     rot: heading,
+    ...(heading === 180 ? { reversed: true } : {}),
     w: spec.bodyW * n,
-    d: spec.bodyD + PORCH_D,
+    d: spec.bodyD + porch,
     h: mine[0].heightM,
-  });
+  };
+  ctx.groups.push(group);
+  return group;
 }
 
 // ---- the layout (zone metres, x east, y north) ----
@@ -394,9 +441,68 @@ export const enclave = {
 
 export const landed = { houses, groups, enclave };
 export { houses, groups };
-export const houseById = (id: string) => houses.find((h) => h.id === id);
-export const groupById = (id: string) => groups.find((g) => g.id === id);
-export const groupOfHouse = (id: string) => groups.find((g) => g.houses.includes(id));
+// ---- the other sites' landed buildings: the same recipes, built on demand and cached ----
+// Ids are "sb<n>" (n = index in site-layout.json); a house is "sb<n>-<k>". ILLUSTRATIVE: made-up plans and prices.
+const SITE_TYPOLOGY: Record<string, Typology> = { terrace: "terrace", link: "terrace", superlink: "terrace", townhouse: "terrace", cluster: "terrace", semid: "semid", bungalow: "bungalow" };
+const SITE_NAME: Record<string, string> = { terrace: "terrace", link: "link home", superlink: "superlink", townhouse: "townhouse", cluster: "cluster home", semid: "semi-D", bungalow: "bungalow" };
+const HOME_TYPE = { terrace: "Terrace", semid: "Semi-D", bungalow: "Bungalow" } as const;
+const FALLBACK_PSF = { terrace: 476, semid: 654, bungalow: 650 }; // RM per built-up sqft: the Mori Pines, Camellia and bungalow anchors above
+/** RM per built-up sqft for a typology at a site: its own product's "From" price over its size (data.ts), else the site's landed average, else the enclave's anchor. */
+function sitePsf(site: string, typology: Typology): number {
+  const landed = products.filter((u) => u.townshipId === site && u.landed);
+  const mean = (us: typeof landed) => us.reduce((t, u) => t + u.priceRM / u.builtUpSqft, 0) / us.length;
+  const own = landed.filter((u) => u.type === HOME_TYPE[typology]);
+  if (own.length) return mean(own);
+  if (landed.length) return mean(landed) * ({ terrace: 1, semid: 1.12, bungalow: 1.2 }[typology]);
+  return FALLBACK_PSF[typology];
+}
+
+const siteGroups = new Map<string, Group>();
+const siteHouses = new Map<string, House>();
+/** The landed building spawned at `sb<n>`, with its houses; undefined for anything else. */
+export function siteGroup(id: string): Group | undefined {
+  const idx = siteIndexOf(id);
+  if (idx === undefined || siteKind(siteLayout.buildings[idx]) !== "landed") return undefined;
+  const hit = siteGroups.get(id);
+  if (hit) return hit;
+  const b = siteLayout.buildings[idx];
+  const v = parseVariant(b.variant);
+  const type = v.type as LandedType;
+  const typology = SITE_TYPOLOGY[type];
+  const n = v.n ?? DEFAULT_N[type];
+  const porch = Math.min(PORCH_OF[type], 0.4 * b.d);
+  const bodyD = Math.min(b.d - porch, MAX_BODY[type]);
+  const bungalow = typology === "bungalow";
+  const lotD = bodyD + porch + (bungalow ? 16 : 2.2);
+  const psf = sitePsf(b.site, typology);
+  const spec: Spec = {
+    typology,
+    roof: v.style && v.style in ROOF ? (v.style as RoofStyle) : "gable",
+    bodyW: b.w / n, bodyD, lotW: b.w / n + (typology === "semid" ? 3.2 : bungalow ? 9 : 0), lotD, porchEnd: bungalow ? bodyD + porch + 11 : lotD,
+    storeys: v.storeys, porch, variant: b.variant,
+    label: (kind, st) => `${st}-storey ${SITE_NAME[type]}${typology === "terrace" ? `, ${kind}` : ""}`,
+    priceOf: (kind, i, built) => Math.round((psf * built * (1 + (kind === "end lot" ? 0.04 : 0) + (((i * 7 + idx * 13) % 5) - 2) * 0.004)) / 5000) * 5000,
+  };
+  const kx = 111_320 * Math.cos((b.lat * Math.PI) / 180);
+  const ctx: Ctx = { zone: (x, y) => [b.lng + x / kx, b.lat + y / M_PER_DEG_LAT], project: townshipById[b.site]?.name ?? b.site, houses: [], groups: [], pools: [] };
+  const group = layBuilding(spec, id, n, 0, 0, 0, lotD, `${id}-`, 1, ctx);
+  // Where the map put it: the footprint centre and turn (the model turns by rot - 90, clockwise, front facing south at 0), its whole w x d.
+  Object.assign(group, { lng: b.lng, lat: b.lat, rot: b.rot - 90, w: b.w, d: b.d });
+  const no = siteLayout.buildings.slice(0, idx).filter((o) => o.site === b.site && siteKind(o) === "landed").length + 1; // this building's number among the site's landed ones
+  const COMPASS: Compass[] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const facing = COMPASS[Math.round((((180 + b.rot - 90) % 360) + 360) % 360 / 45) % 8]; // the front's compass bearing: south turned by the model's rotation
+  ctx.houses.forEach((h, k) => {
+    h.lotNo = `${no}.${k + 1}`;
+    h.facing = facing;
+    siteHouses.set(h.id, h);
+  });
+  siteGroups.set(id, group);
+  return group;
+}
+
+export const houseById = (id: string) => houses.find((h) => h.id === id) ?? (siteGroup(id.replace(/-\d+$/, "")) ? siteHouses.get(id) : undefined);
+export const groupById = (id: string) => groups.find((g) => g.id === id) ?? siteGroup(id);
+export const groupOfHouse = (id: string) => groups.find((g) => g.houses.includes(id)) ?? (/^sb\d+-\d+$/.test(id) ? siteGroup(id.replace(/-\d+$/, "")) : undefined);
 
 /** Numbers for the report: per typology, count and ranges. */
 export function summary() {

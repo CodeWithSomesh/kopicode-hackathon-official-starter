@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { PixPanel } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import type { Lang, Reply } from "./commands";
@@ -71,7 +77,15 @@ export function CommandConsole({
   };
 
   return (
-    <PixPanel tone="ink" className="grid gap-3 p-4">
+    <PixPanel
+      tone="ink"
+      // A dark board in every theme. Dark themes flip ink to cream, so take their near-black
+      // "on light" colour there instead; light themes don't define it and keep the ink fill.
+      style={
+        { "--pix-fill": "var(--j-on-light, var(--color-ink))" } as CSSProperties
+      }
+      className="grid gap-3 p-4"
+    >
       <h2 className="font-pixel text-lg font-bold">Cakap je</h2>
 
       <div

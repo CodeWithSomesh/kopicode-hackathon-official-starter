@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import * as THREE from "three";
+import { DARK_THEMES } from "@/lib/homelander/theme-config";
 import { cn } from "@/lib/utils";
 import { CATALOG, type Item, type Kind } from "./furniture";
 import type { Floor } from "./plans";
@@ -54,26 +55,55 @@ type Colors = Record<
   | "sun"
   | "raya"
   | "select"
-  | "teh",
+  | "teh"
+  /** Behind and around the model: these two follow the theme, light or dark. */
+  | "backdrop"
+  | "ground",
   string
 >;
+
+/**
+ * The model's own materials in a dark theme. It's a physical model under daylight, so plaster
+ * walls stay light at night; only the table it sits on goes dark. These are Teh Susu's tokens.
+ */
+const DAYLIGHT = {
+  ink: "#17332a",
+  soft: "#4a6359",
+  surface: "#ffffff",
+  cloud: "#e4efe8",
+  line: "#c9dbd1",
+  furniture: "#d6ebf3",
+  plant: "#1f9d6b",
+  glass: "#3f8fb5",
+  sun: "#f2b632",
+  raya: "#d8452f",
+  select: "#12704b",
+  teh: "#8a5a33",
+};
 
 function readColors(el: Element): Colors {
   const css = getComputedStyle(el);
   const v = (n: string, f: string) => css.getPropertyValue(n).trim() || f;
+  const backdrop = v("--j-surface", DAYLIGHT.surface);
+  const ground = v("--color-cloud", DAYLIGHT.cloud);
+  const theme = el.closest("[data-jtheme]")?.getAttribute("data-jtheme");
+  if (theme && DARK_THEMES.includes(theme))
+    return { ...DAYLIGHT, backdrop, ground };
   return {
-    ink: v("--color-ink", "#17332a"),
-    soft: v("--color-ink-soft", "#4a6359"),
-    surface: v("--j-surface", "#ffffff"),
-    cloud: v("--color-cloud", "#e4efe8"),
-    line: v("--j-line", "#c9dbd1"),
-    furniture: v("--color-lilac", "#d6ebf3"),
-    plant: v("--color-pandan", "#1f9d6b"),
-    glass: v("--color-sky-deep", "#3f8fb5"),
-    sun: v("--color-kaya", "#f2b632"),
-    raya: v("--color-raya", "#d8452f"),
-    select: v("--color-pandan-deep", "#12704b"),
-    teh: v("--color-teh", "#8a5a33"),
+    ink: v("--color-ink", DAYLIGHT.ink),
+    soft: v("--color-ink-soft", DAYLIGHT.soft),
+    surface: backdrop,
+    cloud: ground,
+    line: v("--j-line", DAYLIGHT.line),
+    furniture: v("--color-lilac", DAYLIGHT.furniture),
+    plant: v("--color-pandan", DAYLIGHT.plant),
+    glass: v("--color-sky-deep", DAYLIGHT.glass),
+    sun: v("--color-kaya", DAYLIGHT.sun),
+    raya: v("--color-raya", DAYLIGHT.raya),
+    select: v("--color-pandan-deep", DAYLIGHT.select),
+    teh: v("--color-teh", DAYLIGHT.teh),
+    backdrop,
+    ground,
   };
 }
 
@@ -82,8 +112,16 @@ export function Plan3D(props: Props) {
   const [colors, setColors] = useState<Colors | null>(null);
 
   useEffect(() => {
-    // Theme colours live in CSS; read them once the wrapper is in the themed tree.
-    if (wrap.current) setColors(readColors(wrap.current));
+    // Theme colours live in CSS; read them now and again whenever the theme switches.
+    const el = wrap.current;
+    if (!el) return;
+    const read = () => setColors(readColors(el));
+    read();
+    const themed = el.closest("[data-jtheme]");
+    if (!themed) return;
+    const watch = new MutationObserver(read);
+    watch.observe(themed, { attributeFilter: ["data-jtheme"] });
+    return () => watch.disconnect();
   }, []);
 
   const { bounds } = props;
@@ -126,7 +164,7 @@ export function Plan3D(props: Props) {
           onPointerMissed={() => props.onSelect(null)}
           gl={{ antialias: true }}
         >
-          <color attach="background" args={[colors.surface]} />
+          <color attach="background" args={[colors.backdrop]} />
           <Scene {...props} colors={colors} centre={centre} span={span} />
         </Canvas>
       ) : null}
@@ -234,7 +272,7 @@ function Scene({
         receiveShadow
       >
         <planeGeometry args={[span * 4, span * 4]} />
-        <meshBasicMaterial color={colors.cloud} />
+        <meshBasicMaterial color={colors.ground} />
       </mesh>
 
       {/* Floors. */}

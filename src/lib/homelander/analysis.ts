@@ -49,10 +49,12 @@ export type EffectiveMode = "car" | "train";
 
 export type CommuteLeg = {
   who: "you" | "partner";
-  anchor: Anchor;
+  anchor: Anchor | null;
   label: string;
-  /** False for homes too far to commute daily (Johor, Sabah vs a KL office). */
+  /** False for homes too far to commute daily (Johor, Sabah vs a KL office), or when an input is missing. */
   compared: boolean;
+  /** What the buyer still has to tell Uncle before this commute can be compared; null when nothing. */
+  missing: string | null;
   notComparedWhy: string | null;
   cost: CommuteCost | null;
   mode: EffectiveMode;
@@ -70,7 +72,7 @@ export type SchoolCell = {
   within: boolean | null;
 };
 
-export type Fit = "in" | "stretch" | "over";
+export type Fit = "in" | "stretch" | "over" | "unknown";
 
 export type HomeAnalysis = {
   unit: Unit;
@@ -98,9 +100,10 @@ export type HomeAnalysis = {
   maintenanceSource: "gamuda" | "estimated";
   maintenanceNote: string;
   totalMonthlyRM: number;
-  /** Take-home minus other debts minus the total monthly cost. */
-  leftRM: number;
-  dsrAfter: number;
+  /** Take-home minus other debts minus the total monthly cost; null when income is unknown. */
+  leftRM: number | null;
+  /** Debt service ratio with this loan; null when income is unknown. */
+  dsrAfter: number | null;
   fit: Fit;
 
   /* commute */
@@ -159,6 +162,7 @@ export function typeAveragePsf(type: Unit["type"]) {
 }
 
 export function fitOf(price: number, maxPrice: number): Fit {
+  if (maxPrice <= 0) return "unknown";
   if (maxPrice > 0 && price <= maxPrice) return "in";
   if (maxPrice > 0 && price <= maxPrice * (1 + STRETCH_SHARE)) return "stretch";
   return "over";
@@ -199,6 +203,27 @@ export function maintenanceOf(unit: Unit): {
   };
 }
 
+/** A leg we can't compare because the buyer hasn't told Uncle something yet. */
+function missingLeg(
+  who: "you" | "partner",
+  anchor: Anchor | null,
+  why: string,
+): CommuteLeg {
+  return {
+    who,
+    anchor,
+    label: anchor?.name ?? "work",
+    compared: false,
+    missing: why,
+    notComparedWhy: why,
+    cost: null,
+    mode: "car",
+    oneWayMin: 0,
+    hoursPerYear: 0,
+    monthlyRM: 0,
+  };
+}
+
 function commuteLeg(
   t: Township,
   anchor: Anchor,
@@ -206,6 +231,14 @@ function commuteLeg(
   who: "you" | "partner",
   ctx: BattleContext,
 ): CommuteLeg {
+  if (ctx.officeDays === null || ctx.mode === null)
+    return missingLeg(
+      who,
+      anchor,
+      ctx.commuteMissing ?? "Tell Uncle how you commute",
+    );
+  const officeDays = ctx.officeDays;
+  const ctxMode = ctx.mode;
   const region = regionOf(t);
   const km = distanceKm(t.pos, anchor.pos);
   // Every commute anchor is in the Klang Valley, so a Johor or Sabah home is not a daily commute.
@@ -215,26 +248,28 @@ function commuteLeg(
       anchor,
       label,
       compared: false,
+      missing: null,
       notComparedWhy: `${t.name} is in ${regionName[region]}, about ${Math.round(km)} km from ${anchor.name}. Not a daily commute.`,
       cost: null,
-      mode: ctx.mode === "train" ? "train" : "car",
+      mode: ctxMode === "train" ? "train" : "car",
       oneWayMin: 0,
       hoursPerYear: 0,
       monthlyRM: 0,
     };
   }
-  const cost = commuteCost(t.pos, anchor, ctx.officeDays);
+  const cost = commuteCost(t.pos, anchor, officeDays);
   const mode: EffectiveMode =
-    ctx.mode === "fastest"
+    ctxMode === "fastest"
       ? cost.trainMinOneWay < cost.driveMinPeak
         ? "train"
         : "car"
-      : ctx.mode;
+      : ctxMode;
   return {
     who,
     anchor,
     label,
     compared: true,
+    missing: null,
     notComparedWhy: null,
     cost,
     mode,
@@ -277,7 +312,13 @@ export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
 
   const maint = maintenanceOf(unit);
 
-  const you = commuteLeg(township, ctx.work, ctx.workLabel, "you", ctx);
+  const you = ctx.work
+    ? commuteLeg(township, ctx.work, ctx.workLabel ?? ctx.work.name, "you", ctx)
+    : missingLeg(
+        "you",
+        null,
+        ctx.commuteMissing ?? "Tell Uncle where you work",
+      );
   const partner = ctx.partner
     ? commuteLeg(
         township,
@@ -291,8 +332,13 @@ export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
   const totalMonthlyRM = Math.round(
     instalmentRM + maint.rm + you.monthlyRM + (partner?.monthlyRM ?? 0),
   );
-  const leftRM = Math.round(m.netRM - m.commitmentsRM - totalMonthlyRM);
-  const dsrAfter = m.netRM > 0 ? (m.commitmentsRM + instalmentRM) / m.netRM : 1;
+  const incomeKnown = m.source !== "missing" && m.netRM > 0;
+  const leftRM = incomeKnown
+    ? Math.round(m.netRM - m.commitmentsRM - totalMonthlyRM)
+    : null;
+  const dsrAfter = incomeKnown
+    ? (m.commitmentsRM + instalmentRM) / m.netRM
+    : null;
 
   const bedsShort = Math.max(ctx.bedsNeeded - unit.beds, 0);
   const bedsSpare = Math.max(unit.beds - ctx.bedsNeeded, 0);
@@ -309,14 +355,18 @@ export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
         label: schoolTypeLabel[type],
         name: s.name,
         km: s.km,
-        within: ctx.schoolMatters ? s.km <= ctx.schoolMaxKm : null,
+        within:
+          ctx.schoolMatters && ctx.schoolMaxKm !== null
+            ? s.km <= ctx.schoolMaxKm
+            : null,
       },
     ];
   });
   const hasSchoolData = schools.length > 0;
+  const maxKm = ctx.schoolMaxKm;
   const within = (types: SchoolType[]) =>
-    hasSchoolData
-      ? schools.some((s) => types.includes(s.type) && s.km <= ctx.schoolMaxKm)
+    hasSchoolData && maxKm !== null
+      ? schools.some((s) => types.includes(s.type) && s.km <= maxKm)
       : null;
 
   const st = nearestStation(township.pos);
@@ -423,16 +473,16 @@ export function statsOf(a: HomeAnalysis, ctx: BattleContext): Stats {
   const m = ctx.money;
 
   // Monthly: share of take-home left after debts and the full monthly cost; capped when over budget.
-  const leftShare = m.netRM > 0 ? a.leftRM / m.netRM : 0;
+  const leftShare = m.netRM > 0 && a.leftRM !== null ? a.leftRM / m.netRM : 0;
   let monthly = clamp(leftShare * 200);
   if (a.fit === "over") monthly = Math.min(monthly, 20);
   else if (a.fit === "stretch") monthly = Math.min(monthly, 45);
 
-  // Cash: savings cover the upfront cash (100 at 118%); unknown savings: months of take-home it eats.
+  // Cash: savings cover the upfront cash (100 at 118%). Unknown savings: not judged (see unjudged()).
   const cash =
     m.savingsRM !== null
       ? clamp((m.savingsRM / Math.max(a.upfrontRM, 1)) * 85)
-      : clamp(100 - (a.upfrontRM / Math.max(m.netRM, 1)) * 3.5);
+      : 0;
 
   // Commute: 0 when it cannot be compared; partner counts a third.
   const commute = !a.you.compared
@@ -560,10 +610,10 @@ export function uncleWeights(
     ready: 2,
   };
   const why: string[] = [];
-  if (ctx.officeDays >= 4) {
+  if (ctx.officeDays !== null && ctx.officeDays >= 4) {
     w.commute = 8;
     why.push(`${ctx.officeDays} office days`);
-  } else if (ctx.officeDays <= 2) {
+  } else if (ctx.officeDays !== null && ctx.officeDays <= 2) {
     w.commute = 3;
     why.push(
       `only ${ctx.officeDays} office day${ctx.officeDays === 1 ? "" : "s"}`,
@@ -579,7 +629,7 @@ export function uncleWeights(
     w.family = Math.max(w.family, 6);
     why.push("parents moving in");
   }
-  if (sample && ctx.money.netRM > 0 && sample.dsrAfter > 0.55) {
+  if (sample && sample.dsrAfter !== null && sample.dsrAfter > 0.55) {
     w.monthly = 9;
     why.push("a tight monthly budget");
   }
@@ -597,6 +647,37 @@ export function uncleWeights(
     why.push("you want a ready home");
   }
   return { weights: w, why };
+}
+
+/**
+ * Categories the fight can't judge for this buyer, with the reason. Nothing is guessed: no salary
+ * means no monthly verdict, no savings means no cash-upfront verdict, no workplace means no commute.
+ */
+export function unjudged(ctx: BattleContext): Partial<Record<StatKey, string>> {
+  const out: Partial<Record<StatKey, string>> = {};
+  if (ctx.money.source === "missing")
+    out.monthly =
+      "Uncle doesn't know your salary yet, so money left each month can't be judged";
+  if (ctx.money.savingsRM === null)
+    out.cash =
+      "Uncle doesn't know your savings, so cash upfront can't be judged";
+  if (ctx.commuteMissing) out.commute = ctx.commuteMissing;
+  return out;
+}
+
+/** The weights the fight really uses: categories we can't judge count zero. */
+export function effectiveWeights(w: Weights, ctx: BattleContext): Weights {
+  const skip = unjudged(ctx);
+  return Object.fromEntries(
+    STATS.map((s) => [s.key, skip[s.key] ? 0 : w[s.key]]),
+  ) as Weights;
+}
+
+/** Weighted score before rounding (0-100), so rankings don't tie on rounding. */
+export function rawScore(stats: Stats, w: Weights) {
+  const total = STATS.reduce((sum, s) => sum + w[s.key], 0);
+  if (total <= 0) return 0;
+  return STATS.reduce((sum, s) => sum + stats[s.key] * w[s.key], 0) / total;
 }
 
 export function overallScore(stats: Stats, w: Weights) {

@@ -8,6 +8,7 @@ import {
   type StatKey,
   type Weights,
 } from "@/lib/homelander/analysis";
+import { cn } from "@/lib/utils";
 
 export type WeightMode = PresetId | "custom";
 
@@ -17,6 +18,7 @@ export function Priorities({
   weights,
   uncleWhy,
   hasProfile,
+  skipped,
   onPreset,
   onWeight,
 }: {
@@ -24,6 +26,8 @@ export function Priorities({
   weights: Weights;
   uncleWhy: string[];
   hasProfile: boolean;
+  /** Categories that can't be judged yet (missing inputs): slider disabled, with the reason. */
+  skipped: Partial<Record<StatKey, string>>;
   onPreset: (p: PresetId) => void;
   onWeight: (k: StatKey, v: number) => void;
 }) {
@@ -77,9 +81,15 @@ export function Priorities({
         {STATS.map((s) => (
           <li
             key={s.key}
-            className="grid grid-cols-[6.5rem_minmax(0,1fr)_1.5rem] items-center gap-3"
+            className="grid grid-cols-[6.5rem_minmax(0,1fr)_1.5rem] items-center gap-x-3"
           >
-            <label htmlFor={`w-${s.key}`} className="text-sm font-semibold">
+            <label
+              htmlFor={`w-${s.key}`}
+              className={cn(
+                "text-sm font-semibold",
+                skipped[s.key] && "text-ink-soft",
+              )}
+            >
               {s.label}
             </label>
             <input
@@ -90,15 +100,25 @@ export function Priorities({
               step={1}
               value={weights[s.key]}
               onChange={(e) => onWeight(s.key, Number(e.target.value))}
-              className="h-6 w-full cursor-pointer accent-pandan-deep"
+              disabled={Boolean(skipped[s.key])}
+              className="h-6 w-full cursor-pointer accent-pandan-deep disabled:cursor-not-allowed disabled:opacity-40"
               aria-describedby={`w-${s.key}-hint`}
             />
             <span className="text-right font-pixel text-base tabular-nums">
-              {weights[s.key]}
+              {skipped[s.key] ? "–" : weights[s.key]}
             </span>
-            <span id={`w-${s.key}-hint`} className="sr-only">
-              {s.hint}
-            </span>
+            {skipped[s.key] ? (
+              <span
+                id={`w-${s.key}-hint`}
+                className="col-span-3 text-xs text-ink-soft"
+              >
+                Sits out the fight: {skipped[s.key]}.
+              </span>
+            ) : (
+              <span id={`w-${s.key}-hint`} className="sr-only">
+                {s.hint}
+              </span>
+            )}
           </li>
         ))}
       </ul>

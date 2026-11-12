@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
-import { anchorOptions, availabilityOf, passReasons, rm, townshipById, unitById, type Unit } from "@/lib/homelander/data";
+import { availabilityOf, passReasons, rm, townshipById, unitById, type Unit } from "@/lib/homelander/data";
 import { BATTLE_MAX, DECK_LIKE_LIMIT, LIKES_TO_BATTLE, anchorFor, recommend } from "@/lib/homelander/recommend";
-import { homelander, useHomeLander } from "@/lib/homelander/store";
+import { homelander, useHomeLander, type HomeLanderState } from "@/lib/homelander/store";
 import { moneyBasis } from "./_swipe/buyer";
-import { CardStack, type Dir, type StackHandle } from "./_swipe/card-stack";
+import { CardStack, DECK_HEIGHT, type Dir, type StackHandle } from "./_swipe/card-stack";
 import { celebrateLike, preloadConfetti } from "./_swipe/confetti";
 import { EncounterCard } from "./_swipe/encounter-card";
 import { Controls, EndOfDeck, Insights, Shortlist, matchesFilter, type StockFilter } from "./_swipe/panels";
@@ -21,9 +21,71 @@ import { swipeSprites } from "./_swipe/sprites";
  * Right = like (confetti!) or "notify me" when sold out; left = pass, then optionally say why.
  * Up (or tap the card) flips to the details worked out for this buyer.
  * Desktop: deck on the left, filters / insights / shortlist on the right. Phones: one column.
+ * Real data only: until the buyer has sat with Uncle there is no deck, just a way to start.
  */
 export function SwipeDeck() {
   const s = useHomeLander();
+  // The store lives in localStorage, so the server render can't know who this is: wait a tick.
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  if (!mounted) return <Frame />;
+  if (!knowsBuyer(s)) return <UncleGate />;
+  return <Deck s={s} />;
+}
+
+const noopSubscribe = () => () => {};
+const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+/** Onboarded and Uncle actually heard something: the deck is built from answers, never assumptions. */
+const knowsBuyer = (s: HomeLanderState) => !!s.onboardedAt && Object.values(s.profile).some(filled);
+
+/**
+ * The page frame. The wrapper bleeds out to the page gutters (to 1rem short of the window edge
+ * on wide screens) and clips sideways only there, so a thrown card can fly off without adding
+ * a horizontal scrollbar while panel outlines and chips (drawn as box-shadows) keep their room.
+ */
+function Frame({ aside, sub, children }: { aside?: React.ReactNode; sub?: React.ReactNode; children?: React.ReactNode }) {
+  return (
+    <div
+      className="grid grid-cols-[minmax(0,1fr)] gap-6 overflow-x-clip [--bleed:1rem] lg:[--bleed:max(2rem,calc((100vw-72rem)/2+1rem))]"
+      style={{ marginInline: "calc(var(--bleed) * -1)", paddingInline: "var(--bleed)" }}
+    >
+      <header className="grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <h1 className="font-pixel text-[1.625rem] leading-none sm:text-4xl">Find your home</h1>
+          {aside}
+        </div>
+        {sub}
+      </header>
+      {children}
+    </div>
+  );
+}
+
+/** No profile yet: say so plainly and send them to Uncle. */
+function UncleGate() {
+  return (
+    <Frame>
+      <PixPanel className="mx-auto grid w-full max-w-xl justify-items-center gap-4 p-6 text-center sm:p-10">
+        <Sprite art="uncle" scale={6} label="Uncle" />
+        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Uncle needs to know you first</h2>
+        <p className="max-w-md text-[15px] text-ink">
+          Every home in the deck is picked and ranked from your own answers: your budget, where you work, who lives
+          with you and what you need. No answers, no guesses, so there&apos;s no deck yet.
+        </p>
+        <p className="max-w-md text-sm text-ink-soft">About ten questions with Uncle. Talk or type, lah.</p>
+        <div className="p-1 pb-2">
+          <PixButton asChild tone="pandan" size="lg">
+            <Link href="/onboarding">
+              <Sprite art="uncle" scale={2} />
+              Sit with Uncle
+            </Link>
+          </PixButton>
+        </div>
+      </PixPanel>
+    </Frame>
+  );
+}
+
+function Deck({ s }: { s: HomeLanderState }) {
   const router = useRouter();
   const stack = useRef<StackHandle>(null);
   const [filter, setFilter] = useState<StockFilter>("all");
@@ -35,8 +97,8 @@ export function SwipeDeck() {
 
   useEffect(preloadConfetti, []);
 
-  const uncleAnchor = anchorFor(s.profile.workArea);
-  const anchor = uncleAnchor ?? anchorOptions.find((a) => a.id === s.anchorId) ?? anchorOptions[0]!;
+  // Only the workplace the buyer told Uncle: no default office.
+  const anchor = useMemo(() => anchorFor(s.profile.workArea), [s.profile.workArea]);
   // Uncle's order: best match for this buyer first.
   const picks = useMemo(() => recommend(s.profile, s.budget, anchor), [s.profile, s.budget, anchor]);
   const pickById = useMemo(() => new Map(picks.map((p) => [p.unit.id, p])), [picks]);
@@ -93,12 +155,12 @@ export function SwipeDeck() {
       setAnnounce(`Liked ${name}. ${likes} on your shortlist.`);
       if (likes === LIKES_TO_BATTLE) {
         toast.success("Battle unlocked!", {
-          description: "Three homes liked. Make them fight it out, or keep swiping.",
+          description: `${LIKES_TO_BATTLE} homes liked. Make them fight it out, or keep swiping.`,
           action: { label: "Battle", onClick: goBattle },
         });
       } else if (likes === DECK_LIKE_LIMIT) {
-        toast.success("Ten suka! Your shortlist is full.", {
-          description: `Your top ${BATTLE_MAX} by match go into Battle.`,
+        toast.success(`${DECK_LIKE_LIMIT} suka! Your shortlist is full.`, {
+          description: `${DECK_LIKE_LIMIT} is the sweet spot. Battle them, or remove one to keep swiping.`,
           action: { label: "Battle", onClick: goBattle },
         });
       }
@@ -168,25 +230,14 @@ export function SwipeDeck() {
   const asked = askReasonFor ? s.passed.find((p) => p.id === askReasonFor) : null;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 overflow-x-clip [overflow-clip-margin:8px]">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div className="grid gap-1.5">
-          <h1 className="font-pixel text-3xl leading-none sm:text-4xl">Find your home</h1>
-          <p className="max-w-xl text-[15px] text-ink">
-            {s.onboardedAt
-              ? `Uncle's picks for you, best match first. Like up to ${DECK_LIKE_LIMIT}, then make them battle.`
-              : "Every card is a real Gamuda Land home. Suka or tak nak?"}
-          </p>
-          {s.onboardedAt ? null : (
-            <p className="text-sm text-ink-soft">
-              <Link href="/onboarding" className="font-semibold text-pandan-deep underline underline-offset-4">
-                Sit with Uncle first
-              </Link>{" "}
-              and the deck sorts itself to your life and budget.
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
+    <Frame
+      sub={
+        <p className="max-w-xl text-[15px] text-ink">
+          Uncle&apos;s picks for you, best match first. Like up to {DECK_LIKE_LIMIT}, then make them battle.
+        </p>
+      }
+      aside={
+        <div className="flex items-center gap-2 p-1">
           <PixTag tone="white" className="text-[12px]">
             <Sprite art="heart" scale={1.5} className="text-raya" />
             <span className="tabular-nums">
@@ -199,8 +250,8 @@ export function SwipeDeck() {
             <span className="sr-only"> homes</span>
           </PixPanel>
         </div>
-      </header>
-
+      }
+    >
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,370px)] lg:gap-10">
         <section aria-label="Swipe deck" className="grid content-start gap-4 lg:row-span-3 lg:row-start-1">
           <div className="mx-auto grid w-full max-w-[460px] select-none">
@@ -235,7 +286,7 @@ export function SwipeDeck() {
                 )}
               />
             ) : (
-              <div className="h-[clamp(360px,calc(100svh-26rem),560px)] lg:h-[clamp(440px,64svh,640px)]">
+              <div className={DECK_HEIGHT}>
                 <EndOfDeck
                   s={s}
                   full={full}
@@ -246,7 +297,7 @@ export function SwipeDeck() {
               </div>
             )}
 
-            <div className="mt-6 flex items-center justify-center gap-5 p-1 pb-2">
+            <div className="relative z-20 mt-8 flex items-center justify-center gap-5 p-1 pb-2">
               <RoundButton tone="raya" label="Pass on this home (left arrow)" disabled={!top} onClick={() => decide("left")}>
                 <Sprite art="cross" scale={4} />
               </RoundButton>
@@ -277,19 +328,18 @@ export function SwipeDeck() {
             filter={filter}
             onFilter={setFilter}
             counts={counts}
-            anchorId={s.anchorId}
-            secondAnchorId={s.secondAnchorId}
-            fromUncle={uncleAnchor && s.profile.workArea ? { anchor: uncleAnchor, said: s.profile.workArea } : null}
+            work={anchor && s.profile.workArea ? { anchor, said: s.profile.workArea } : null}
+            workSaid={s.profile.workArea}
           />
         </div>
         <div className="lg:col-start-2 lg:row-start-2">
           <Shortlist liked={likedByMatch} scoreOf={(id) => pickById.get(id)?.score} />
         </div>
         <div className="lg:col-start-2 lg:row-start-3">
-          <Insights s={s} />
+          <Insights s={s} anchorId={anchor?.id ?? null} />
         </div>
       </div>
-    </div>
+    </Frame>
   );
 }
 

@@ -19,6 +19,12 @@ export const THRESHOLD = 110;
 const FLICK_SPEED = 0.55;
 const MAX_TILT = 22;
 const BEHIND = 2;
+/** The deck's height, shared with whatever replaces it at the end of the deck. */
+export const DECK_HEIGHT = "h-[clamp(340px,calc(100svh-26rem),560px)] lg:h-[clamp(440px,calc(100svh-21rem),640px)]";
+/** How far each card behind peeks out above the one in front (px). */
+const PEEK_STEP = 11;
+/** Room at the top of the deck for the peeking cards. */
+const PEEK = BEHIND * PEEK_STEP;
 
 /** A damped spring sampled into a CSS linear() easing: real overshoot and settle, no JS loop. */
 function springEasing(damping = 0.52, freq = 1.55, points = 48) {
@@ -242,15 +248,20 @@ export function CardStack<T extends { id: string }>({
   const visible = cards.slice(0, BEHIND + 1);
 
   return (
-    <div className="relative h-[clamp(360px,calc(100svh-26rem),560px)] lg:h-[clamp(440px,64svh,640px)] w-full [perspective:1600px]">
+    // The deck keeps everything inside its own box: the cards sit below a strip of PEEK px
+    // (BEHIND * PEEK_STEP) where the cards behind show their top edges, so nothing pokes out
+    // underneath into the buttons.
+    <div className={cn("relative isolate w-full [perspective:1600px]", DECK_HEIGHT)}>
       {visible
         .map((card, i) => {
           const isTop = i === 0;
           const depth = isTop ? 0 : i - rise;
           const transform = isTop
             ? `translate3d(${x}px, ${y}px, 0) rotate(${tilt}deg) scale(1)`
-            : `translate3d(0px, ${depth * 16}px, 0) rotate(0deg) scale(${1 - depth * 0.05})`;
+            : `translate3d(0px, ${-depth * PEEK_STEP}px, 0) rotate(0deg) scale(${1 - depth * 0.045})`;
           return (
+            // Outer layer moves (transform); inner layer is the frame. Kept apart so the
+            // entrance fade on the newest back card can't override the stack transform.
             <div
               key={card.id}
               ref={isTop ? topEl : undefined}
@@ -264,39 +275,49 @@ export function CardStack<T extends { id: string }>({
               onPointerUp={isTop ? onPointerUp : undefined}
               onPointerCancel={isTop ? onPointerCancel : undefined}
               className={cn(
-                "pix-frame absolute inset-0 overflow-hidden will-change-transform",
+                "absolute inset-x-0 bottom-0 will-change-transform",
                 isTop ? "touch-pan-y" : "pointer-events-none",
                 isTop && !dragDisabled && (phase === "drag" ? "cursor-grabbing" : "cursor-grab"),
-                i === BEHIND && "animate-in duration-300 fade-in-0 motion-reduce:animate-none",
               )}
-              style={
-                {
-                  zIndex: 10 - i,
-                  transform,
-                  transformOrigin: isTop ? (tiltSign > 0 ? "50% 110%" : "50% -10%") : "50% 100%",
-                  transition: isTop ? topTransition : reduced || phase === "drag" ? "none" : `transform 460ms ${SETTLE}`,
-                  "--pix-drop": isTop ? "6px" : "0px",
-                } as React.CSSProperties
-              }
+              style={{
+                top: PEEK,
+                zIndex: 10 - i,
+                transform,
+                transformOrigin: isTop ? (tiltSign > 0 ? "50% 110%" : "50% -10%") : "50% 0%",
+                transition: isTop ? topTransition : reduced || phase === "drag" ? "none" : `transform 460ms ${SETTLE}`,
+              }}
             >
-              {renderCard(card, isTop)}
-              {isTop ? (
-                <>
-                  <Stamp side="left" opacity={yes} className="text-pandan-deep">
-                    {yesLabel(card)}
-                  </Stamp>
-                  <Stamp side="right" opacity={no} className="text-raya-deep">
-                    TAK NAK
-                  </Stamp>
-                </>
-              ) : (
-                // Cards further back are dimmed a touch, so the top one reads as the one in hand.
+              <div
+                className={cn(
+                  "pix-frame relative isolate h-full w-full overflow-hidden",
+                  i === BEHIND && "animate-in duration-300 fade-in-0 motion-reduce:animate-none",
+                )}
+                style={{ "--pix-drop": isTop ? "6px" : "0px" } as React.CSSProperties}
+              >
+                {renderCard(card, isTop)}
+                {/* An inner hairline over the photo's edge, so no photo pixel bleeds past the rounded corner. */}
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute inset-0 bg-ink transition-opacity duration-300"
-                  style={{ opacity: Math.max(0, depth) * 0.12 }}
+                  className="pointer-events-none absolute inset-0 z-[1] rounded-[inherit] shadow-[inset_0_0_0_1.5px_var(--color-ink)]"
                 />
-              )}
+                {isTop ? (
+                  <>
+                    <Stamp side="left" opacity={yes} className="text-pandan-deep">
+                      {yesLabel(card)}
+                    </Stamp>
+                    <Stamp side="right" opacity={no} className="text-raya-deep">
+                      TAK NAK
+                    </Stamp>
+                  </>
+                ) : (
+                  // Cards further back are dimmed a touch, so the top one reads as the one in hand.
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 bg-ink transition-opacity duration-300"
+                    style={{ opacity: Math.max(0, depth) * 0.14 }}
+                  />
+                )}
+              </div>
             </div>
           );
         })

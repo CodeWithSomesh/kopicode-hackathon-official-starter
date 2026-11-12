@@ -7,6 +7,7 @@ import {
   bestIndices,
   leadOverNext,
   STATS,
+  type StatKey,
   type Weights,
 } from "@/lib/homelander/analysis";
 import type { BattleContext } from "@/lib/homelander/battle-context";
@@ -35,15 +36,20 @@ export function HeadToHead({
   fighters,
   ctx,
   winnerId,
+  revealed,
   weights,
+  skipped,
   lineup,
   onSwap,
   onRemove,
 }: {
   fighters: Fighter[];
   ctx: BattleContext;
+  /** "" until the fight has been played. */
   winnerId: string;
+  revealed: boolean;
   weights: Weights;
+  skipped: Partial<Record<StatKey, string>>;
   lineup: string[];
   onSwap: (slot: number, id: string) => void;
   onRemove: (slot: number) => void;
@@ -52,7 +58,7 @@ export function HeadToHead({
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const toggle = (id: string) => setClosed((c) => ({ ...c, [id]: !c[id] }));
   const n = fighters.length;
-  const winnerCol = (f: Fighter) => f.unit.id === winnerId && n > 1;
+  const winnerCol = (f: Fighter) => revealed && f.unit.id === winnerId && n > 1;
 
   return (
     <section
@@ -133,6 +139,7 @@ export function HeadToHead({
                       f={f}
                       slot={i}
                       isWinner={winnerCol(f)}
+                      revealed={revealed}
                       lineup={lineup}
                       onSwap={(id) => onSwap(i, id)}
                       onRemove={n > 1 ? () => onRemove(i) : undefined}
@@ -145,11 +152,15 @@ export function HeadToHead({
                 winnerCol={winnerCol}
                 ctx={ctx}
               />
-              <OverallRow
-                key={fighters.map((f) => `${f.unit.id}:${f.overall}`).join()}
-                fighters={fighters}
-                winnerCol={winnerCol}
-              />
+              {revealed ? (
+                <OverallRow
+                  key={fighters.map((f) => `${f.unit.id}:${f.overall}`).join()}
+                  fighters={fighters}
+                  winnerCol={winnerCol}
+                />
+              ) : (
+                <SealedRow n={n} />
+              )}
             </thead>
 
             {sections.map((s) => (
@@ -170,8 +181,10 @@ export function HeadToHead({
                 blurb: "What the overall is made of, on the weights you set",
                 rows: STATS.map((st): Row => ({
                   id: `stat-${st.key}`,
-                  label: `${st.label} (×${weights[st.key]})`,
-                  hint: st.hint,
+                  label: skipped[st.key]
+                    ? `${st.label} (not judged)`
+                    : `${st.label} (×${weights[st.key]})`,
+                  hint: skipped[st.key] ?? st.hint,
                   cell: (f) => ({
                     main: (
                       <span className="grid gap-1">
@@ -233,7 +246,9 @@ function HeadlineRow({
       value: (f) => f.totalMonthlyRM,
       show: (f) => money(f.totalMonthlyRM),
       sub: (f) =>
-        f.leftRM < 0 ? (
+        f.leftRM === null ? (
+          "Salary not known"
+        ) : f.leftRM < 0 ? (
           <span className="text-raya-deep">
             {money(-f.leftRM)} short a month
           </span>
@@ -244,11 +259,16 @@ function HeadlineRow({
     {
       label: "Commuting a year",
       value: (f) => (f.you.compared ? f.you.hoursPerYear : null),
-      show: (f) => (f.you.compared ? `${f.you.hoursPerYear} h` : "n/a"),
+      show: (f) =>
+        f.you.compared
+          ? `${f.you.hoursPerYear} h`
+          : f.you.missing
+            ? "?"
+            : "n/a",
       sub: (f) =>
         f.you.compared
           ? `${f.you.oneWayMin} min each way`
-          : "Not a daily commute",
+          : (f.you.missing ?? "Not a daily commute"),
     },
     {
       label: "Cash upfront",
@@ -278,8 +298,10 @@ function HeadlineRow({
           At a glance
         </span>
         <span className="mt-1 block text-xs font-normal text-ink-soft">
-          {ctx.officeDays} days to {ctx.work.name}
-          {ctx.money.source === "sample" ? ", sample payslip" : ""}
+          {ctx.work && ctx.officeDays !== null
+            ? `${ctx.officeDays} days to ${ctx.work.name}`
+            : "Commute needs where you work"}
+          {ctx.money.source === "missing" ? ", salary not known" : ""}
         </span>
       </th>
       {fighters.map((f, i) => (
@@ -317,6 +339,36 @@ function HeadlineRow({
           </dl>
         </td>
       ))}
+    </tr>
+  );
+}
+
+/** Before the fight: the overall score stays sealed so the table doesn't spoil the result. */
+function SealedRow({ n }: { n: number }) {
+  return (
+    <tr>
+      <th
+        scope="row"
+        className={cn(
+          stickyCol,
+          "border-b-[1.5px] border-ink px-3 py-3 align-middle",
+        )}
+      >
+        <span className="block font-pixel text-base leading-tight">
+          Overall
+        </span>
+        <span className="block text-xs font-normal text-ink-soft">
+          Revealed after the fight
+        </span>
+      </th>
+      <td
+        colSpan={n}
+        className="border-b-[1.5px] border-ink px-2.5 py-3 align-middle lg:px-3"
+      >
+        <span className="font-pixel text-base text-ink-soft">
+          ?? · The scores stay sealed until the fight below is played.
+        </span>
+      </td>
     </tr>
   );
 }

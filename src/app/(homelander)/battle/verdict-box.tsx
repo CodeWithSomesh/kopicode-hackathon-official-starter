@@ -47,7 +47,11 @@ export function VerdictBox({
             <Mini
               label="Commute"
               value={
-                winner.you.compared ? `${winner.you.hoursPerYear}h/yr` : "n/a"
+                winner.you.compared
+                  ? `${winner.you.hoursPerYear}h/yr`
+                  : winner.you.missing
+                    ? "?"
+                    : "n/a"
               }
             />
             <Mini label="Upfront" value={kRM(winner.upfrontRM)} />
@@ -166,8 +170,8 @@ export function VerdictBox({
           </div>
           <p className="text-xs text-ink-soft">
             Estimates from{" "}
-            {ctx.money.source === "sample"
-              ? "a sample payslip"
+            {ctx.money.source === "missing"
+              ? "what you told Uncle (salary not known yet)"
               : ctx.money.source === "bank"
                 ? "your bank check"
                 : "what you told Uncle"}

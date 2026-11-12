@@ -8,13 +8,22 @@ import { cn } from "@/lib/utils";
 import { crown, money, UnitSelect } from "./bits";
 import { fitTone } from "./rows";
 
-const fitShort = { in: "In budget", stretch: "Stretch", over: "Over" } as const;
+const fitShort = {
+  in: "In budget",
+  stretch: "Stretch",
+  over: "Over",
+  unknown: null,
+} as const;
 
-/** Compact column header: photo, name, project, price, match, fit, swap and remove. */
+/**
+ * Compact column header: photo, name, project, price, match, fit, swap and remove. The rank and
+ * the winner's crown only show once the fight has been played (`revealed`).
+ */
 export function FighterHead({
   f,
   slot,
   isWinner,
+  revealed,
   lineup,
   onSwap,
   onRemove,
@@ -22,6 +31,7 @@ export function FighterHead({
   f: Fighter;
   slot: number;
   isWinner: boolean;
+  revealed: boolean;
   lineup: string[];
   onSwap: (id: string) => void;
   onRemove?: () => void;
@@ -40,7 +50,7 @@ export function FighterHead({
           )}
         />
         <div className="absolute top-1.5 left-1.5 flex flex-wrap gap-1">
-          {isWinner ? (
+          {!revealed ? null : isWinner ? (
             <PixTag tone="kaya">
               <Sprite art={crown} scale={1.5} className="text-ink" />
               Winner
@@ -75,7 +85,9 @@ export function FighterHead({
         <PixTag tone="lilac" title="Match score from your swipe deck">
           Match {f.match}
         </PixTag>
-        <PixTag tone={fitTone[f.fit]}>{fitShort[f.fit]}</PixTag>
+        {fitShort[f.fit] ? (
+          <PixTag tone={fitTone[f.fit]}>{fitShort[f.fit]}</PixTag>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-1.5 pt-0.5">

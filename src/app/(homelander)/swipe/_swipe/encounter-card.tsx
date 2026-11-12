@@ -24,8 +24,10 @@ type Props = {
   unit: Unit;
   pick?: Match;
   profile: Profile;
-  basis: MoneyBasis;
-  anchor: Anchor;
+  /** Null until the buyer gives a salary or runs the bank check. */
+  basis: MoneyBasis | null;
+  /** Null until we know where the buyer works. */
+  anchor: Anchor | null;
   /** Only the top card loads its photo eagerly and can open its details. */
   isTop: boolean;
   open: boolean;
@@ -107,11 +109,11 @@ export const EncounterCard = memo(function EncounterCard({ unit, pick, profile, 
           <Fact art={swipeSprites.area}>{unit.builtUpSqft.toLocaleString("en-MY")} sq ft</Fact>
           <li>{unit.tenure}</li>
         </ul>
-        <div className="flex items-end justify-between gap-3 pt-1">
+        <div className="mt-1 flex items-center justify-between gap-4 border-t border-white/15 pt-3">
           {lead ? (
-            <p className="line-clamp-2 flex min-w-0 gap-2 text-sm text-white/90">
+            <p className="flex min-w-0 flex-1 items-start gap-2 text-sm leading-snug text-white/90">
               <Sprite art="sparkle" scale={2} className="mt-0.5 shrink-0 text-kaya" />
-              <span>{lead}</span>
+              <span className="line-clamp-2 min-w-0">{lead}</span>
             </p>
           ) : (
             <span />

@@ -2,13 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { defineSprite, Sprite } from "@/components/homelander/sprite";
-import {
-  availabilityOf,
-  rm,
-  rmShort,
-  townships,
-  units,
-} from "@/lib/homelander/data";
+import { availabilityOf, rm, rmShort, townships } from "@/lib/homelander/data";
+import { realUnits } from "@/lib/homelander/recommend";
 import { cn } from "@/lib/utils";
 
 /* Sprites only this screen uses. Colours are currentColor, so they follow the theme. */
@@ -115,7 +110,8 @@ export function useStepIn(steps = 10, frameMs = 60) {
 }
 
 /**
- * Native select listing every home, grouped by project. With `placeholder`, it is an "add"
+ * Native select listing every real home (Gamuda Land's own figures, never estimated samples),
+ * grouped by project. With `placeholder`, it is an "add"
  * picker: it resets after each pick.
  */
 export function UnitSelect({
@@ -154,7 +150,7 @@ export function UnitSelect({
           </option>
         ) : null}
         {townships.map((t) => {
-          const list = units.filter((u) => u.townshipId === t.id);
+          const list = realUnits.filter((u) => u.townshipId === t.id);
           if (!list.length) return null;
           return (
             <optgroup

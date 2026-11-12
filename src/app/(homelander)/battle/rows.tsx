@@ -57,17 +57,24 @@ const fitLabel: Record<Fit, string> = {
   in: "In budget",
   stretch: "Stretch",
   over: "Over budget",
+  unknown: "Not judged",
 };
-export const fitTone: Record<Fit, "pandan" | "kaya" | "raya"> = {
+export const fitTone: Record<Fit, "pandan" | "kaya" | "raya" | "white"> = {
   in: "pandan",
   stretch: "kaya",
   over: "raya",
+  unknown: "white",
 };
 
-const NC: Cell = {
-  main: "Not compared",
-  sub: "Not a daily commute",
-  tone: "muted",
+/** The cell for a commute we can't compare: missing input (ask Uncle) or too far to commute. */
+const nc = (f: Fighter): Cell =>
+  f.you.missing
+    ? { main: f.you.missing, sub: "Then this row fills in", tone: "warn" }
+    : { main: "Not compared", sub: "Not a daily commute", tone: "muted" };
+const NO_INCOME: Cell = {
+  main: "Tell Uncle your salary",
+  sub: "We don't guess your pay",
+  tone: "warn",
 };
 const perMonthLead = (g: number) => `${money(g)}/mo less than next`;
 
@@ -83,7 +90,13 @@ export function buildSections(
       ? "faster of car or train"
       : ctx.mode === "car"
         ? "driving"
-        : "train";
+        : ctx.mode === "train"
+          ? "train"
+          : "mode not known";
+  const days =
+    ctx.officeDays === null
+      ? "office days not known"
+      : `${ctx.officeDays} office days`;
 
   /* ------------------------------------------------------------ money */
   const moneyRows: Row[] = [
@@ -230,12 +243,22 @@ export function buildSections(
     {
       id: "left",
       label: "Money left each month",
-      hint: `${money(m.netRM)} take-home − ${money(m.commitmentsRM)} other debts − total cost`,
-      cell: (f) => ({
-        main: money(f.leftRM),
-        tone:
-          f.leftRM < 0 ? "bad" : f.leftRM < m.netRM * 0.15 ? "warn" : undefined,
-      }),
+      hint:
+        m.source === "missing"
+          ? "Take-home − other debts − total cost. Needs your salary"
+          : `${money(m.netRM)} take-home − ${money(m.commitmentsRM)} other debts − total cost`,
+      cell: (f) =>
+        f.leftRM === null
+          ? NO_INCOME
+          : {
+              main: money(f.leftRM),
+              tone:
+                f.leftRM < 0
+                  ? "bad"
+                  : f.leftRM < m.netRM * 0.15
+                    ? "warn"
+                    : undefined,
+            },
       value: (f) => f.leftRM,
       better: "high",
       lead: (g) => `${money(g)}/mo more than next`,
@@ -244,27 +267,49 @@ export function buildSections(
       id: "dsr",
       label: "Debt service ratio",
       hint: "All loans ÷ take-home. Most banks stop at 60%, some 70%",
-      cell: (f) => ({
-        main: pct(f.dsrAfter),
-        sub: <DsrBar value={f.dsrAfter} />,
-        tone: f.dsrAfter > 0.7 ? "bad" : f.dsrAfter > 0.6 ? "warn" : undefined,
-      }),
+      cell: (f) =>
+        f.dsrAfter === null
+          ? NO_INCOME
+          : {
+              main: pct(f.dsrAfter),
+              sub: <DsrBar value={f.dsrAfter} />,
+              tone:
+                f.dsrAfter > 0.7
+                  ? "bad"
+                  : f.dsrAfter > 0.6
+                    ? "warn"
+                    : undefined,
+            },
       value: (f) => f.dsrAfter,
       better: "low",
     },
     {
       id: "fit",
       label: "Budget fit",
-      hint: `Bank ceiling about ${kRM(m.maxPriceRM)}${m.source === "sample" ? " (sample payslip)" : ""}`,
-      cell: (f) => ({
-        main: fitLabel[f.fit],
-        sub:
-          f.fit === "in"
-            ? `${kRM(m.maxPriceRM - f.priceRM)} headroom`
-            : `${kRM(f.priceRM - m.maxPriceRM)} over`,
-        tone: f.fit === "in" ? "good" : f.fit === "stretch" ? "warn" : "bad",
-      }),
-      value: (f) => (f.fit === "in" ? 2 : f.fit === "stretch" ? 1 : 0),
+      hint:
+        m.source === "missing"
+          ? "Needs your salary or the bank check"
+          : `Bank ceiling about ${kRM(m.maxPriceRM)}`,
+      cell: (f) =>
+        f.fit === "unknown"
+          ? NO_INCOME
+          : {
+              main: fitLabel[f.fit],
+              sub:
+                f.fit === "in"
+                  ? `${kRM(m.maxPriceRM - f.priceRM)} headroom`
+                  : `${kRM(f.priceRM - m.maxPriceRM)} over`,
+              tone:
+                f.fit === "in" ? "good" : f.fit === "stretch" ? "warn" : "bad",
+            },
+      value: (f) =>
+        f.fit === "unknown"
+          ? null
+          : f.fit === "in"
+            ? 2
+            : f.fit === "stretch"
+              ? 1
+              : 0,
       better: "high",
     },
   ];
@@ -277,7 +322,7 @@ export function buildSections(
       label: "Road distance",
       hint: "One way, estimated road km",
       cell: (f) =>
-        c(f) ? { main: `${c(f)!.driveKmOneWay.toFixed(1)} km` } : NC,
+        c(f) ? { main: `${c(f)!.driveKmOneWay.toFixed(1)} km` } : nc(f),
       value: (f) => c(f)?.driveKmOneWay ?? null,
       better: "low",
     },
@@ -293,7 +338,7 @@ export function buildSections(
               main: `${c(f)!.driveMinPeak} min`,
               sub: `Off-peak ~${c(f)!.driveMinOffPeak} min`,
             }
-          : NC,
+          : nc(f),
       value: (f) => c(f)?.driveMinPeak ?? null,
       better: "low",
       lead: (g) => `${Math.round(g)} min faster`,
@@ -306,7 +351,7 @@ export function buildSections(
       estimated: true,
       cell: (f) => {
         const x = c(f);
-        if (!x) return NC;
+        if (!x) return nc(f);
         const access =
           x.stationKm <= 1.2
             ? `${Math.round((x.stationKm / 5) * 60)} min walk`
@@ -327,7 +372,7 @@ export function buildSections(
       estimated: true,
       cell: (f) => {
         const x = c(f);
-        if (!x) return NC;
+        if (!x) return nc(f);
         const names = x.tolls.plazas.map((p) => p.name);
         return {
           main:
@@ -341,9 +386,9 @@ export function buildSections(
     {
       id: "tolls-month",
       label: "Tolls per month",
-      hint: `${ctx.officeDays} office days, both ways`,
+      hint: `${days}, both ways`,
       estimated: true,
-      cell: (f) => (c(f) ? { main: money(c(f)!.car.tollRM) } : NC),
+      cell: (f) => (c(f) ? { main: money(c(f)!.car.tollRM) } : nc(f)),
       value: (f) => c(f)?.car.tollRM ?? null,
       better: "low",
     },
@@ -358,7 +403,7 @@ export function buildSections(
               main: money(c(f)!.car.fuelRM + c(f)!.car.parkingRM),
               sub: `Fuel ${money(c(f)!.car.fuelRM)} · parking ${money(c(f)!.car.parkingRM)}`,
             }
-          : NC,
+          : nc(f),
       value: (f) => (c(f) ? c(f)!.car.fuelRM + c(f)!.car.parkingRM : null),
       better: "low",
     },
@@ -375,7 +420,7 @@ export function buildSections(
                 ? `Incl. ${money(c(f)!.train.accessRM)} feeder`
                 : undefined,
             }
-          : NC,
+          : nc(f),
       value: (f) => c(f)?.train.totalRM ?? null,
       better: "low",
     },
@@ -389,7 +434,7 @@ export function buildSections(
       cell: (f) =>
         f.you.compared
           ? { main: `${money(f.you.monthlyRM)}/mo`, sub: `By ${youMode(f)}` }
-          : NC,
+          : nc(f),
       value: (f) => (f.you.compared ? f.you.monthlyRM : null),
       better: "low",
       lead: perMonthLead,
@@ -397,7 +442,7 @@ export function buildSections(
     {
       id: "hours",
       label: "Hours a year commuting",
-      hint: `Peak, both ways, ${ctx.officeDays} days a week, 48 weeks`,
+      hint: `Peak, both ways, ${days} a week, 48 weeks`,
       mine: true,
       strong: true,
       estimated: true,
@@ -407,7 +452,7 @@ export function buildSections(
               main: `${f.you.hoursPerYear} h`,
               sub: `${f.you.oneWayMin} min one way by ${youMode(f)} · ${Math.round(f.you.hoursPerYear / 8)} working days`,
             }
-          : NC,
+          : nc(f),
       value: (f) => (f.you.compared ? f.you.hoursPerYear : null),
       better: "low",
       lead: (g) => `${Math.round(g)} h/yr less than next`,
@@ -415,7 +460,7 @@ export function buildSections(
   ];
   if (anyPartner) {
     const partnerName =
-      fighters.find((f) => f.partner)?.partner?.anchor.name ?? "partner's work";
+      fighters.find((f) => f.partner)?.partner?.label ?? "partner's work";
     commuteRows.push(
       {
         id: "partner-time",
@@ -428,7 +473,7 @@ export function buildSections(
                 main: `${f.partner.oneWayMin} min`,
                 sub: `${f.partner.hoursPerYear} h a year by ${f.partner.mode}`,
               }
-            : NC,
+            : nc(f),
         value: (f) => (f.partner?.compared ? f.partner.hoursPerYear : null),
         better: "low",
       },
@@ -440,7 +485,7 @@ export function buildSections(
         cell: (f) =>
           f.partner?.compared
             ? { main: `${money(f.partner.monthlyRM)}/mo` }
-            : NC,
+            : nc(f),
         value: (f) => (f.partner?.compared ? f.partner.monthlyRM : null),
         better: "low",
       },
@@ -455,7 +500,7 @@ export function buildSections(
     {
       id: "beds",
       label: "Bedrooms",
-      hint: `You need ${ctx.bedsNeeded}${ctx.hasProfile ? "" : " (default)"}`,
+      hint: `You need ${ctx.bedsNeeded}`,
       cell: (f) => ({
         main: `${f.unit.beds} bed · ${f.unit.baths} bath`,
         sub: f.bedsShort
@@ -486,9 +531,10 @@ export function buildSections(
       familyRows.push({
         id: `school-${t}`,
         label: schoolTypeLabel[t],
-        hint: ctx.schoolMatters
-          ? `Nearest; within ${ctx.schoolMaxKm} km is what you asked`
-          : "Nearest, straight line",
+        hint:
+          ctx.schoolMatters && ctx.schoolMaxKm !== null
+            ? `Nearest; within ${ctx.schoolMaxKm} km is what you asked`
+            : "Nearest, straight line",
         cell: (f) => {
           const s = f.schools.find((x) => x.type === t);
           if (!s) return { main: "None nearby", tone: "muted" };
@@ -506,7 +552,7 @@ export function buildSections(
         value: (f) => f.schools.find((x) => x.type === t)?.km ?? null,
         better: "low",
       });
-    if (ctx.schoolMatters)
+    if (ctx.schoolMatters && ctx.schoolMaxKm !== null)
       familyRows.push({
         id: "school-check",
         label: `Within your ${ctx.schoolMaxKm} km`,
@@ -530,11 +576,11 @@ export function buildSections(
         better: "high",
       });
   }
-  if (ctx.parentsMovingIn || !ctx.hasProfile)
+  if (ctx.parentsMovingIn)
     familyRows.push({
       id: "parents",
       label: "Parents moving in",
-      hint: ctx.parentsMovingIn ? "You said yes" : "In case they do",
+      hint: "You said yes",
       cell: (f) =>
         f.unit.landed
           ? {
@@ -742,9 +788,11 @@ export function buildSections(
     },
     {
       id: "commute",
-      title: `Commute to ${ctx.workLabel}`,
+      title: ctx.workLabel ? `Commute to ${ctx.workLabel}` : "Commute",
       art: car,
-      blurb: `${ctx.officeDays} office days a week${anyPartner ? ", plus your partner" : ""}`,
+      blurb: ctx.commuteMissing
+        ? `${ctx.commuteMissing}, then every commute row fills in`
+        : `${days} a week${anyPartner ? ", plus your partner" : ""}`,
       rows: commuteRows,
     },
     { id: "family", title: "Family & schools", art: family, rows: familyRows },

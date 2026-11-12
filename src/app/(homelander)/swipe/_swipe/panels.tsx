@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
-import { anchorOptions, availabilityOf, rmShort, townshipById, unitById, type Anchor } from "@/lib/homelander/data";
+import { availabilityOf, rmShort, townshipById, unitById, type Anchor } from "@/lib/homelander/data";
 import { BATTLE_MAX, DECK_LIKE_LIMIT, LIKES_TO_BATTLE } from "@/lib/homelander/recommend";
 import { homelander, type HomeLanderState } from "@/lib/homelander/store";
 import { tasteInsights } from "@/lib/homelander/taste";
@@ -39,22 +39,21 @@ function PanelTitle({ children, aside, id }: { children: React.ReactNode; aside?
   );
 }
 
-/** Availability filter and work anchor. */
+/** Availability filter, and the workplace every commute is worked out from (only ever the buyer's own). */
 export function Controls({
   filter,
   onFilter,
   counts,
-  anchorId,
-  secondAnchorId,
-  fromUncle,
+  work,
+  workSaid,
 }: {
   filter: StockFilter;
   onFilter: (f: StockFilter) => void;
   counts: Record<StockFilter, number>;
-  anchorId: string;
-  secondAnchorId: string;
-  /** The workplace Uncle heard in onboarding; when set, it wins over the picker. */
-  fromUncle: { anchor: Anchor; said: string } | null;
+  /** The workplace Uncle heard in onboarding, matched to one of our commute anchors. */
+  work: { anchor: Anchor; said: string } | null;
+  /** What the buyer said, even when we couldn't place it. */
+  workSaid?: string;
 }) {
   return (
     <PixPanel className="grid gap-4 p-4">
@@ -88,11 +87,11 @@ export function Controls({
       </fieldset>
 
       <div className="grid gap-1.5 border-t-2 border-dashed border-ink/15 pt-4">
-        {fromUncle ? (
+        {work ? (
           <>
-            <p className="font-pixel text-lg leading-none">You work near {fromUncle.anchor.name}</p>
+            <p className="font-pixel text-lg leading-none">You work near {work.anchor.name}</p>
             <p className="text-xs text-ink-soft">
-              Uncle heard &ldquo;{fromUncle.said}&rdquo;. Every commute is worked out from there.{" "}
+              Uncle heard &ldquo;{work.said}&rdquo;. Every commute is worked out from there.{" "}
               <Link href="/profile" className="font-semibold text-pandan-deep underline underline-offset-2">
                 Change
               </Link>
@@ -100,29 +99,16 @@ export function Controls({
           </>
         ) : (
           <>
-            <label htmlFor="work-anchor" className="font-pixel text-lg leading-none">
-              Where do you work?
-            </label>
-            <div className="relative">
-              <select
-                id="work-anchor"
-                value={anchorId}
-                onChange={(e) => homelander.anchors(e.target.value, secondAnchorId)}
-                className="h-11 w-full appearance-none rounded-full border-2 border-ink bg-white px-4 pr-10 text-base text-ink"
-              >
-                {anchorOptions.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <Sprite
-                art={{ rows: ["#####", ".###.", "..#.."] }}
-                scale={2}
-                className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-ink"
-              />
-            </div>
-            <p className="text-xs text-ink-soft">Every card works out your rush-hour commute from here.</p>
+            <p className="font-pixel text-lg leading-none">Tell Uncle where you work</p>
+            <p className="text-xs text-ink-soft">
+              {workSaid
+                ? <>Uncle heard &ldquo;{workSaid}&rdquo; but can&apos;t place it on the map yet. </>
+                : null}
+              Commute times and costs show up once Uncle knows your workplace. We don&apos;t guess one.{" "}
+              <Link href="/onboarding" className="font-semibold text-pandan-deep underline underline-offset-2">
+                Tell Uncle
+              </Link>
+            </p>
           </>
         )}
       </div>
@@ -131,12 +117,13 @@ export function Controls({
 }
 
 /** "What your swipes say": taste insights plus a read on how scarce your likes are. */
-export function Insights({ s }: { s: HomeLanderState }) {
+export function Insights({ s, anchorId }: { s: HomeLanderState; anchorId: string | null }) {
+  // Commute insights need the buyer's own workplace; without one, leave them out rather than guess.
   const lines = tasteInsights(
     s.liked,
     s.passed.map((p) => p.id),
-    s.anchorId,
-  );
+    anchorId ?? "",
+  ).filter((line) => anchorId !== null || !line.includes(" min from "));
   const scarce = s.liked.filter((id) => {
     const st = availabilityOf(id).status;
     return st === "Few left" || st === "Last unit";
@@ -245,7 +232,7 @@ function LikeMeter({ count }: { count: number }) {
         {count < LIKES_TO_BATTLE
           ? `${LIKES_TO_BATTLE - count} more ${LIKES_TO_BATTLE - count === 1 ? "like" : "likes"} to unlock Battle.`
           : count >= DECK_LIKE_LIMIT
-            ? "Deck full. Time to battle."
+            ? `Shortlist full. Battle them, or remove one to keep swiping.`
             : `Battle unlocked. Room for ${DECK_LIKE_LIMIT - count} more.`}
       </p>
     </div>
@@ -327,6 +314,8 @@ export function EndOfDeck({
   /** Liked homes, best match first, for the Battle hand-off. */
   rankedLikes: string[];
 }) {
+  /** How many likes to remove to reopen the deck (more than one only for an older, longer list). */
+  const over = s.liked.length - DECK_LIKE_LIMIT + 1;
   if (filtered) {
     return (
       <PixPanel className="grid h-full content-center justify-items-center gap-4 p-6 text-center sm:p-8">
@@ -350,18 +339,21 @@ export function EndOfDeck({
         className="animate-[pix-bob_1.2s_steps(2)_infinite] text-kaya-deep"
         label="Trophy"
       />
-      <h2 className="font-pixel text-3xl leading-tight sm:text-4xl">{full ? "Ten suka! Deck closed" : "Habis! Deck cleared"}</h2>
-      <p className="max-w-sm text-[15px]">
-        {full ? (
-          <>That&apos;s a full shortlist. Uncle stops the deck here so the battle stays sharp.</>
-        ) : (
-          <>
-            You met every Gamuda Land home in the deck and said suka to{" "}
-            <strong className="font-pixel text-lg">{s.liked.length}</strong>.{" "}
-          </>
-        )}{" "}
-        {s.liked.length >= LIKES_TO_BATTLE ? "Time to make them fight it out." : "See where they sit on the map next."}
-      </p>
+      <h2 className="font-pixel text-3xl leading-tight sm:text-4xl">
+        {full ? `${DECK_LIKE_LIMIT} suka! Deck closed` : "Habis! Deck cleared"}
+      </h2>
+      {full ? (
+        <p className="max-w-sm text-[15px]">
+          {DECK_LIKE_LIMIT} is the sweet spot: a short list gives Uncle a sharper read. Battle them, or remove{" "}
+          {over > 1 ? `${over} from your shortlist` : "one"} to keep swiping.
+        </p>
+      ) : (
+        <p className="max-w-sm text-[15px]">
+          You met every Gamuda Land home in the deck and said suka to{" "}
+          <strong className="font-pixel text-lg">{s.liked.length}</strong>.{" "}
+          {s.liked.length >= LIKES_TO_BATTLE ? "Time to make them fight it out." : "See where they sit on the map next."}
+        </p>
+      )}
       <div className="flex flex-wrap justify-center gap-4 p-1 pb-2">
         <BattleButton liked={rankedLikes} size="lg" />
         <PixButton asChild size="lg">

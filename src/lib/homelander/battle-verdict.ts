@@ -1,7 +1,9 @@
 import {
   analyseHome,
-  overallScore,
+  effectiveWeights,
+  rawScore,
   statsOf,
+  unjudged,
   STATS,
   type HomeAnalysis,
   type StatKey,
@@ -18,8 +20,10 @@ import { rm, type Unit } from "./data";
 
 export type Fighter = HomeAnalysis & {
   stats: Stats;
-  /** Weighted score minus profile penalties, 0-100. */
+  /** Weighted score minus profile penalties, 0-100, rounded for display. */
   overall: number;
+  /** The same before rounding: what the ranking (and the fight's HP) really uses. */
+  exact: number;
   /** Points taken off for deal-breakers hit and must-haves missing (known fails only). */
   penalty: number;
   rank: number;
@@ -46,6 +50,10 @@ export type Battle = {
   /** Winner vs every other fighter: positive numbers favour the winner. */
   rivals: RivalLine[];
   checks: Check[];
+  /** The weights really used: categories we can't judge are zero. */
+  weights: Weights;
+  /** Categories left out of the fight, with the reason (missing inputs). */
+  skipped: Partial<Record<StatKey, string>>;
 };
 
 /* ---------------------------------------------------------------- formatting */
@@ -73,6 +81,8 @@ export function runBattle(
   matchOf: (u: Unit) => number,
 ): Battle | null {
   if (list.length === 0) return null;
+  const skipped = unjudged(ctx);
+  const w = effectiveWeights(weights, ctx);
   const analysed = list.map((u) => analyseHome(u, ctx));
   const checks = profileChecks(analysed, ctx);
   const fighters: Fighter[] = analysed.map((a) => {
@@ -87,10 +97,12 @@ export function runBattle(
           : 0),
       0,
     );
+    const raw = rawScore(stats, w);
     return {
       ...a,
       stats,
-      overall: Math.max(overallScore(stats, weights) - penalty, 0),
+      overall: Math.max(Math.round(raw) - penalty, 0),
+      exact: raw - penalty,
       penalty,
       rank: 0,
       match: matchOf(a.unit),
@@ -99,7 +111,7 @@ export function runBattle(
   const order = [...fighters].sort(
     (a, b) =>
       Number(a.soldOut) - Number(b.soldOut) ||
-      b.overall - a.overall ||
+      b.exact - a.exact ||
       b.match - a.match,
   );
   order.forEach((f, i) => (f.rank = i + 1));
@@ -109,7 +121,7 @@ export function runBattle(
     fighters,
     winner,
     runnerUp,
-    reasons: reasonsFor(winner, runnerUp, weights, ctx, fighters, checks),
+    reasons: reasonsFor(winner, runnerUp, w, ctx, fighters, checks),
     caveats: caveatsFor(winner, runnerUp, ctx, checks),
     closeCall: runnerUp ? winner.overall - runnerUp.overall < 3 : false,
     rivals: order.slice(1).map((r) => ({
@@ -124,6 +136,8 @@ export function runBattle(
       overall: winner.overall - r.overall,
     })),
     checks,
+    weights: w,
+    skipped,
   };
 }
 
@@ -179,14 +193,14 @@ export function reasonsFor(
       out.push({
         keys: ["commute"],
         score: gap("commute") + 10,
-        text: `${dHours} fewer hours a year getting to ${ctx.work.name} than from ${vs} (${best.you.oneWayMin} vs ${next.you.oneWayMin} min one way by ${best.you.mode}).`,
+        text: `${dHours} fewer hours a year getting to ${ctx.workLabel ?? "work"} than from ${vs} (${best.you.oneWayMin} vs ${next.you.oneWayMin} min one way by ${best.you.mode}).`,
       });
   }
   if (best.you.compared && !next.you.compared)
     out.push({
       keys: ["commute"],
       score: 300,
-      text: `You can commute to ${ctx.work.name} from here. ${vs} is not a daily commute.`,
+      text: `You can commute to ${ctx.workLabel ?? "work"} from here. ${vs} is not a daily commute.`,
     });
 
   if (best.partner?.compared && next.partner?.compared) {
@@ -195,7 +209,7 @@ export function reasonsFor(
       out.push({
         keys: ["commute"],
         score: gap("commute") / 2,
-        text: `Your partner gets back ${dp} hours a year too, going to ${best.partner.anchor.name}.`,
+        text: `Your partner gets back ${dp} hours a year too, going to ${best.partner.label}.`,
       });
   }
 
@@ -306,7 +320,7 @@ export function reasonsFor(
       {
         key: "monthly",
         ok: rivals.every((r) => r.totalMonthlyRM > best.totalMonthlyRM),
-        text: `Cheapest to live in of all ${n}: ${money(best.totalMonthlyRM)} a month all-in, leaving ${money(best.leftRM)}.`,
+        text: `Cheapest to live in of all ${n}: ${money(best.totalMonthlyRM)} a month all-in${best.leftRM !== null ? `, leaving ${money(best.leftRM)}` : ""}.`,
       },
       {
         key: "commute",
@@ -340,8 +354,8 @@ export function reasonsFor(
       },
       {
         key: "fit",
-        ok: best.fit === "in" && best.dsrAfter <= 0.6,
-        text: `Comfortably inside your budget: ${k(ctx.money.maxPriceRM - best.priceRM)} under the bank ceiling, debt service ratio ${pct(best.dsrAfter)} with this loan.`,
+        ok: best.fit === "in" && best.dsrAfter !== null && best.dsrAfter <= 0.6,
+        text: `Comfortably inside your budget: ${k(ctx.money.maxPriceRM - best.priceRM)} under the bank ceiling, debt service ratio ${pct(best.dsrAfter ?? 0)} with this loan.`,
       },
     ];
     for (const f of facts.filter((x) => x.ok && !covered.has(x.key))) {
@@ -384,11 +398,11 @@ export function caveatsFor(
     out.push(
       "Every home in the ring is sold out. Ask the sales gallery about the next phase.",
     );
-  if (best.fit !== "in")
+  if (best.fit === "stretch" || best.fit === "over")
     out.push(
       `At ${k(best.priceRM)} it is ${best.fit === "over" ? "over" : "a stretch on"} the roughly ${k(m.maxPriceRM)} the bank may lend against.`,
     );
-  if (best.dsrAfter > 0.6)
+  if (best.dsrAfter !== null && best.dsrAfter > 0.6)
     out.push(
       `Your debt service ratio would be ${pct(best.dsrAfter)} with this loan: above the common 60% line${best.dsrAfter <= 0.7 ? ", though some banks go to 70%" : " and the 70% some banks allow"}.`,
     );
@@ -396,7 +410,7 @@ export function caveatsFor(
     out.push(
       `You'd be ${k(-best.savingsGapRM)} short on cash upfront (needs ${k(best.upfrontRM)}).`,
     );
-  if (best.leftRM < m.netRM * 0.15)
+  if (best.leftRM !== null && best.leftRM < m.netRM * 0.15)
     out.push(
       `Tight: about ${money(best.leftRM)} left a month once the loan, fees, commute and other debts are paid.`,
     );
@@ -412,7 +426,7 @@ export function caveatsFor(
     out.push(
       `Keys in ${best.unit.completion}: ${plural(best.waitYears, "year")} of waiting, maybe while paying rent.`,
     );
-  if (!best.you.compared && best.you.notComparedWhy)
+  if (!best.you.compared && !best.you.missing && best.you.notComparedWhy)
     out.push(best.you.notComparedWhy);
   else if (best.you.hoursPerYear > 350)
     out.push(
@@ -447,11 +461,13 @@ export function caveatsFor(
       );
   }
   if (m.savingsRM === null)
-    out.push("Tell Uncle your savings and we can check the cash upfront.");
-  if (m.source === "sample")
+    out.push("Tell Uncle your savings and we can judge the cash upfront.");
+  if (m.source === "missing")
     out.push(
-      "Money uses a sample payslip, not yours. Sit with Uncle or run the bank check.",
+      "Uncle doesn't know your salary yet, so budget fit and money left each month aren't judged.",
     );
+  if (ctx.commuteMissing)
+    out.push(`${ctx.commuteMissing} to compare commutes.`);
   return out.slice(0, 6);
 }
 
@@ -526,6 +542,8 @@ export function hasFeature(
           : "no toll on our estimate",
     };
   }
+  if (a.you.missing && /commute|jam|traffic|(work|office)/.test(p))
+    return { met: null, why: a.you.missing.toLowerCase() };
   if (/short commute|near (work|office)|close to (work|office)/.test(p)) {
     if (!a.you.compared) return { met: false, why: "not a daily commute" };
     return {
@@ -611,13 +629,16 @@ export function profileChecks(
 
 /* ---------------------------------------------------------------- lineup */
 
-export type LineupSource = "picks" | "liked" | "mixed" | "sample";
+export type LineupSource = "picks" | "liked" | "few";
 
 export const BATTLE_MAX = 5;
+/** A battle needs at least this many homes. */
+export const BATTLE_MIN = 2;
 
 /**
- * Lineup to open with: the buyer's Battle picks (set by the swipe deck, best match first),
- * else their likes best match first, else a sample lineup from the top matches in different projects.
+ * Lineup to open with, from the buyer's own choices only (never a made-up sample): their Battle
+ * picks (set by the swipe deck), else their likes best match first. With fewer than two, the
+ * screen asks them to pick more.
  */
 export function startingLineup(
   s: { compare: string[]; liked: string[] },
@@ -625,30 +646,14 @@ export function startingLineup(
   ranked: Unit[],
 ): { ids: string[]; source: LineupSource } {
   const rank = new Map(ranked.map((u, i) => [u.id, i]));
-  const picks = s.compare.filter(isUnit);
-  if (picks.length >= 1)
+  const picks = [...new Set(s.compare.filter(isUnit))];
+  if (picks.length >= BATTLE_MIN)
     return { ids: picks.slice(0, BATTLE_MAX), source: "picks" };
-  const liked = s.liked
-    .filter(isUnit)
-    .sort((a, b) => (rank.get(a) ?? 99) - (rank.get(b) ?? 99));
-  if (liked.length >= 2)
-    return { ids: liked.slice(0, BATTLE_MAX), source: "liked" };
-  const sample = sampleLineup(ranked, liked);
-  if (liked.length === 1) return { ids: sample, source: "mixed" };
-  return { ids: sample, source: "sample" };
-}
-
-/** Up to 3 homes: the given ids first, then the best match from each project not yet in. */
-export function sampleLineup(ranked: Unit[], keep: string[] = []): string[] {
-  const out = [...keep];
-  const projects = new Set(
-    ranked.filter((u) => keep.includes(u.id)).map((u) => u.townshipId),
+  const liked = [...new Set(s.liked.filter(isUnit))].sort(
+    (a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999),
   );
-  for (const u of ranked) {
-    if (out.length >= 3) break;
-    if (out.includes(u.id) || projects.has(u.townshipId)) continue;
-    out.push(u.id);
-    projects.add(u.townshipId);
-  }
-  return out;
+  if (liked.length >= BATTLE_MIN)
+    return { ids: liked.slice(0, BATTLE_MAX), source: "liked" };
+  const few = [...new Set([...picks, ...liked])].slice(0, BATTLE_MAX);
+  return { ids: few, source: few.length >= BATTLE_MIN ? "picks" : "few" };
 }

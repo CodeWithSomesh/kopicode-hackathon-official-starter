@@ -1,16 +1,15 @@
 import { eligibility, MIN_TENURE } from "@/lib/homelander/bank";
 import { commuteCost, type CommuteCost } from "@/lib/homelander/commute-cost";
 import {
-  affordability,
   costOfUnit,
   distanceKm,
   LOAN_RATE,
   LOAN_YEARS,
   monthlyInstalment,
   rm,
-  samplePayslip,
   townshipById,
   type Anchor,
+  type Township,
   type Unit,
 } from "@/lib/homelander/data";
 import { toIncomeInput, type Profile } from "@/lib/homelander/profile";
@@ -20,8 +19,10 @@ import type { Budget } from "@/lib/homelander/store";
 
 /**
  * Everything the "More details" side of a card says, worked out for THIS buyer: their income
- * (from Uncle, else the bank check, else a labelled sample payslip), their workplace and office
- * days, their household and school limits. Pure functions, so the card stays a view.
+ * (from Uncle, else their bank check), their workplace and office days, their household and
+ * school limits. Real data only: when a figure can't be worked out from what the buyer told us
+ * (no salary, no workplace), it is null and the card asks for it instead of inventing one.
+ * Pure functions, so the card stays a view.
  */
 
 export type MoneyBasis = {
@@ -30,11 +31,12 @@ export type MoneyBasis = {
   tenureYears: number;
   rate: number;
   savingsRM?: number;
-  source: "uncle" | "bank" | "sample";
+  source: "uncle" | "bank";
   note: string;
 };
 
-export function moneyBasis(profile: Profile, budget: Budget | null): MoneyBasis {
+/** Null when the buyer hasn't told Uncle their salary and hasn't run the bank check. */
+export function moneyBasis(profile: Profile, budget: Budget | null): MoneyBasis | null {
   const input = toIncomeInput(profile);
   if (input) {
     const e = eligibility(input);
@@ -60,22 +62,15 @@ export function moneyBasis(profile: Profile, budget: Budget | null): MoneyBasis 
       note: `From your bank check: ${rm(budget.netRM)} take-home.`,
     };
   }
-  const a = affordability(samplePayslip);
-  return {
-    netRM: a.netRM,
-    commitmentsRM: a.commitmentsRM,
-    tenureYears: LOAN_YEARS,
-    rate: LOAN_RATE,
-    source: "sample",
-    note: `Sample payslip (${rm(samplePayslip.grossRM)} gross). Sit with Uncle for your own numbers.`,
-  };
+  return null;
 }
 
 export type CommuteMode = "car" | "train";
 
 export type HomeDetails = {
   money: {
-    instalmentRM: number;
+    /** Null without the buyer's salary or bank check (tenure and rate come from them). */
+    instalmentRM: number | null;
     loanRM: number;
     downPaymentRM: number;
     stampDutyRM: number;
@@ -85,14 +80,17 @@ export type HomeDetails = {
     /** Monthly maintenance / service charge, or null when not published. */
     upkeepRM: number | null;
     upkeepHow: string | null;
-    commuteRM: number;
-    /** Instalment + upkeep + commute. */
-    totalMonthlyRM: number;
-    /** Take-home after commitments and the total above. */
-    leftRM: number;
+    /** Null when we don't know where the buyer works; 0 when the home is too far to commute. */
+    commuteRM: number | null;
+    /** Instalment + upkeep + commute; null without an instalment. */
+    totalMonthlyRM: number | null;
+    /** Take-home after commitments and the total above; null without the buyer's income. */
+    leftRM: number | null;
+    /** Null when the buyer didn't say what they've saved. */
     savingsGapRM: number | null;
     psfRM: number;
   };
+  /** Null when we don't know where the buyer works. */
   commute: {
     anchor: Anchor;
     cost: CommuteCost;
@@ -101,7 +99,7 @@ export type HomeDetails = {
     officeDays: number;
     far: boolean;
     straightKm: number;
-  };
+  } | null;
   family: {
     need: number | null;
     beds: number;
@@ -118,23 +116,12 @@ const FAR_KM = 90;
 const knowsHousehold = (p: Profile) =>
   p.minBedrooms !== undefined || p.livingWith !== undefined || p.kidsPlanned !== undefined || p.kidsNow !== undefined;
 
-export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis, anchor: Anchor): HomeDetails {
+export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis | null, anchor: Anchor | null): HomeDetails {
   const t = townshipById[unit.townshipId]!;
-  const officeDays = profile.officeDays ?? 5;
-  const cost = commuteCost(t.pos, anchor, officeDays);
-  const mode: CommuteMode =
-    profile.commuteMode === "train"
-      ? "train"
-      : profile.commuteMode === "car"
-        ? "car"
-        : cost.train.totalRM < cost.car.totalRM && cost.trainMinOneWay <= cost.driveMinPeak + 10
-          ? "train"
-          : "car";
-  const straightKm = distanceKm(t.pos, anchor.pos);
-  const far = (t.region !== undefined && t.region !== "klang-valley") || straightKm > FAR_KM;
+  const commute = anchor ? commuteFor(t, profile, anchor) : null;
 
-  const c = costOfUnit(unit.priceRM, basis.netRM, basis.commitmentsRM);
-  const instalmentRM = Math.round(monthlyInstalment(c.loan, basis.rate, basis.tenureYears));
+  const c = costOfUnit(unit.priceRM, basis?.netRM ?? 0, basis?.commitmentsRM ?? 0);
+  const instalmentRM = basis ? Math.round(monthlyInstalment(c.loan, basis.rate, basis.tenureYears)) : null;
   const upkeepRM =
     unit.maintenancePsfRM !== undefined
       ? Math.round(unit.maintenancePsfRM * unit.builtUpSqft)
@@ -148,9 +135,10 @@ export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis, anc
         ? "Guard and service fee"
         : null;
   // A daily commute from Johor or Sabah isn't a monthly cost, it's a move: leave it out of the total.
-  const commuteRM = far ? 0 : mode === "train" ? cost.train.totalRM : cost.car.totalRM;
-  const totalMonthlyRM = instalmentRM + (upkeepRM ?? 0) + commuteRM;
+  const commuteRM = !commute ? null : commute.far ? 0 : commute.mode === "train" ? commute.cost.train.totalRM : commute.cost.car.totalRM;
+  const totalMonthlyRM = instalmentRM === null ? null : instalmentRM + (upkeepRM ?? 0) + (commuteRM ?? 0);
   const upfrontRM = Math.round(c.upfront);
+  const savingsRM = basis?.savingsRM ?? profile.savingsRM;
 
   const limit = profile.schoolMatters ? (profile.schoolMaxKm ?? 5) : null;
   const near = nearestByType(t.pos);
@@ -176,11 +164,11 @@ export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis, anc
       upkeepHow,
       commuteRM,
       totalMonthlyRM,
-      leftRM: Math.round(basis.netRM - basis.commitmentsRM - totalMonthlyRM),
-      savingsGapRM: basis.savingsRM !== undefined ? Math.round(upfrontRM - basis.savingsRM) : null,
+      leftRM: basis && totalMonthlyRM !== null ? Math.round(basis.netRM - basis.commitmentsRM - totalMonthlyRM) : null,
+      savingsGapRM: savingsRM !== undefined ? Math.round(upfrontRM - savingsRM) : null,
       psfRM: Math.round(unit.priceRM / unit.builtUpSqft),
     },
-    commute: { anchor, cost, mode, modeAssumed: !profile.commuteMode || profile.commuteMode === "mixed", officeDays, far, straightKm },
+    commute,
     family: {
       need: knowsHousehold(profile) ? bedroomsNeeded(profile) : null,
       beds: unit.beds,
@@ -189,4 +177,20 @@ export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis, anc
     },
     completion: { year: unit.completion, cantWait: profile.underConstructionOk === false && unit.completion > THIS_YEAR },
   };
+}
+
+function commuteFor(t: Township, profile: Profile, anchor: Anchor): NonNullable<HomeDetails["commute"]> {
+  const officeDays = profile.officeDays ?? 5;
+  const cost = commuteCost(t.pos, anchor, officeDays);
+  const mode: CommuteMode =
+    profile.commuteMode === "train"
+      ? "train"
+      : profile.commuteMode === "car"
+        ? "car"
+        : cost.train.totalRM < cost.car.totalRM && cost.trainMinOneWay <= cost.driveMinPeak + 10
+          ? "train"
+          : "car";
+  const straightKm = distanceKm(t.pos, anchor.pos);
+  const far = (t.region !== undefined && t.region !== "klang-valley") || straightKm > FAR_KM;
+  return { anchor, cost, mode, modeAssumed: !profile.commuteMode || profile.commuteMode === "mixed", officeDays, far, straightKm };
 }

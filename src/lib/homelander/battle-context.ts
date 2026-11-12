@@ -1,31 +1,27 @@
 import { eligibility, tenureYears, MAX_TENURE } from "./bank";
-import {
-  affordability,
-  anchorOptions,
-  samplePayslip,
-  type Anchor,
-} from "./data";
+import { anchorOptions, type Anchor } from "./data";
 import { toIncomeInput, type Profile } from "./profile";
 import { anchorFor, bedroomsNeeded } from "./recommend";
 import type { Budget } from "./store";
 
 /**
- * Who is buying, for the Battle screen. Everything comes from what Uncle heard (the profile)
- * and the bank check; whatever is missing falls back to a labelled default so the screen
- * always works: 5 office days, KL Sentral, the sample payslip.
+ * Who is buying, for the Battle screen. Everything comes from what Uncle heard (the profile),
+ * the bank check, or what the buyer picks on this screen. Nothing is invented: when an input is
+ * missing it stays missing (null), and the screen says so ("Tell Uncle where you work") and
+ * leaves that category out of the fight instead of guessing.
  */
 
 export type CommuteMode = "car" | "train" | "fastest";
 
-export type MoneySource = "bank" | "profile" | "sample";
+export type MoneySource = "bank" | "profile" | "missing";
 
 export type BuyerMoney = {
   source: MoneySource;
-  /** Monthly take-home the bank counts (joint and other income included). */
+  /** Monthly take-home the bank counts (joint and other income included). 0 when missing. */
   netRM: number;
   /** Monthly debt payments before this home loan. */
   commitmentsRM: number;
-  /** Rough ceiling on the price the bank may lend against at 60% DSR. */
+  /** Rough ceiling on the price the bank may lend against at 60% DSR. 0 when missing. */
   maxPriceRM: number;
   /** Loan tenure from age (to 70, max 35 years). */
   tenureYears: number;
@@ -37,25 +33,34 @@ export type BuyerMoney = {
 };
 
 export type BattleContext = {
+  /** Uncle has heard at least one answer. */
   hasProfile: boolean;
-  /** Plain labels for every default we filled in, shown on screen. */
-  defaults: string[];
-  work: Anchor;
+  /** The buyer finished onboarding (or at least has a profile we can battle on). */
+  onboarded: boolean;
+  /** Plain labels for every input Uncle doesn't have yet, shown on screen. */
+  missing: string[];
+  /** Null until the buyer tells Uncle (or picks here) where they work. */
+  work: Anchor | null;
   /** What the buyer said ("Mid Valley"), or the anchor name. */
-  workLabel: string;
-  workSource: "profile" | "picked" | "default";
+  workLabel: string | null;
+  workSource: "profile" | "picked" | "missing";
+  /** A workplace the buyer named that is not on our commute map. */
+  workUnmapped: string | null;
   partner: Anchor | null;
   partnerLabel: string | null;
-  officeDays: number;
-  mode: CommuteMode;
-  modeSource: "profile" | "picked" | "default";
+  officeDays: number | null;
+  mode: CommuteMode | null;
+  modeSource: "profile" | "picked" | "missing";
+  /** Why commute can't be compared (no workplace, office days or mode), or null when it can. */
+  commuteMissing: string | null;
   bedsNeeded: number;
   homeType: "landed" | "high_rise" | "either";
   hasKids: boolean;
   parentsMovingIn: boolean;
   pets: boolean | null;
   schoolMatters: boolean;
-  schoolMaxKm: number;
+  /** The distance the buyer said is OK; null when they haven't said. */
+  schoolMaxKm: number | null;
   schoolTransport: Profile["schoolTransport"] | null;
   underConstructionOk: boolean | null;
   mustHaves: string[];
@@ -71,10 +76,6 @@ export type ContextOverrides = {
   mode?: CommuteMode | null;
 };
 
-export const DEFAULT_WORK_ID = "kl-sentral";
-export const DEFAULT_OFFICE_DAYS = 5;
-export const DEFAULT_SCHOOL_KM = 5;
-
 const meaningful = (p: Profile) =>
   Object.values(p).some(
     (v) =>
@@ -85,35 +86,33 @@ const meaningful = (p: Profile) =>
   );
 
 export function battleContext(
-  s: { profile: Profile; budget: Budget | null },
+  s: { profile: Profile; budget: Budget | null; onboardedAt?: string | null },
   o: ContextOverrides = {},
   year = new Date().getFullYear(),
 ): BattleContext {
   const p = s.profile ?? {};
   const hasProfile = meaningful(p);
-  const defaults: string[] = [];
+  const missing: string[] = [];
 
-  // Workplace: picked on this screen > what Uncle heard > KL Sentral.
+  // Workplace: picked on this screen > what Uncle heard > nothing.
   const picked = o.workId
     ? anchorOptions.find((a) => a.id === o.workId)
     : undefined;
   const heard = anchorFor(p.workArea);
-  const fallback =
-    anchorOptions.find((a) => a.id === DEFAULT_WORK_ID) ?? anchorOptions[0]!;
-  const work = picked ?? heard ?? fallback;
-  const workSource = picked ? "picked" : heard ? "profile" : "default";
-  if (workSource === "default")
-    defaults.push(
-      p.workArea
-        ? `Work: "${p.workArea}" is not on our map yet, so KL Sentral`
-        : "Work: KL Sentral",
+  const work = picked ?? heard ?? null;
+  const workSource = picked ? "picked" : heard ? "profile" : "missing";
+  const workUnmapped = !work && p.workArea ? p.workArea : null;
+  if (!work)
+    missing.push(
+      workUnmapped
+        ? `Work: "${workUnmapped}" isn't on our commute map yet`
+        : "Where you work",
     );
 
   const partner = anchorFor(p.partnerWorkArea);
 
-  const officeDays = o.officeDays ?? p.officeDays ?? DEFAULT_OFFICE_DAYS;
-  if (o.officeDays == null && p.officeDays === undefined)
-    defaults.push("5 office days a week");
+  const officeDays = o.officeDays ?? p.officeDays ?? null;
+  if (officeDays === null) missing.push("Office days a week");
 
   const fromProfile: CommuteMode | null =
     p.commuteMode === "car"
@@ -123,15 +122,27 @@ export function battleContext(
         : p.commuteMode === "mixed"
           ? "fastest"
           : null;
-  const mode = o.mode ?? fromProfile ?? "car";
-  const modeSource = o.mode ? "picked" : fromProfile ? "profile" : "default";
-  if (modeSource === "default") defaults.push("Driving to work");
+  const mode = o.mode ?? fromProfile ?? null;
+  const modeSource = o.mode ? "picked" : fromProfile ? "profile" : "missing";
+  if (mode === null) missing.push("Car or train");
 
-  // Money: the bank check if run, else Uncle's numbers, else the sample payslip.
+  const commuteMissing = !work
+    ? workUnmapped
+      ? `"${workUnmapped}" isn't on our commute map. Pick the closest place you work`
+      : "Tell Uncle where you work"
+    : officeDays === null
+      ? "Tell Uncle your office days"
+      : mode === null
+        ? "Tell Uncle car or train"
+        : null;
+
+  // Money: the bank check if run, else Uncle's numbers, else missing (no sample payslip).
   const input = toIncomeInput(p);
   const elig = input ? eligibility(input) : null;
   const tenureFromAge = p.age !== undefined;
   const tenure = tenureFromAge ? tenureYears(p.age!) : MAX_TENURE;
+  const savingsRM = p.savingsRM ?? null;
+  const firstHome = p.firstHome ?? null;
   let money: BuyerMoney;
   if (s.budget && s.budget.netRM > 0) {
     money = {
@@ -141,8 +152,8 @@ export function battleContext(
       maxPriceRM: s.budget.maxPriceRM,
       tenureYears: tenure,
       tenureFromAge,
-      savingsRM: p.savingsRM ?? null,
-      firstHome: p.firstHome ?? null,
+      savingsRM,
+      firstHome,
     };
   } else if (elig && elig.netRM > 0) {
     money = {
@@ -152,24 +163,29 @@ export function battleContext(
       maxPriceRM: elig.maxPriceRM,
       tenureYears: elig.tenureYears,
       tenureFromAge: true,
-      savingsRM: p.savingsRM ?? null,
-      firstHome: p.firstHome ?? null,
+      savingsRM,
+      firstHome,
     };
   } else {
-    const a = affordability(samplePayslip);
     money = {
-      source: "sample",
-      netRM: a.netRM,
-      commitmentsRM: a.commitmentsRM,
-      maxPriceRM: a.maxPriceRM,
+      source: "missing",
+      netRM: 0,
+      commitmentsRM: 0,
+      maxPriceRM: 0,
       tenureYears: tenure,
       tenureFromAge,
-      savingsRM: p.savingsRM ?? null,
-      firstHome: p.firstHome ?? null,
+      savingsRM,
+      firstHome,
     };
-    defaults.push("Sample payslip (RM9,800 gross)");
+    missing.push(
+      p.grossRM === undefined
+        ? "Your monthly salary"
+        : "Your age (for the bank's sums)",
+    );
   }
-  if (!tenureFromAge) defaults.push("35-year loan (tell Uncle your age)");
+  if (savingsRM === null) missing.push("Savings for the down payment");
+  if (!tenureFromAge && money.source !== "missing")
+    missing.push("Your age (loan uses the 35-year maximum until then)");
 
   const hasKids =
     (p.kidsNow ?? 0) > 0 ||
@@ -178,22 +194,29 @@ export function battleContext(
 
   return {
     hasProfile,
-    defaults,
+    onboarded: Boolean(s.onboardedAt) && hasProfile,
+    missing,
     work,
-    workLabel: workSource === "profile" && p.workArea ? p.workArea : work.name,
+    workLabel: work
+      ? workSource === "profile" && p.workArea
+        ? p.workArea
+        : work.name
+      : null,
     workSource,
+    workUnmapped,
     partner,
     partnerLabel: partner ? (p.partnerWorkArea ?? partner.name) : null,
     officeDays,
     mode,
     modeSource,
+    commuteMissing,
     bedsNeeded: bedroomsNeeded(p),
     homeType: p.homeType ?? "either",
     hasKids,
     parentsMovingIn: p.parentsMovingIn ?? false,
     pets: p.pets ?? null,
     schoolMatters: p.schoolMatters ?? false,
-    schoolMaxKm: p.schoolMaxKm ?? DEFAULT_SCHOOL_KM,
+    schoolMaxKm: p.schoolMaxKm ?? null,
     schoolTransport: p.schoolTransport ?? null,
     underConstructionOk: p.underConstructionOk ?? null,
     mustHaves: p.mustHaves ?? [],
@@ -210,7 +233,7 @@ export function budgetForMatch(
   budget: Budget | null,
 ): Budget | null {
   if (budget) return budget;
-  if (ctx.money.source === "sample") return null;
+  if (ctx.money.source === "missing") return null;
   return {
     grossRM: 0,
     netRM: ctx.money.netRM,

@@ -27,17 +27,16 @@ export function CardDetails({
   unit: Unit;
   pick?: Match;
   d: HomeDetails;
-  basis: MoneyBasis;
+  /** Null when the buyer hasn't given a salary or run the bank check. */
+  basis: MoneyBasis | null;
   onClose: () => void;
 }) {
   const t = townshipById[unit.townshipId]!;
   const { money, commute, family, completion } = d;
   const a = availabilityOf(unit.id);
-  const c = commute.cost;
-  const modeCost = commute.mode === "train" ? c.train.totalRM : c.car.totalRM;
 
   return (
-    <div className="grid content-start">
+    <div className="grid grid-cols-[minmax(0,1fr)] content-start">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b-2 border-ink/10 bg-white/95 px-4 py-3 backdrop-blur-sm">
         <div className="min-w-0">
           <p className="truncate font-pixel text-lg leading-tight">{t.name}</p>
@@ -57,11 +56,15 @@ export function CardDetails({
         </button>
       </div>
 
-      <div className="grid gap-5 px-4 pt-4 pb-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5 px-4 pt-4 pb-6">
         {/* Money */}
         <Section art={swipeSprites.coin} title="Money" tone="text-kaya-deep">
           <div className="grid grid-cols-2 gap-2.5">
-            <Big label="Monthly instalment" value={rm(money.instalmentRM)} hint={`${basis.tenureYears} yrs at ${(basis.rate * 100).toFixed(1)}%`} />
+            {money.instalmentRM !== null && basis ? (
+              <Big label="Monthly instalment" value={rm(money.instalmentRM)} hint={`${basis.tenureYears} yrs at ${(basis.rate * 100).toFixed(1)}%`} />
+            ) : (
+              <Big label="Monthly instalment" value="Ask Uncle" hint="Needs your salary" muted />
+            )}
             <Big label="Cash upfront" value={rm(money.upfrontRM)} hint="Deposit, duty, legal" />
           </div>
           <Rows>
@@ -78,88 +81,59 @@ export function CardDetails({
             ) : null}
           </Rows>
           <Rows>
-            <Row label="Instalment" value={rm(money.instalmentRM)} />
+            {money.instalmentRM !== null ? <Row label="Instalment" value={rm(money.instalmentRM)} /> : null}
             <Row
               label={money.upkeepHow ?? "Maintenance"}
               value={money.upkeepRM !== null ? rm(money.upkeepRM) : "Not published"}
               muted={money.upkeepRM === null}
             />
-            <Row
-              label={commute.far ? "Commute" : `Commute by ${commute.mode}${commute.modeAssumed ? " (cheaper)" : ""}`}
-              value={commute.far ? "Not counted" : rm(money.commuteRM)}
-              muted={commute.far}
-            />
-            <Row label="Every month, all in" value={rm(money.totalMonthlyRM)} strong />
-            <Row
-              label="Left after bills and loans"
-              value={rm(money.leftRM)}
-              tone={money.leftRM < 0 ? "bad" : money.leftRM < 1500 ? "warn" : "good"}
-              strong
-            />
+            {commute ? (
+              <Row
+                label={commute.far ? "Commute" : `Commute by ${commute.mode}${commute.modeAssumed ? " (cheaper)" : ""}`}
+                value={commute.far || money.commuteRM === null ? "Not counted" : rm(money.commuteRM)}
+                muted={commute.far}
+              />
+            ) : (
+              <Row label="Commute" value="Tell Uncle where you work" muted />
+            )}
+            {money.totalMonthlyRM !== null ? <Row label="Every month, all in" value={rm(money.totalMonthlyRM)} strong /> : null}
+            {money.leftRM !== null ? (
+              <Row
+                label="Left after bills and loans"
+                value={rm(money.leftRM)}
+                tone={money.leftRM < 0 ? "bad" : money.leftRM < 1500 ? "warn" : "good"}
+                strong
+              />
+            ) : null}
           </Rows>
           <Note>
-            {basis.note} {rm(money.psfRM)} per sq ft. {unit.source === "official" ? "Price from gamudaland.com.my." : "Sample price."}
+            {basis ? `${basis.note} ` : ""}
+            {rm(money.psfRM)} per sq ft. {unit.source === "official" ? "Price from gamudaland.com.my." : "Sample price."}
           </Note>
-          {basis.source === "sample" ? (
-            <Link href="/onboarding" className="text-sm font-semibold text-pandan-deep underline underline-offset-4">
-              Tell Uncle your salary for real numbers
+          {basis ? null : (
+            <Link href="/onboarding" className="justify-self-start text-sm font-semibold text-pandan-deep underline underline-offset-4">
+              Tell Uncle your salary for your monthly numbers
             </Link>
-          ) : null}
+          )}
         </Section>
 
         {/* Commute */}
-        <Section art={swipeSprites.car} title={`To ${commute.anchor.name}`} tone="text-sky-deep">
-          {commute.far ? (
-            <div className="flex gap-2.5 rounded-xl bg-raya/10 p-3 text-sm">
-              <Sprite art={swipeSprites.warn} scale={2} className="mt-0.5 shrink-0 text-raya-deep" />
+        {commute ? (
+          <CommuteSection commute={commute} townName={t.name} townState={t.state ?? t.area} />
+        ) : (
+          <Section art={swipeSprites.car} title="Your commute" tone="text-sky-deep">
+            <div className="flex gap-2.5 rounded-xl bg-cloud p-3 text-sm">
+              <Sprite art={swipeSprites.clock} scale={2} className="mt-0.5 shrink-0 text-ink" />
               <p>
-                <span className="font-semibold">Far from your workplace.</span> {t.name} is in {t.state ?? t.area}, about{" "}
-                {Math.round(commute.straightKm)} km from {commute.anchor.name} as the crow flies. Think relocation or remote
-                work, not a daily drive.
+                <span className="font-semibold">Tell Uncle where you work.</span> Drive and train times, tolls and the monthly
+                cost of getting to work are worked out from your workplace, so we don&apos;t guess one.
               </p>
             </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-2.5">
-                <Big label="Peak drive" value={`${c.driveMinPeak} min`} hint={`${c.driveKmOneWay} km`} />
-                <Big label="Off-peak" value={`${c.driveMinOffPeak} min`} hint="One way" />
-                <Big label="By train" value={`${c.trainMinOneWay} min`} hint={c.station} />
-              </div>
-              <Rows>
-                <Row label="Nearest station" value={`${c.station}, ${c.stationKm.toFixed(1)} km`} />
-                <Row label="Line" value={c.line} />
-                <Row
-                  label="Tolls, one way (est.)"
-                  value={c.tolls.oneWayRM > 0 ? rm(c.tolls.oneWayRM) : "None on the likely route"}
-                  muted={c.tolls.oneWayRM === 0}
-                />
-                {c.tolls.plazas.length ? (
-                  <li className="flex flex-wrap gap-1.5 py-1.5">
-                    {c.tolls.plazas.map((p) => (
-                      <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-cloud px-2 py-0.5 text-xs">
-                        <Sprite art={swipeSprites.toll} scale={1.5} className="text-ink-soft" />
-                        {p.name} <span className="text-ink-soft">{p.highway}</span>
-                      </span>
-                    ))}
-                  </li>
-                ) : null}
-                <Row label="Fuel a month" value={rm(c.car.fuelRM)} />
-                <Row label="Tolls a month" value={rm(c.car.tollRM)} />
-                <Row label="Parking a month" value={rm(c.car.parkingRM)} />
-                <Row label="Driving, all in" value={rm(c.car.totalRM)} strong={commute.mode === "car"} />
-                <Row label="Train fares and feeder" value={rm(c.train.totalRM)} strong={commute.mode === "train"} />
-              </Rows>
-              <p className="flex items-center gap-2 rounded-xl bg-cloud px-3 py-2 text-sm">
-                <Sprite art={swipeSprites.clock} scale={2} className="shrink-0 text-ink" />
-                <span>
-                  <span className="font-pixel text-base tabular-nums">{commute.mode === "train" ? c.hoursPerYear.train : c.hoursPerYear.car} h</span> a
-                  year on the road at {commute.officeDays} office days a week ({rm(modeCost)} a month).
-                </span>
-              </p>
-            </>
-          )}
-          <Note>Estimates from distance and rush-hour speeds. Tolls are estimated from a hand-built plaza table.</Note>
-        </Section>
+            <Link href="/onboarding" className="justify-self-start text-sm font-semibold text-pandan-deep underline underline-offset-4">
+              Tell Uncle where you work
+            </Link>
+          </Section>
+        )}
 
         {/* Family */}
         <Section art={swipeSprites.family} title="Family" tone="text-pandan-deep">
@@ -172,7 +146,7 @@ export function CardDetails({
             <Row label="Bathrooms" value={`${unit.baths}`} />
           </Rows>
           {family.schools.length ? (
-            <ul className="grid gap-1.5">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
               {family.schools.map((s) => (
                 <li key={s.type} className="flex items-start gap-2.5 text-sm">
                   <Sprite art={swipeSprites.school} scale={2} className={cn("mt-0.5 shrink-0", s.tooFar ? "text-raya-deep" : "text-ink-soft")} />
@@ -245,7 +219,7 @@ export function CardDetails({
           <Section art="uncle" title="Uncle's take" tone="text-ink">
             <p className="font-pixel text-base">{pick.score}% match</p>
             {pick.reasons.length ? (
-              <ul className="grid gap-1.5">
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                 {pick.reasons.map((r) => (
                   <li key={r} className="flex gap-2 text-sm">
                     <Sprite art="heart" scale={1.5} className="mt-1 shrink-0 text-pandan" />
@@ -255,7 +229,7 @@ export function CardDetails({
               </ul>
             ) : null}
             {pick.catches.length ? (
-              <ul className="grid gap-1.5">
+              <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                 {pick.catches.map((r) => (
                   <li key={r} className="flex gap-2 text-sm text-raya-deep">
                     <Sprite art="cross" scale={1.5} className="mt-1 shrink-0" />
@@ -275,9 +249,76 @@ export function CardDetails({
   );
 }
 
+function CommuteSection({
+  commute,
+  townName,
+  townState,
+}: {
+  commute: NonNullable<HomeDetails["commute"]>;
+  townName: string;
+  townState: string;
+}) {
+  const c = commute.cost;
+  const modeCost = commute.mode === "train" ? c.train.totalRM : c.car.totalRM;
+  return (
+    <Section art={swipeSprites.car} title={`To ${commute.anchor.name}`} tone="text-sky-deep">
+      {commute.far ? (
+        <div className="flex gap-2.5 rounded-xl bg-raya/10 p-3 text-sm">
+          <Sprite art={swipeSprites.warn} scale={2} className="mt-0.5 shrink-0 text-raya-deep" />
+          <p>
+            <span className="font-semibold">Far from your workplace.</span> {townName} is in {townState}, about{" "}
+            {Math.round(commute.straightKm)} km from {commute.anchor.name} as the crow flies. Think relocation or remote work,
+            not a daily drive.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2.5">
+            <Big label="Peak drive" value={`${c.driveMinPeak} min`} hint={`${c.driveKmOneWay} km`} />
+            <Big label="Off-peak" value={`${c.driveMinOffPeak} min`} hint="One way" />
+            <Big label="By train" value={`${c.trainMinOneWay} min`} hint={c.station} />
+          </div>
+          <Rows>
+            <Row label="Nearest station" value={`${c.station}, ${c.stationKm.toFixed(1)} km`} />
+            <Row label="Line" value={c.line} />
+            <Row
+              label="Tolls, one way (est.)"
+              value={c.tolls.oneWayRM > 0 ? rm(c.tolls.oneWayRM) : "None on the likely route"}
+              muted={c.tolls.oneWayRM === 0}
+            />
+            {c.tolls.plazas.length ? (
+              <li className="flex flex-wrap gap-1.5 py-1.5">
+                {c.tolls.plazas.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-1 rounded-full bg-cloud px-2 py-0.5 text-xs">
+                    <Sprite art={swipeSprites.toll} scale={1.5} className="text-ink-soft" />
+                    {p.name} <span className="text-ink-soft">{p.highway}</span>
+                  </span>
+                ))}
+              </li>
+            ) : null}
+            <Row label="Fuel a month" value={rm(c.car.fuelRM)} />
+            <Row label="Tolls a month" value={rm(c.car.tollRM)} />
+            <Row label="Parking a month" value={rm(c.car.parkingRM)} />
+            <Row label="Driving, all in" value={rm(c.car.totalRM)} strong={commute.mode === "car"} />
+            <Row label="Train fares and feeder" value={rm(c.train.totalRM)} strong={commute.mode === "train"} />
+          </Rows>
+          <p className="flex items-center gap-2 rounded-xl bg-cloud px-3 py-2 text-sm">
+            <Sprite art={swipeSprites.clock} scale={2} className="shrink-0 text-ink" />
+            <span>
+              <span className="font-pixel text-base tabular-nums">{commute.mode === "train" ? c.hoursPerYear.train : c.hoursPerYear.car} h</span> a
+              year on the road at {commute.officeDays} office days a week ({rm(modeCost)} a month).
+            </span>
+          </p>
+        </>
+      )}
+      <Note>Estimates from distance and rush-hour speeds. Tolls are estimated from a hand-built plaza table.</Note>
+    </Section>
+  );
+}
+
 function Section({ art, title, tone, children }: { art: SpriteArt | SpriteName; title: string; tone: string; children: ReactNode }) {
   return (
-    <section className="grid gap-2.5">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
       <h3 className="flex items-center gap-2 font-pixel text-lg leading-none">
         <Sprite art={art} scale={2} className={cn("shrink-0", tone)} />
         {title}
@@ -287,18 +328,18 @@ function Section({ art, title, tone, children }: { art: SpriteArt | SpriteName; 
   );
 }
 
-function Big({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Big({ label, value, hint, muted }: { label: string; value: string; hint?: string; muted?: boolean }) {
   return (
     <div className="grid min-w-0 gap-0.5 rounded-xl bg-cloud px-3 py-2.5">
       <span className="truncate text-xs text-ink-soft">{label}</span>
-      <span className="truncate font-pixel text-lg leading-tight tabular-nums sm:text-xl">{value}</span>
+      <span className={cn("truncate font-pixel text-lg leading-tight tabular-nums sm:text-xl", muted && "text-ink-soft")}>{value}</span>
       {hint ? <span className="truncate text-[11px] text-ink-soft">{hint}</span> : null}
     </div>
   );
 }
 
 function Rows({ children }: { children: ReactNode }) {
-  return <ul className="grid divide-y divide-ink/10 rounded-xl border-2 border-ink/10 px-3">{children}</ul>;
+  return <ul className="grid grid-cols-[minmax(0,1fr)] divide-y divide-ink/10 rounded-xl border-2 border-ink/10 px-3">{children}</ul>;
 }
 
 const toneClass = { good: "text-pandan-deep", warn: "text-kaya-deep", bad: "text-raya-deep" } as const;
@@ -321,7 +362,7 @@ function Row({
       <span className={cn("min-w-0", strong ? "font-semibold" : "text-ink-soft")}>{label}</span>
       <span
         className={cn(
-          "shrink-0 text-right tabular-nums",
+          "max-w-[60%] shrink-0 text-right tabular-nums",
           strong && "font-pixel text-base",
           muted && "text-ink-soft",
           tone && toneClass[tone],

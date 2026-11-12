@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import {
@@ -17,36 +18,36 @@ import {
   type BattleContext,
   type CommuteMode,
 } from "@/lib/homelander/battle-context";
+import { fightScript } from "@/lib/homelander/battle-fight";
 import {
   BATTLE_MAX,
+  BATTLE_MIN,
   runBattle,
   startingLineup,
   type LineupSource,
 } from "@/lib/homelander/battle-verdict";
 import { anchorOptions, unitById, type Unit } from "@/lib/homelander/data";
-import { recommend } from "@/lib/homelander/recommend";
+import { realUnits, recommend } from "@/lib/homelander/recommend";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 import { kRM, swords, UnitSelect } from "./bits";
+import { FightArena, type FightPhase } from "./fight-arena";
 import { HeadToHead } from "./head-to-head";
 import { Priorities, type WeightMode } from "./priorities";
 import { VerdictBox } from "./verdict-box";
 
-const isUnit = (id: string) => id in unitById;
+/** Only real Gamuda Land homes (published figures) can enter the ring. */
+const realIds = new Set(realUnits.map((u) => u.id));
+const isUnit = (id: string) => realIds.has(id);
 
 const sourceCopy: Record<
   LineupSource,
   { tag: string; tone: "kaya" | "pandan" | "lilac"; text: string }
 > = {
-  sample: {
-    tag: "Sample lineup",
+  few: {
+    tag: "Need 2 homes",
     tone: "kaya",
-    text: "You haven't liked two homes yet, so here are top matches from different projects.",
-  },
-  mixed: {
-    tag: "1 like + samples",
-    tone: "kaya",
-    text: "Your one like, against top matches from other projects.",
+    text: "A battle needs at least two homes you picked.",
   },
   liked: {
     tag: "From your likes",
@@ -60,14 +61,35 @@ const sourceCopy: Record<
   },
 };
 
+const noop = () => () => {};
+/** False during the server render and hydration, when the store still shows its empty state. */
+const useHydrated = () =>
+  useSyncExternalStore(
+    noop,
+    () => true,
+    () => false,
+  );
+
+/**
+ * Battle of the homes. Page order: title + lineup and settings, then the head-to-head table
+ * (no winner shown), then the fight, and only after the fight the verdict. Runs only on what the
+ * buyer really told Uncle: no sample payslip, default office or default office days.
+ */
 export function BattleView() {
   const s = useHomeLander();
+  const reducedMotion = usePrefersReducedMotion();
+  const hydrated = useHydrated();
 
   const [workId, setWorkId] = useState<string | null>(null);
   const [officeDays, setOfficeDays] = useState<number | null>(null);
   const [mode, setMode] = useState<CommuteMode | null>(null);
   const [weightMode, setWeightMode] = useState<WeightMode>("uncle");
   const [custom, setCustom] = useState<Weights | null>(null);
+  const [fight, setFight] = useState<{
+    key: string;
+    phase: FightPhase;
+    run: number;
+  }>({ key: "", phase: "idle", run: 0 });
 
   const ctx = battleContext(s, { workId, officeDays, mode });
   const matchBudget = budgetForMatch(ctx, s.budget);
@@ -89,7 +111,24 @@ export function BattleView() {
         ? uncle.weights
         : PRESETS[weightMode].weights;
 
-  const result = runBattle(list, ctx, weights, (u) => matchById.get(u.id) ?? 0);
+  const result =
+    ctx.onboarded && list.length >= BATTLE_MIN
+      ? runBattle(list, ctx, weights, (u) => matchById.get(u.id) ?? 0)
+      : null;
+  const script = result ? fightScript(result, ctx) : null;
+
+  // The fight belongs to this lineup: change the lineup and the result is sealed again.
+  const lineupKey = ids.join("|");
+  const phase: FightPhase = fight.key === lineupKey ? fight.phase : "idle";
+  const revealed = phase === "done";
+  const start = () =>
+    setFight((f) => ({
+      key: lineupKey,
+      phase: reducedMotion ? "done" : "fighting",
+      run: f.run + 1,
+    }));
+  const finish = () =>
+    setFight((f) => ({ ...f, key: lineupKey, phase: "done" }));
 
   const save = (next: string[]) =>
     homelander.setCompare(next.slice(0, BATTLE_MAX));
@@ -117,41 +156,27 @@ export function BattleView() {
     .slice(0, BATTLE_MAX);
   const canUseLikes =
     source === "picks" &&
-    likedTop.length >= 2 &&
+    likedTop.length >= BATTLE_MIN &&
     likedTop.join() !== ids.join();
 
   const src = sourceCopy[source];
-  const winnerId = result?.winner.unit.id ?? "";
 
-  return (
-    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:gap-8">
-      {/* Title */}
-      <header className="grid gap-2">
-        <h1 className="flex items-center gap-3 font-pixel text-3xl leading-none lg:text-5xl">
-          <Sprite
-            art={swords}
-            scale={4}
-            className="shrink-0 text-pandan-deep"
-          />
-          Battle of the homes
-        </h1>
-        <p className="max-w-3xl text-ink-soft">
-          Up to {BATTLE_MAX} Gamuda Land homes, side by side on what you&apos;d
-          pay every month, how long you&apos;d spend getting to work, room for
-          the family and the home itself. Every figure is an estimate you can
-          check row by row.
-        </p>
+  const title = (
+    <header className="grid gap-2">
+      <h1 className="flex items-center gap-3 font-pixel text-3xl leading-none lg:text-5xl">
+        <Sprite art={swords} scale={4} className="shrink-0 text-pandan-deep" />
+        Battle of the homes
+      </h1>
+      <p className="max-w-3xl text-ink-soft">
+        Up to {BATTLE_MAX} Gamuda Land homes you picked, side by side on what
+        you&apos;d pay every month, how long you&apos;d spend getting to work,
+        room for the family and the home itself. Compare them first, then let
+        them fight it out.
+      </p>
+      {ctx.onboarded ? (
         <p className="flex flex-wrap items-center gap-2 text-sm">
           <PixTag tone={src.tone}>{src.tag}</PixTag>
           <span className="text-ink-soft">{src.text}</span>
-          {source === "sample" || source === "mixed" ? (
-            <Link
-              href="/swipe"
-              className="font-semibold underline decoration-2 underline-offset-4"
-            >
-              Swipe to pick your own
-            </Link>
-          ) : null}
           {canUseLikes ? (
             <button
               type="button"
@@ -162,53 +187,152 @@ export function BattleView() {
             </button>
           ) : null}
         </p>
-      </header>
+      ) : null}
+    </header>
+  );
 
-      {!ctx.hasProfile ? <NoProfile ctx={ctx} /> : null}
+  // Until the saved state is read, show nothing rather than flash the "know you first" gate.
+  if (!hydrated)
+    return <div className="grid grid-cols-[minmax(0,1fr)] gap-6">{title}</div>;
 
-      <SetupBar
-        ctx={ctx}
-        onWork={setWorkId}
-        onOfficeDays={setOfficeDays}
-        onMode={setMode}
-        ids={ids}
-        onAdd={add}
-      />
+  if (!ctx.onboarded)
+    return (
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:gap-8">
+        {title}
+        <Gate />
+      </div>
+    );
 
-      {result && list.length >= 2 ? (
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
-          <VerdictBox key={winnerId} battle={result} ctx={ctx} />
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:gap-8">
+      {title}
+
+      {ctx.missing.length ? <Missing ctx={ctx} /> : null}
+
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 xl:grid-cols-[minmax(0,1fr)_21rem] xl:items-start">
+        <SetupBar
+          ctx={ctx}
+          onWork={setWorkId}
+          onOfficeDays={setOfficeDays}
+          onMode={setMode}
+          ids={ids}
+          onAdd={add}
+        />
+        {result ? (
           <Priorities
             mode={weightMode}
             weights={weights}
             uncleWhy={uncle.why}
             hasProfile={ctx.hasProfile}
+            skipped={result.skipped}
             onPreset={(p) => setWeightMode(p)}
             onWeight={setWeight}
           />
-        </div>
+        ) : null}
+      </div>
+
+      {result && script ? (
+        <>
+          <HeadToHead
+            fighters={result.fighters}
+            ctx={ctx}
+            winnerId={revealed ? result.winner.unit.id : ""}
+            revealed={revealed}
+            weights={result.weights}
+            skipped={result.skipped}
+            lineup={ids}
+            onSwap={swap}
+            onRemove={remove}
+          />
+          <FightArena
+            battle={result}
+            script={script}
+            phase={phase}
+            run={fight.run}
+            reducedMotion={reducedMotion}
+            onStart={start}
+            onDone={finish}
+          />
+          {revealed ? (
+            <Reveal
+              key={`${lineupKey}:${fight.run}`}
+              reducedMotion={reducedMotion}
+            >
+              <VerdictBox battle={result} ctx={ctx} />
+            </Reveal>
+          ) : null}
+        </>
       ) : (
         <NeedTwo ids={ids} onAdd={add} />
       )}
-
-      {result ? (
-        <HeadToHead
-          fighters={result.fighters}
-          ctx={ctx}
-          winnerId={list.length >= 2 ? winnerId : ""}
-          weights={weights}
-          lineup={ids}
-          onSwap={swap}
-          onRemove={remove}
-        />
-      ) : null}
     </div>
   );
 }
 
 /* ---------------------------------------------------------------- pieces */
 
-function NoProfile({ ctx }: { ctx: BattleContext }) {
+/** The verdict slides in (and scrolls into view) once the fight is over. */
+function Reveal({
+  children,
+  reducedMotion,
+}: {
+  children: React.ReactNode;
+  reducedMotion: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "start",
+    });
+    if (reducedMotion) return;
+    el.animate(
+      [
+        { opacity: 0, transform: "translateY(32px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: 480, easing: "steps(8, end)" },
+    );
+  }, [reducedMotion]);
+  return (
+    <div ref={ref} className="scroll-mt-24">
+      {children}
+    </div>
+  );
+}
+
+function Gate() {
+  return (
+    <PixPanel
+      tone="kaya"
+      className="grid gap-4 p-5 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-6 sm:p-6"
+    >
+      <Sprite art="uncle" scale={6} className="text-ink" />
+      <div className="grid gap-3">
+        <h2 className="font-pixel text-2xl leading-tight lg:text-3xl">
+          Uncle needs to know you first
+        </h2>
+        <p className="max-w-2xl">
+          A battle on guesses is no battle. Sit with Uncle for ten minutes:
+          where you work, who you live with, what you earn and what you&apos;ve
+          saved. Then every row and every round uses your life, not a sample.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <PixButton asChild tone="white" size="lg">
+            <Link href="/onboarding">
+              <Sprite art="uncle" scale={2} />
+              Sit with Uncle
+            </Link>
+          </PixButton>
+        </div>
+      </div>
+    </PixPanel>
+  );
+}
+
+function Missing({ ctx }: { ctx: BattleContext }) {
   return (
     <PixPanel
       tone="kaya"
@@ -218,17 +342,17 @@ function NoProfile({ ctx }: { ctx: BattleContext }) {
       <Sprite art="uncle" scale={4} className="hidden text-ink sm:block" />
       <div className="grid gap-1">
         <p className="font-pixel text-lg leading-tight">
-          You haven&apos;t sat with Uncle yet
+          Uncle doesn&apos;t know everything yet
         </p>
         <p className="text-sm">
-          So this battle uses stand-ins: {ctx.defaults.join(", ")}. Ten minutes
-          with Uncle and every row uses your life instead.
+          Still missing: {ctx.missing.join(", ")}. We don&apos;t guess these:
+          the rows that need them say so, and the fight leaves those rounds out.
         </p>
       </div>
       <PixButton asChild tone="white">
         <Link href="/onboarding">
           <Sprite art="uncle" scale={2} />
-          Sit with Uncle
+          Tell Uncle
         </Link>
       </PixButton>
     </PixPanel>
@@ -264,20 +388,25 @@ function SetupBar({
       ? `Your bank check: up to about ${kRM(m.maxPriceRM)}`
       : m.source === "profile"
         ? `From what you told Uncle: up to about ${kRM(m.maxPriceRM)}`
-        : `Sample payslip: up to about ${kRM(m.maxPriceRM)}`;
+        : "Uncle doesn't know your salary yet, so budget isn't judged";
   return (
     <PixPanel
       flat
       tone="sky"
-      className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_8rem_minmax(0,1fr)_minmax(0,1.3fr)]"
+      className="grid content-start gap-4 p-4 md:grid-cols-2"
     >
       <label className="grid content-start gap-1.5">
         <span className="font-pixel-label text-[11px] uppercase">Work at</span>
         <select
           className={select}
-          value={ctx.work.id}
+          value={ctx.work?.id ?? ""}
           onChange={(e) => onWork(e.target.value)}
         >
+          {ctx.work ? null : (
+            <option value="" disabled>
+              Pick where you work
+            </option>
+          )}
           {anchorOptions.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
@@ -289,7 +418,9 @@ function SetupBar({
             ? `You told Uncle "${ctx.workLabel}"`
             : ctx.workSource === "picked"
               ? "Picked here"
-              : "Default, until you tell Uncle"}
+              : ctx.workUnmapped
+                ? `"${ctx.workUnmapped}" isn't on our map: pick the closest`
+                : "Not told Uncle yet: no commute rows until you pick"}
           {ctx.partner ? `. Partner: ${ctx.partner.name}` : ""}
         </span>
       </label>
@@ -300,9 +431,14 @@ function SetupBar({
         </span>
         <select
           className={select}
-          value={ctx.officeDays}
+          value={ctx.officeDays ?? ""}
           onChange={(e) => onOfficeDays(Number(e.target.value))}
         >
+          {ctx.officeDays === null ? (
+            <option value="" disabled>
+              Pick
+            </option>
+          ) : null}
           {[0, 1, 2, 3, 4, 5, 6].map((n) => (
             <option key={n} value={n}>
               {n} a week
@@ -337,7 +473,7 @@ function SetupBar({
             ? "As you told Uncle"
             : ctx.modeSource === "picked"
               ? "Picked here"
-              : "Default"}
+              : "Not told Uncle yet"}
         </span>
       </div>
 
@@ -360,7 +496,7 @@ function SetupBar({
         <span
           className={cn(
             "text-xs",
-            m.source === "sample" ? "font-semibold text-ink" : "text-ink-soft",
+            m.source === "missing" ? "font-semibold text-ink" : "text-ink-soft",
           )}
         >
           {moneyText}
@@ -388,22 +524,26 @@ function NeedTwo({
   ids: string[];
   onAdd: (id: string) => void;
 }) {
+  const inRing = ids.map((id) => unitById[id]?.name).filter(Boolean);
   return (
-    <PixPanel className="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_20rem] sm:items-center">
-      <div className="grid gap-1">
+    <PixPanel className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_20rem] sm:items-center">
+      <div className="grid gap-2">
         <h2 className="font-pixel text-2xl leading-tight">
-          A battle needs two homes
+          Pick at least {BATTLE_MIN} homes to battle
         </h2>
         <p className="text-ink-soft">
-          {ids.length === 1 ? "One home is in the ring. " : ""}Add another to
-          see who wins, or go swipe and like a few.
+          {inRing.length
+            ? `Only ${inRing.join(", ")} is in the ring. `
+            : "The ring is empty. "}
+          Like a few homes on the swipe deck and they line up here, or add one
+          you already know.
         </p>
-        <Link
-          href="/swipe"
-          className="w-fit text-sm font-semibold underline decoration-2 underline-offset-4"
-        >
-          Go to the swipe deck
-        </Link>
+        <PixButton asChild tone="kaya" className="w-fit">
+          <Link href="/swipe">
+            <Sprite art="heart" scale={2} />
+            Go to the swipe deck
+          </Link>
+        </PixButton>
       </div>
       <UnitSelect
         taken={ids}

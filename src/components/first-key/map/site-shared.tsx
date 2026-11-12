@@ -12,6 +12,18 @@ import type { ThemeColors } from "../use-theme-colors";
 export const SITE_MIN_ZOOM = 14.5;
 
 const M_LAT = 110_574;
+
+/** Where to look for a site: centre of its spawned buildings and the zoom that fits them (clamped so they are always drawn, SITE_MIN_ZOOM..16.5). */
+export function siteFit(site: string, freePx: number): { center: [number, number]; zoom: number } | null {
+  const bs = siteLayout.buildings.filter((b) => b.site === site);
+  if (!bs.length) return null;
+  const lngs = bs.map((b) => b.lng), lats = bs.map((b) => b.lat);
+  const [w, e, s, n] = [Math.min(...lngs), Math.max(...lngs), Math.min(...lats), Math.max(...lats)];
+  const lat = (s + n) / 2;
+  const spanM = Math.max(120, (e - w) * 111_320 * Math.cos((lat * Math.PI) / 180), (n - s) * M_LAT);
+  const zoom = Math.log2((freePx * 0.8 * 78_271.5 * Math.cos((lat * Math.PI) / 180)) / spanM);
+  return { center: [(w + e) / 2, lat], zoom: Math.min(16.5, Math.max(SITE_MIN_ZOOM + 0.1, zoom)) };
+}
 /** The model's w axis points east (bearing 90) at model-rotation 0: MODEL_W_BEARING in tower/variants.ts (not imported, it pulls in three). */
 export const W_BEARING = 90;
 

@@ -22,7 +22,7 @@ import { EnclaveSwitch } from "./enclave-switch";
 import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
 import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
-import { SITE_MIN_ZOOM, SiteChip, siteFootprints, siteLabels, typeFill, useZoomGate } from "./site-shared";
+import { SITE_MIN_ZOOM, SiteChip, siteFit, siteFootprints, siteLabels, typeFill, useZoomGate } from "./site-shared";
 
 // Turbopack can't resolve MapLibre's module worker next to the bundle, so it is served from /public (a copy of
 // node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs; re-copy it if MapLibre is upgraded). The only worker setup in the app.
@@ -85,7 +85,9 @@ const klangView = () => {
 const devView = (id: string) => {
   const t = townshipById[id];
   if (id === COVE_ID) return townshipView();
-  return { center: [t.pos.lng, t.pos.lat] as [number, number], zoom: 14.6, pitch: 50, bearing: 0, padding: cameraPadding(true) };
+  const padding = cameraPadding(true);
+  const fit = siteFit(id, Math.max(200, Math.min(window.innerWidth - padding.left - padding.right, window.innerHeight - padding.top - padding.bottom)));
+  return { center: fit?.center ?? ([t.pos.lng, t.pos.lat] as [number, number]), zoom: fit?.zoom ?? 14.6, pitch: 50, bearing: 0, padding };
 };
 
 // the landed enclave's terrace rows, pairs and bungalows are selectable by their group id too

@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
+import { baguaCells, ongScore, readFengShui, type Note } from "./fengshui";
+import { FengShuiPanel } from "./fengshui-panel";
 import { FurniturePanel } from "./furniture-panel";
 import { describe, moveBy, moveTo, place, remove, rotate, type Result } from "./layout-ops";
 import { PlanCanvas } from "./plan-canvas";
@@ -44,6 +46,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [items, setItems] = useState<Item[]>(() => defaultItems(planId));
   const [selected, setSelected] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [showBagua, setShowBagua] = useState(false);
 
   // The server renders the default layout; the buyer's saved one loads after hydration.
   useEffect(() => {
@@ -178,9 +181,39 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const tag = heatTag[livingHeat.level];
   const sunnyHours = strip.filter((s) => s.share >= 0.05).length / 2;
 
+  const notes = useMemo(
+    () =>
+      readFengShui({
+        plan,
+        items,
+        facing,
+        livingSunHours: sunnyHours,
+        livingCurtains: curtains.has(living.id),
+      }),
+    [plan, items, facing, sunnyHours, curtains, living.id],
+  );
+  const score = ongScore(notes);
+  const floorNotes = useMemo(() => notes.filter((n) => n.floor === floor.id), [notes, floor.id]);
+  const flagged = useMemo(
+    () => new Set(floorNotes.filter((n) => n.tone !== "good").flatMap((n) => n.uids)),
+    [floorNotes],
+  );
+  const strips = useMemo(
+    () => floorNotes.flatMap((n) => (n.strip && n.tone === "fix" ? [n.strip] : [])),
+    [floorNotes],
+  );
+  const bagua = useMemo(() => (showBagua ? baguaCells(floor, facing) : null), [showBagua, floor, facing]);
+
+  const pickNote = (n: Note) => {
+    const idx = plan.floors.findIndex((f) => f.id === n.floor);
+    if (idx >= 0 && idx !== floorIdx) setFloorIdx(idx);
+    setSelected(n.uids[0] ?? null);
+    document.getElementById("fs-plan")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <PixPanel className="grid min-w-0 gap-3 p-3 sm:p-4">
+      <PixPanel id="fs-plan" className="grid min-w-0 scroll-mt-4 gap-3 p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-2" role="tablist" aria-label="Floor">
             {plan.floors.map((f, i) => (
@@ -213,6 +246,9 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           onSelect={setSelected}
           onDrag={dragTo}
           onKeyDown={onPlanKey}
+          bagua={bagua}
+          flagged={flagged}
+          strips={strips}
           className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
         />
 
@@ -233,6 +269,16 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       </PixPanel>
 
       <div className="grid min-w-0 gap-4">
+        <FengShuiPanel
+          notes={notes}
+          score={score}
+          floorLabel={(id) => plan.floors.find((f) => f.id === id)?.label ?? id}
+          currentFloor={floor.id}
+          showBagua={showBagua}
+          onToggleBagua={() => setShowBagua((v) => !v)}
+          onPick={pickNote}
+        />
+
         <PixPanel className="grid gap-4 p-4">
           <fieldset className="grid gap-2">
             <legend className="mb-2 text-sm font-semibold">

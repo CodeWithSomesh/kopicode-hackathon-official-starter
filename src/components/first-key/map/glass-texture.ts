@@ -18,7 +18,8 @@ const noise = (x: number, y: number) => {
   return n - Math.floor(n);
 };
 
-export function drawGlassTexture(colors: ThemeColors, dark: boolean): ImageData {
+/** `lit` (0..1) is how much of the night-time window glow is on: 0 = all dark panes, 1 = full. Light variant ignores it. */
+export function drawGlassTexture(colors: ThemeColors, dark: boolean, lit = 1): ImageData {
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = SIZE;
   const ctx = canvas.getContext("2d")!;
@@ -33,8 +34,8 @@ export function drawGlassTexture(colors: ThemeColors, dark: boolean): ImageData 
   for (let r = 0; r < CELLS; r++) {
     for (let c = 0; c < CELLS; c++) {
       const n = noise(c, r);
-      const lit = dark && n > 0.86;
-      ctx.fillStyle = lit ? mix(colors.primary, colors.foreground, 0.25) : tones[Math.floor(n * tones.length) % tones.length];
+      const isLit = dark && n > 1 - 0.22 * lit; // windows come on in a fixed random order as `lit` rises
+      ctx.fillStyle = isLit ? mix(colors.primary, colors.foreground, 0.25) : tones[Math.floor(n * tones.length) % tones.length];
       // 2px mullions either side, a thicker spandrel band under every fourth floor
       const spandrel = r % 4 === 3 ? 4 : 2;
       ctx.fillRect(c * CELL + 2, r * CELL + 2, CELL - 3, CELL - spandrel - 1);

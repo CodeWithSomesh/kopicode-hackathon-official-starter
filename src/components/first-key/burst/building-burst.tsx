@@ -59,7 +59,7 @@ export function BuildingBurst({ building, selectedUnitId, onSelectUnit, active }
       >
         <Canvas
           orthographic
-          dpr={[1, 2]}
+          dpr={[1, 1.5]}
           frameloop={active ? "always" : "demand"}
           camera={{ position: [40, 34, 40], near: -500, far: 500 }}
           gl={{ localClippingEnabled: true, antialias: true }}

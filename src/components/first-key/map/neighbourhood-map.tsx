@@ -5,8 +5,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Map, { Marker, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
 import { addProtocol, setWorkerUrl, type LayerSpecification, type StyleSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
+import { gsap } from "gsap";
 import { layers as basemapLayers, namedFlavor } from "@protomaps/basemaps";
-import { useTheme } from "next-themes";
 import { Coffee, GraduationCap, HeartPulse, Landmark, ShoppingBasket, TrainFront, Trees, type LucideIcon } from "lucide-react";
 import { township } from "@/lib/first-key/township";
 import { bearingDeg, centroid, compassOf, distanceM, walkingMinutes } from "@/lib/first-key/geo";
@@ -20,6 +20,7 @@ setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url)
 
 const PMTILES_URL = process.env.NEXT_PUBLIC_PMTILES_URL; // our own basemap file; unset = plain background
 let registered = false;
+const NIGHT_STEPS = 5;
 
 // The opening shot fits the 12 buildings to 70% of the screen width (any screen size), not a fixed zoom.
 const LNGS = township.buildings.flatMap((b) => b.footprint.map((p) => p[0]));
@@ -27,7 +28,6 @@ const SPAN_M = (Math.max(...LNGS) - Math.min(...LNGS)) * 111_320 * Math.cos((tow
 const M_PER_PX_Z0 = 78_271.5 * Math.cos((township.center[1] * Math.PI) / 180); // MapLibre 512px tiles
 const overviewZoom = () => Math.log2((window.innerWidth * 0.7 * M_PER_PX_Z0) / SPAN_M);
 const overview = () => ({ center: township.center as [number, number], zoom: overviewZoom(), pitch: 52, bearing: 0 });
-const DARK_THEMES = ["dark", "kopi-o"];
 const ICONS: Record<PlaceKind, LucideIcon> = {
   school: GraduationCap,
   clinic: HeartPulse,
@@ -68,6 +68,8 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   const wrap = useRef<HTMLDivElement>(null);
   const stopped = useRef(false); // user has touched the map: no more auto-rotation
   const [loaded, setLoaded] = useState(false);
+  // Cap the device pixel ratio: the demo laptop / projector draws about 600 extrusions.
+  const [pixelRatio] = useState(() => Math.min(window.devicePixelRatio, 1.5));
   // The pmtiles:// protocol is registered once per page; the style only points at the file after that.
   const [protocolReady, setProtocolReady] = useState(false);
   useEffect(() => {
@@ -85,14 +87,17 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   });
   const reduced = usePrefersReducedMotion();
   const colors = useThemeColors();
-  const { resolvedTheme } = useTheme();
-  const dark = DARK_THEMES.includes(resolvedTheme ?? "");
-  // Mount the map only once the theme is known and the protocol is registered: one style set, no rebuild that
-  // aborts in-flight tile requests (those logged "Failed to fetch" at load).
-  const ready = resolvedTheme !== undefined && (!PMTILES_URL || protocolReady);
+  // Dark = the theme's background is dark: works for any theme (Kopi O, Teh Susu...) and for a class flip.
+  const dark = (colors.background.match(/\d+/g) ?? ["255"]).slice(0, 3).reduce((t, v) => t + Number(v), 0) / 3 < 128;
+  // Mount the map only once the PMTiles protocol is registered: one style set at load.
+  const ready = !PMTILES_URL || protocolReady;
 
-  // the id carries the colours, so any theme (Kopi O, Teh Susu...) gets its own texture
-  const glassId = `glass-${dark ? "d" : "l"}-${colors["chart-3"]}-${colors.background}-${colors.primary}-${colors.foreground}`;
+  // Night reveal: when the theme flips light to dark while open, `lit` runs 0..NIGHT_STEPS and the windows come on.
+  const [lit, setLit] = useState(NIGHT_STEPS);
+  // the id carries the colours (so any theme gets its own texture) and, in dark, the night-reveal step
+  const idFor = (step: number) =>
+    `glass-${dark ? "d" : "l"}-${colors["chart-3"]}-${colors.background}-${colors.primary}-${colors.foreground}${dark ? `-L${step}` : ""}`;
+  const glassId = idFor(lit);
   // Protomaps layers for the theme, with its flat `buildings` fill swapped for soft, plain extrusions: the real
   // neighbourhood stands up quietly around ours (the township is the only textured thing). Height from the data, else 6 m.
   const basemap = useMemo<LayerSpecification[]>(
@@ -175,12 +180,18 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   );
 
   // Draw the window texture for the current theme. MapLibre may ask before or after this runs, so register it now,
-  // on every style change, and when the style asks for it by name (the id changes with the theme).
+  // on every style change, and when the style asks for it by name. In dark all night-reveal frames are drawn up
+  // front (tiny canvases), so swapping frames never shows a building without its texture.
   useEffect(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
     const ensure = () => {
-      if (!map.hasImage(glassId)) map.addImage(glassId, drawGlassTexture(colors, dark), { pixelRatio: window.innerWidth < 640 ? 3.5 : 2 });
+      for (const step of dark ? Array.from({ length: NIGHT_STEPS + 1 }, (_, i) => i) : [0]) {
+        const id = idFor(step);
+        if (!map.hasImage(id)) {
+          map.addImage(id, drawGlassTexture(colors, dark, step / NIGHT_STEPS), { pixelRatio: window.innerWidth < 640 ? 3.5 : 2 });
+        }
+      }
     };
     ensure();
     map.on("styledata", ensure);
@@ -189,7 +200,27 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
       map.off("styledata", ensure);
       map.off("styleimagemissing", ensure);
     };
-  }, [colors, dark, glassId, loaded, ready]);
+    // idFor is derived from colors and dark
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colors, dark, loaded, ready]);
+
+  // Light to dark while /find is open: the windows come on over about 1.2 s. Dark to light, first load and
+  // reduced motion all just switch.
+  const wasDark = useRef(dark);
+  useEffect(() => {
+    const was = wasDark.current;
+    wasDark.current = dark;
+    if (!dark || was || !loaded || reduced) return;
+    const ctx = gsap.context(() => {
+      const t = { v: 0 };
+      setLit(0);
+      gsap.to(t, { v: NIGHT_STEPS, duration: 1.2, ease: "none", onUpdate: () => setLit(Math.round(t.v)) });
+    });
+    return () => {
+      ctx.revert();
+      setLit(NIGHT_STEPS);
+    };
+  }, [dark, loaded, reduced]);
 
   const flyTo = (id: string, then?: () => void) => {
     const map = mapRef.current?.getMap();
@@ -266,16 +297,18 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
       {ready && (
       <Map
         ref={mapRef}
+        pixelRatio={pixelRatio}
         initialViewState={initialView}
         mapStyle={style}
         maxPitch={70}
         interactiveLayerIds={["township-buildings", "township-selected"]}
         cursor="auto"
         onError={(e) => {
-          // A tile request dropped mid-flight (the view moved on) surfaces as "Failed to fetch" from the PMTiles source:
-          // a warning, not an error. Anything else is logged as before.
-          const tileDrop = e.error?.message === "Failed to fetch" && (e as unknown as { sourceId?: string }).sourceId === "protomaps";
-          (tileDrop ? console.warn : console.error)(e.error);
+          // Only a request that was really aborted (the view moved on) is quiet. Everything else stays loud, most of
+          // all a failed fetch of the PMTiles file (wrong URL, CORS on a cross-origin host).
+          const err = e.error as (Error & { name?: string }) | undefined;
+          const aborted = err?.name === "AbortError" || /abort/i.test(err?.message ?? "");
+          (aborted ? console.warn : console.error)(err);
         }}
         onClick={onClick}
         onLoad={() => setLoaded(true)}

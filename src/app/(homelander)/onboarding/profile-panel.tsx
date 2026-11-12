@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/homelander/i18n/client";
 import { PixPanel } from "@/components/homelander/pixel";
 import {
   essentials,
@@ -13,6 +14,9 @@ import {
 import { homelander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 
+/** i18n marker: the scanner (npm run i18n:check) sees tr(text) literals; the render sites below call t(value). */
+const tr = (s: string) => s;
+
 type Option = { value: string; label: string };
 type Field =
   | { key: ProfileKey; label: string; kind: "choice"; options: Option[] }
@@ -24,99 +28,99 @@ type Field =
 
 const sections: { title: string; fields: Field[]; show?: (p: Profile) => boolean }[] = [
   {
-    title: "Household",
+    title: tr("Household"),
     fields: [
       {
         key: "livingWith",
-        label: "Living with",
+        label: tr("Living with"),
         kind: "choice",
         options: [
-          { value: "alone", label: "Alone" },
-          { value: "partner", label: "Partner" },
-          { value: "partner_kids", label: "Partner + kids" },
-          { value: "parents", label: "Parents" },
-          { value: "friends", label: "Friends" },
-          { value: "other", label: "Other" },
+          { value: "alone", label: tr("Alone") },
+          { value: "partner", label: tr("Partner") },
+          { value: "partner_kids", label: tr("Partner + kids") },
+          { value: "parents", label: tr("Parents") },
+          { value: "friends", label: tr("Friends") },
+          { value: "other", label: tr("Other") },
         ],
       },
-      { key: "householdSize", label: "People in the home", kind: "number", hint: "You included" },
-      { key: "parentsMovingIn", label: "Parents moving in", kind: "yesno" },
-      { key: "pets", label: "Pets", kind: "yesno" },
+      { key: "householdSize", label: tr("People in the home"), kind: "number", hint: tr("You included") },
+      { key: "parentsMovingIn", label: tr("Parents moving in"), kind: "yesno" },
+      { key: "pets", label: tr("Pets"), kind: "yesno" },
     ],
   },
   {
-    title: "What worries you",
+    title: tr("What worries you"),
     fields: [
-      { key: "painPoints", label: "Worries", kind: "worries" },
-      { key: "worryNote", label: "In your words", kind: "text", placeholder: "Optional" },
+      { key: "painPoints", label: tr("Worries"), kind: "worries" },
+      { key: "worryNote", label: tr("In your words"), kind: "text", placeholder: tr("Optional") },
     ],
   },
   {
-    title: "Work and places",
+    title: tr("Work and places"),
     fields: [
-      { key: "workArea", label: "Work is in", kind: "text", placeholder: "e.g. Bangsar South" },
-      { key: "officeDays", label: "Office days a week", kind: "number" },
-      { key: "partnerWorkArea", label: "Partner works in", kind: "text", placeholder: "Optional" },
+      { key: "workArea", label: tr("Work is in"), kind: "text", placeholder: tr("e.g. Bangsar South") },
+      { key: "officeDays", label: tr("Office days a week"), kind: "number" },
+      { key: "partnerWorkArea", label: tr("Partner works in"), kind: "text", placeholder: tr("Optional") },
       {
         key: "commuteMode",
-        label: "Gets around by",
+        label: tr("Gets around by"),
         kind: "choice",
         options: [
-          { value: "car", label: "Car" },
-          { value: "train", label: "Train" },
-          { value: "mixed", label: "Both" },
+          { value: "car", label: tr("Car") },
+          { value: "train", label: tr("Train") },
+          { value: "mixed", label: tr("Both") },
         ],
       },
-      { key: "preferredAreas", label: "Areas you like", kind: "tags", placeholder: "Kajang, Shah Alam" },
-      { key: "mustBeNear", label: "Must be near", kind: "tags", placeholder: "MRT, my parents" },
+      { key: "preferredAreas", label: tr("Areas you like"), kind: "tags", placeholder: tr("Kajang, Shah Alam") },
+      { key: "mustBeNear", label: tr("Must be near"), kind: "tags", placeholder: tr("MRT, my parents") },
     ],
   },
   {
-    title: "The home",
+    title: tr("The home"),
     fields: [
       {
         key: "homeType",
-        label: "Type",
+        label: tr("Type"),
         kind: "choice",
         options: [
-          { value: "landed", label: "Landed" },
-          { value: "high_rise", label: "High-rise" },
-          { value: "either", label: "Either" },
+          { value: "landed", label: tr("Landed") },
+          { value: "high_rise", label: tr("High-rise") },
+          { value: "either", label: tr("Either") },
         ],
       },
-      { key: "minBedrooms", label: "Bedrooms at least", kind: "number" },
-      { key: "mustHaves", label: "Must-haves", kind: "tags", placeholder: "Gated, park" },
-      { key: "dealBreakers", label: "Deal-breakers", kind: "tags", placeholder: "Leasehold" },
+      { key: "minBedrooms", label: tr("Bedrooms at least"), kind: "number" },
+      { key: "mustHaves", label: tr("Must-haves"), kind: "tags", placeholder: tr("Gated, park") },
+      { key: "dealBreakers", label: tr("Deal-breakers"), kind: "tags", placeholder: tr("Leasehold") },
       {
         key: "buyWithin",
-        label: "Buying within",
+        label: tr("Buying within"),
         kind: "choice",
         options: [
-          { value: "3m", label: "3 months" },
-          { value: "6m", label: "6 months" },
-          { value: "1y", label: "A year" },
-          { value: "2y_plus", label: "2 years+" },
+          { value: "3m", label: tr("3 months") },
+          { value: "6m", label: tr("6 months") },
+          { value: "1y", label: tr("A year") },
+          { value: "2y_plus", label: tr("2 years+") },
         ],
       },
-      { key: "underConstructionOk", label: "Can wait for a new build", kind: "yesno" },
+      { key: "underConstructionOk", label: tr("Can wait for a new build"), kind: "yesno" },
     ],
   },
   {
-    title: "Money",
+    title: tr("Money"),
     fields: [
-      { key: "grossRM", label: "Gross salary", kind: "number", prefix: "RM", suffix: "/mo" },
-      { key: "takeHomeRM", label: "Take-home", kind: "number", prefix: "RM", suffix: "/mo", hint: "Optional, we can estimate it" },
-      { key: "otherIncomeRM", label: "Other income", kind: "number", prefix: "RM", suffix: "/mo" },
-      { key: "joint", label: "Buying with someone", kind: "yesno" },
-      { key: "jointGrossRM", label: "Their gross salary", kind: "number", prefix: "RM", suffix: "/mo" },
-      { key: "carRM", label: "Car loan", kind: "number", prefix: "RM", suffix: "/mo" },
-      { key: "ptptnRM", label: "PTPTN", kind: "number", prefix: "RM", suffix: "/mo" },
-      { key: "personalRM", label: "Personal loan", kind: "number", prefix: "RM", suffix: "/mo" },
-      { key: "housingRM", label: "Other home loan", kind: "number", prefix: "RM", suffix: "/mo" },
-      { key: "cardBalanceRM", label: "Credit card balance", kind: "number", prefix: "RM" },
-      { key: "savingsRM", label: "Savings for down payment", kind: "number", prefix: "RM" },
-      { key: "firstHome", label: "First home", kind: "yesno" },
-      { key: "age", label: "Age", kind: "number" },
+      { key: "grossRM", label: tr("Gross salary"), kind: "number", prefix: "RM", suffix: "/mo" },
+      { key: "takeHomeRM", label: tr("Take-home"), kind: "number", prefix: "RM", suffix: "/mo", hint: tr("Optional, we can estimate it") },
+      { key: "otherIncomeRM", label: tr("Other income"), kind: "number", prefix: "RM", suffix: "/mo" },
+      { key: "joint", label: tr("Buying with someone"), kind: "yesno" },
+      { key: "jointGrossRM", label: tr("Their gross salary"), kind: "number", prefix: "RM", suffix: "/mo" },
+      { key: "carRM", label: tr("Car loan"), kind: "number", prefix: "RM", suffix: "/mo" },
+      { key: "ptptnRM", label: tr("PTPTN"), kind: "number", prefix: "RM", suffix: "/mo" },
+      { key: "personalRM", label: tr("Personal loan"), kind: "number", prefix: "RM", suffix: "/mo" },
+      { key: "housingRM", label: tr("Other home loan"), kind: "number", prefix: "RM", suffix: "/mo" },
+      { key: "cardBalanceRM", label: tr("Credit card balance"), kind: "number", prefix: "RM" },
+      { key: "savingsRM", label: tr("Savings for down payment"), kind: "number", prefix: "RM" },
+      { key: "firstHome", label: tr("First home"), kind: "yesno" },
+      { key: "age", label: tr("Age"), kind: "number" },
     ],
   },
 ];
@@ -134,6 +138,7 @@ export function ProfilePanel({
   fresh: Set<ProfileKey>;
   onDone: () => void;
 }) {
+  const t = useT();
   const missing = missingEssentials(profile);
   const needed = essentials.filter((e) => (e.when ? e.when(profile) : true));
   const done = needed.length - missing.length;
@@ -142,15 +147,15 @@ export function ProfilePanel({
     <PixPanel className="flex flex-col lg:max-h-[calc(100svh-7.5rem)]">
       <div className="grid gap-2 border-b-2 border-ink/10 p-4">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-pixel text-xl font-bold">What Mochi knows</h2>
+          <h2 className="font-pixel text-xl font-bold">{t("What Mochi knows")}</h2>
           <span className="text-sm text-ink-soft tabular-nums">
-            {done} of {needed.length}
+            {t("{done} of {total}", { done, total: needed.length })}
           </span>
         </div>
         <div className="h-2.5 overflow-hidden rounded-full bg-cloud" aria-hidden>
           <div className="h-full bg-pandan transition-[width] duration-500" style={{ width: `${(done / needed.length) * 100}%` }} />
         </div>
-        <p className="text-xs text-ink-soft">Mochi fills this in as you talk. Tap any answer to fix it.</p>
+        <p className="text-xs text-ink-soft">{t("Mochi fills this in as you talk. Tap any answer to fix it.")}</p>
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 pb-4">
@@ -159,7 +164,7 @@ export function ProfilePanel({
         .filter((s) => (s.show ? s.show(profile) : true))
         .map((s) => (
           <fieldset key={s.title} className="grid gap-2.5 pt-3">
-            <legend className="font-pixel-label text-[11px] text-ink-soft uppercase">{s.title}</legend>
+            <legend className="font-pixel-label text-[11px] text-ink-soft uppercase">{t(s.title)}</legend>
             {s.fields.map((f) =>
               f.kind === "worries" ? (
                 <Worries key={f.key} profile={profile} fresh={fresh.has("painPoints") || fresh.has("topWorry")} />
@@ -174,11 +179,11 @@ export function ProfilePanel({
       <div className="grid gap-2 border-t-2 border-ink/10 p-4">
         {missing.length ? (
           <p className="text-xs text-ink-soft">
-            Mochi still needs {missing.length}: {missing.slice(0, 3).map((m) => m.label.toLowerCase()).join(", ")}
+            {t("Mochi still needs {n}:", { n: missing.length })} {missing.slice(0, 3).map((m) => t(m.label).toLowerCase()).join(", ")}
             {missing.length > 3 ? "…" : "."}
           </p>
         ) : (
-          <p className="text-sm font-medium text-pandan-deep">Mochi has everything it needs. Thank you!</p>
+          <p className="text-sm font-medium text-pandan-deep">{t("Mochi has everything it needs. Thank you!")}</p>
         )}
         <button
           type="button"
@@ -186,7 +191,7 @@ export function ProfilePanel({
           className={cn("pix-btn min-h-11 px-4 text-base", missing.length ? "text-ink" : "text-white")}
           style={{ "--pix-fill": missing.length ? "var(--j-surface, #fff)" : "var(--color-pandan-deep)" } as React.CSSProperties}
         >
-          {missing.length ? "Continue with what I have" : "See my homes"}
+          {missing.length ? t("Continue with what I have") : t("See my homes")}
         </button>
       </div>
     </PixPanel>
@@ -194,6 +199,7 @@ export function ProfilePanel({
 }
 
 function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fresh: boolean }) {
+  const t = useT();
   if (f.kind === "worries") return null;
   const value = profile[f.key];
   const id = `pf-${f.key}`;
@@ -207,24 +213,24 @@ function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fre
       )}
     >
       <label htmlFor={id} className="text-sm text-ink-soft">
-        {f.label}
+        {t(f.label)}
       </label>
       <div className="min-w-0">
         {f.kind === "choice" ? (
-          <div id={id} role="radiogroup" aria-label={f.label} className="flex flex-wrap gap-1.5">
+          <div id={id} role="radiogroup" aria-label={t(f.label)} className="flex flex-wrap gap-1.5">
             {f.options.map((o) => (
               <Pill key={o.value} on={value === o.value} onClick={() => set(value === o.value ? undefined : (o.value as never))}>
-                {o.label}
+                {t(o.label)}
               </Pill>
             ))}
           </div>
         ) : f.kind === "yesno" ? (
-          <div id={id} role="radiogroup" aria-label={f.label} className="flex gap-1.5">
+          <div id={id} role="radiogroup" aria-label={t(f.label)} className="flex gap-1.5">
             <Pill on={value === true} onClick={() => set(value === true ? undefined : (true as never))}>
-              Yes
+              {t("Yes")}
             </Pill>
             <Pill on={value === false} onClick={() => set(value === false ? undefined : (false as never))}>
-              No
+              {t("No")}
             </Pill>
           </div>
         ) : f.kind === "number" ? (
@@ -235,7 +241,7 @@ function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fre
               key={String(value ?? "")}
               inputMode="numeric"
               defaultValue={typeof value === "number" ? value.toLocaleString("en-MY") : ""}
-              placeholder={f.hint ?? ""}
+              placeholder={f.hint ? t(f.hint) : ""}
               onBlur={(e) => {
                 const n = Number(e.target.value.replace(/[^\d.]/g, ""));
                 set(e.target.value.trim() === "" || Number.isNaN(n) ? undefined : (n as never));
@@ -249,7 +255,7 @@ function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fre
             id={id}
             key={String(value ?? "")}
             defaultValue={typeof value === "string" ? value : ""}
-            placeholder={f.placeholder}
+            placeholder={f.placeholder ? t(f.placeholder) : undefined}
             onBlur={(e) => set(e.target.value.trim() ? (e.target.value.trim() as never) : undefined)}
             className={inputCls}
           />
@@ -258,11 +264,11 @@ function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fre
             id={id}
             key={Array.isArray(value) ? value.join("|") : ""}
             defaultValue={Array.isArray(value) ? value.join(", ") : ""}
-            placeholder={f.placeholder}
+            placeholder={f.placeholder ? t(f.placeholder) : undefined}
             onBlur={(e) => {
               const tags = e.target.value
                 .split(",")
-                .map((t) => t.trim())
+                .map((x) => x.trim())
                 .filter(Boolean);
               set(tags.length ? (tags as never) : undefined);
             }}
@@ -279,6 +285,7 @@ function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fre
  * (the first worry picked becomes the biggest until the buyer moves the star).
  */
 function Worries({ profile, fresh }: { profile: Profile; fresh: boolean }) {
+  const t = useT();
   const picked = profile.painPoints ?? [];
   const top = profile.topWorry;
   const toggle = (w: PainPoint) => {
@@ -295,8 +302,8 @@ function Worries({ profile, fresh }: { profile: Profile; fresh: boolean }) {
 
   return (
     <div className={cn("grid gap-2 rounded-lg px-1.5 py-1 transition-colors duration-700", fresh && "bg-kaya/35")}>
-      <p className="text-sm text-ink-soft">Tap all that worry you. Star the biggest.</p>
-      <ul className="flex flex-wrap gap-1.5" aria-label="Worries about buying a home">
+      <p className="text-sm text-ink-soft">{t("Tap all that worry you. Star the biggest.")}</p>
+      <ul className="flex flex-wrap gap-1.5" aria-label={t("Worries about buying a home")}>
         {painPoints.map((w) => {
           const on = picked.includes(w);
           const isTop = top === w;
@@ -311,13 +318,13 @@ function Worries({ profile, fresh }: { profile: Profile; fresh: boolean }) {
                   on ? "rounded-l-full border-pandan-deep bg-pandan-deep text-white" : "rounded-full border-ink/25 text-ink hover:border-ink/60",
                 )}
               >
-                {painPointLabel[w]}
+                {t(painPointLabel[w])}
               </button>
               {on ? (
                 <button
                   type="button"
                   aria-pressed={isTop}
-                  aria-label={isTop ? `${painPointLabel[w]} is your biggest worry` : `Make ${painPointLabel[w]} your biggest worry`}
+                  aria-label={isTop ? t("{label} is your biggest worry", { label: t(painPointLabel[w]) }) : t("Make {label} your biggest worry", { label: t(painPointLabel[w]) })}
                   onClick={() => star(w)}
                   className={cn(
                     "rounded-r-full border-[1.5px] border-l-0 border-pandan-deep px-2 text-xs transition-colors",

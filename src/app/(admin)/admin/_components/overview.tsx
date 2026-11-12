@@ -3,6 +3,7 @@
 import { Area, AreaChart, CartesianGrid, Legend, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { num, pct, rmCompact, type Kpi, type trend } from "@/lib/homelander/admin-metrics";
 import { Card } from "@/components/ui/card";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { axis, ChartFigure, Delta, legend, Section, tooltip } from "./kit";
 
@@ -60,13 +61,14 @@ export function KpiRow({ items, days }: { items: Kpi[]; days: number }) {
 }
 
 export function TrendChart({ rows, days }: { rows: ReturnType<typeof trend>; days: number }) {
+  const t = useT();
   const totalV = rows.reduce((a, r) => a + r.visitors, 0);
   const totalL = rows.reduce((a, r) => a + r.leads, 0);
   return (
     <Section
       id="trend"
       title="Traffic and leads over time"
-      purpose={`Visitors, completed onboardings and leads per ${days === 90 ? "week" : "day"}: spot campaign spikes and whether leads keep up with traffic.`}
+      purpose={t("Visitors, completed onboardings and leads per {unit}: spot campaign spikes and whether leads keep up with traffic.", { unit: days === 90 ? t("week") : t("day") })}
       audience="marketing and management"
     >
       <ChartFigure

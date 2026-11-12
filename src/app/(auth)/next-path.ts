@@ -27,13 +27,16 @@ export function safeNext(value: unknown): string {
 }
 
 /** Error codes the callback puts on /login?error=…, turned into plain words (never echo raw query text). */
+/** i18n marker: the auth card calls t() on these at render. */
+const tr = (s: string) => s;
+
 export const AUTH_ERRORS: Record<string, string> = {
-  link: "That sign-in link didn't work, or it has expired. Try logging in again, or ask for a new link by signing up.",
-  google: "Google sign-in didn't finish. Try again, or use your email and password below.",
-  cancelled: "Google sign-in was cancelled. Pick an option below when you're ready.",
+  link: tr("That sign-in link didn't work, or it has expired. Try logging in again, or ask for a new link by signing up."),
+  google: tr("Google sign-in didn't finish. Try again, or use your email and password below."),
+  cancelled: tr("Google sign-in was cancelled. Pick an option below when you're ready."),
 };
 
 export function authErrorText(code: unknown): string | null {
   if (typeof code !== "string" || !code) return null;
-  return AUTH_ERRORS[code] ?? "Something went wrong while signing you in. Please try again.";
+  return AUTH_ERRORS[code] ?? tr("Something went wrong while signing you in. Please try again.");
 }

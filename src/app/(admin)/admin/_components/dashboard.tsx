@@ -20,6 +20,7 @@ import {
   type RangeDays,
 } from "@/lib/homelander/admin-metrics";
 import { buyerTypes, regions, sampleSessions, SAMPLE_END_MS, DAY_MS, type BuyerType } from "@/lib/homelander/demand";
+import { useT } from "@/lib/homelander/i18n/client";
 import { useHomeLander } from "@/lib/homelander/store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,7 @@ const dateFmt = new Intl.DateTimeFormat("en-MY", { day: "numeric", month: "short
 const timeFmt = new Intl.DateTimeFormat("en-MY", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Kuala_Lumpur" });
 
 export function Dashboard() {
+  const t = useT();
   const [filters, setFilters] = useState<Filters>({ days: 30, region: "all", buyerType: "all", showSample: true });
   const store = useHomeLander();
   // Rendered in the browser only (see dashboard-loader), so reading the clock here is safe.
@@ -83,32 +85,32 @@ export function Dashboard() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="grid gap-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">Buyer insights</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">{t("Buyer insights")}</h1>
               {filters.showSample ? (
                 <Badge variant="warning" className="gap-1">
                   <DatabaseIcon aria-hidden />
-                  Sample data
+                  {t("Sample data")}
                 </Badge>
               ) : null}
               {live.length ? <LiveBadge /> : null}
             </div>
             <p className="max-w-3xl text-sm text-muted-foreground">
-              What HomeLander buyers want, can afford and pass on, so Gamuda Land can decide where to build, how to price and who to call.
+              {t("What HomeLander buyers want, can afford and pass on, so Gamuda Land can decide where to build, how to price and who to call.")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {from} – {to} · Updated {timeFmt.format(new Date(now))} ·{" "}
-              {filters.showSample ? `${d.sl.cur.length - liveCount} sample sessions` : "sample hidden"}
-              {liveCount ? ` + ${liveCount} live from this browser` : live.length ? " · live sessions hidden by these filters" : " · no live activity in this browser yet"}
+              {from} – {to} · {t("Updated {time}", { time: timeFmt.format(new Date(now)) })} ·{" "}
+              {filters.showSample ? t("{n} sample sessions", { n: d.sl.cur.length - liveCount }) : t("sample hidden")}
+              {liveCount ? ` + ${t("{n} live from this browser", { n: liveCount })}` : live.length ? ` · ${t("live sessions hidden by these filters")}` : ` · ${t("no live activity in this browser yet")}`}
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => downloadLeadsCsv(leadRows)} disabled={!leadRows.length}>
             <DownloadIcon aria-hidden />
-            Export leads CSV
+            {t("Export leads CSV")}
           </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 shadow-xs" role="group" aria-label="Filters">
-          <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label="Date range">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 shadow-xs" role="group" aria-label={t("Filters")}>
+          <div className="inline-flex rounded-lg bg-muted p-0.5" role="radiogroup" aria-label={t("Date range")}>
             {ranges.map((r) => (
               <button
                 key={r}
@@ -121,15 +123,15 @@ export function Dashboard() {
                   filters.days === r && "bg-card text-foreground shadow-xs",
                 )}
               >
-                {r} days
+                {t("{n} days", { n: r })}
               </button>
             ))}
           </div>
           <label className="sr-only" htmlFor="f-region">
-            Region
+            {t("Region")}
           </label>
           <NativeSelect id="f-region" className="h-9 w-40" value={filters.region} onChange={(e) => set("region", e.target.value as Filters["region"])}>
-            <option value="all">All regions</option>
+            <option value="all">{t("All regions")}</option>
             {regions.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.label}
@@ -137,13 +139,13 @@ export function Dashboard() {
             ))}
           </NativeSelect>
           <label className="sr-only" htmlFor="f-type">
-            Buyer type
+            {t("Buyer type")}
           </label>
           <NativeSelect id="f-type" className="h-9 w-40" value={filters.buyerType} onChange={(e) => set("buyerType", e.target.value as BuyerType | "all")}>
-            <option value="all">All buyer types</option>
-            {buyerTypes.map((t) => (
-              <option key={t} value={t}>
-                {t}
+            <option value="all">{t("All buyer types")}</option>
+            {buyerTypes.map((bt) => (
+              <option key={bt} value={bt}>
+                {bt}
               </option>
             ))}
           </NativeSelect>
@@ -157,7 +159,7 @@ export function Dashboard() {
             <span className={cn("relative h-5 w-9 rounded-full transition-colors", filters.showSample ? "bg-primary" : "bg-input")}>
               <span className={cn("absolute top-0.5 left-0.5 size-4 rounded-full bg-background shadow transition-transform", filters.showSample && "translate-x-4")} />
             </span>
-            Include sample data
+            {t("Include sample data")}
           </button>
         </div>
       </div>

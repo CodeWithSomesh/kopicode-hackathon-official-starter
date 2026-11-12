@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Loader2Icon } from "lucide-react";
 import { PixButton } from "@/components/homelander/pixel";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { signIn, signUp, type AuthField, type AuthState } from "./actions";
 
@@ -11,6 +12,7 @@ const fieldCls =
 
 /** The email + password option, under "Continue with Google". Same server actions as before, Kopitiam fields. */
 export function AuthForm({ mode, next, disabled }: { mode: "login" | "signup"; next: string; disabled?: boolean }) {
+  const t = useT();
   const [state, action, pending] = useActionState<AuthState, FormData>(mode === "login" ? signIn : signUp, null);
   const invalid = (f: AuthField) => state?.error && state.field === f;
   const describedBy = (f: AuthField, hint?: string) =>
@@ -20,11 +22,11 @@ export function AuthForm({ mode, next, disabled }: { mode: "login" | "signup"; n
     <form action={action} className="grid gap-4" noValidate>
       <input type="hidden" name="next" value={next} />
       <fieldset disabled={disabled || pending} className="grid gap-4">
-        <legend className="sr-only">{mode === "login" ? "Log in with email" : "Sign up with email"}</legend>
+        <legend className="sr-only">{mode === "login" ? t("Log in with email") : t("Sign up with email")}</legend>
         {mode === "signup" && (
           <div className="grid gap-1.5">
             <label htmlFor="fullName" className="text-sm font-semibold text-ink">
-              Your name <span className="font-normal text-ink-soft">(optional)</span>
+              {t("Your name")} <span className="font-normal text-ink-soft">{t("(optional)")}</span>
             </label>
             <input
               id="fullName"
@@ -40,7 +42,7 @@ export function AuthForm({ mode, next, disabled }: { mode: "login" | "signup"; n
         )}
         <div className="grid gap-1.5">
           <label htmlFor="email" className="text-sm font-semibold text-ink">
-            Email
+            {t("Email")}
           </label>
           <input
             id="email"
@@ -58,7 +60,7 @@ export function AuthForm({ mode, next, disabled }: { mode: "login" | "signup"; n
         </div>
         <div className="grid gap-1.5">
           <label htmlFor="password" className="text-sm font-semibold text-ink">
-            Password
+            {t("Password")}
           </label>
           <input
             id="password"
@@ -73,7 +75,7 @@ export function AuthForm({ mode, next, disabled }: { mode: "login" | "signup"; n
           />
           {mode === "signup" ? (
             <p id="password-hint" className="text-sm text-ink-soft">
-              At least 6 characters.
+              {t("At least 6 characters.")}
             </p>
           ) : null}
         </div>
@@ -91,7 +93,7 @@ export function AuthForm({ mode, next, disabled }: { mode: "login" | "signup"; n
 
         <PixButton type="submit" tone="ink" size="lg" className="w-full">
           {pending ? <Loader2Icon className="size-5 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
-          {pending ? "One moment…" : mode === "login" ? "Log in with email" : "Sign up with email"}
+          {pending ? t("One moment…") : mode === "login" ? t("Log in with email") : t("Sign up with email")}
         </PixButton>
       </fieldset>
     </form>

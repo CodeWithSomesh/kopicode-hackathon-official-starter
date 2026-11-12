@@ -3,16 +3,28 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PixPanel } from "@/components/homelander/pixel";
-import { Sprite, sprites, type SpriteName } from "@/components/homelander/sprite";
+import { Sprite, defineSprite, sprites, type SpriteArt, type SpriteName } from "@/components/homelander/sprite";
 import { useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 
-const tabs: { href: string; label: string; icon: SpriteName }[] = [
+/** Feng Shui's tab icon: a compass ring with its needle pointing north. */
+const compass = defineSprite([
+  "..###..",
+  ".#.#.#.",
+  "#..#..#",
+  "#..#..#",
+  "#.....#",
+  ".#...#.",
+  "..###..",
+]);
+
+const tabs: { href: string; label: string; icon: SpriteName | SpriteArt }[] = [
   { href: "/", label: "Map", icon: "pin" },
   { href: "/onboarding", label: "Uncle", icon: "uncle" },
   { href: "/swipe", label: "Swipe", icon: "house" },
   { href: "/battle", label: "Battle", icon: "bars" },
   { href: "/bank", label: "Bank", icon: "bank" },
+  { href: "/feng-shui", label: "Feng Shui", icon: compass },
 ];
 
 /** Routes whose page draws edge to edge (the landing map); the header and tab bar float over it. */
@@ -27,7 +39,11 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
   const { liked } = useHomeLander();
   const full = isFullBleed(pathname);
   const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+    href === "/"
+      ? pathname === "/"
+      : href === "/feng-shui"
+        ? pathname === "/feng-shui" || pathname.endsWith("/feng-shui")
+        : pathname.startsWith(href);
 
   return (
     <>
@@ -66,16 +82,18 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
                     href={t.href}
                     aria-current={isActive(t.href) ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 font-pixel text-base leading-none transition-colors",
+                      "flex items-center gap-1.5 px-2 py-1.5 font-pixel text-sm leading-none whitespace-nowrap transition-colors 2xl:gap-2 2xl:px-3 2xl:text-base",
                       isActive(t.href) ? "bg-kaya" : "hover:bg-sky/40",
                     )}
                   >
                     <Sprite
                       art={t.icon}
                       scale={2}
-                      className={
-                        isActive(t.href) ? "text-ink" : "text-ink-soft"
-                      }
+                      // Six tabs fit the header without icons; they return on wide (2xl) screens.
+                      className={cn(
+                        "hidden 2xl:block",
+                        isActive(t.href) ? "text-ink" : "text-ink-soft",
+                      )}
                     />
                     {t.label}
                   </Link>
@@ -97,7 +115,7 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
               </PixPanel>
               <Link
                 href="/admin"
-                className="hidden font-pixel-label text-xs text-ink underline decoration-2 underline-offset-4 lg:inline"
+                className="hidden font-pixel-label text-xs whitespace-nowrap text-ink underline decoration-2 underline-offset-4 lg:inline"
               >
                 Gamuda view
               </Link>
@@ -147,7 +165,7 @@ function TabBar({ isActive }: { isActive: (href: string) => boolean }) {
       aria-label="HomeLander tabs"
       className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[480px] px-3 pb-[max(env(safe-area-inset-bottom),12px)] lg:hidden"
     >
-      <PixPanel className="grid grid-cols-5 gap-1 p-1.5">
+      <PixPanel className="grid grid-cols-6 gap-1 p-1.5">
         {tabs.map((t) => (
           <Link
             key={t.href}
@@ -163,7 +181,8 @@ function TabBar({ isActive }: { isActive: (href: string) => boolean }) {
               scale={3}
               className={isActive(t.href) ? "text-ink" : "text-ink-soft"}
             />
-            {t.label}
+            {/* Six tabs leave ~56px each, so two-word labels stack. */}
+            <span className="text-center leading-[1.15] whitespace-pre-line">{t.label.replace(" ", "\n")}</span>
           </Link>
         ))}
       </PixPanel>

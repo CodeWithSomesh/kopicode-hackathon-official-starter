@@ -166,7 +166,7 @@ export function Insights({ s, anchorId }: { s: HomeLanderState; anchorId: string
           {lines.map((line) => (
             <li key={line} className="flex gap-2.5 rounded-xl bg-cloud px-3 py-2 text-[15px] leading-snug">
               <Sprite art="sparkle" scale={2} className="mt-1 shrink-0 text-kaya-deep" />
-              {line}
+              {t(line)}
             </li>
           ))}
         </ul>

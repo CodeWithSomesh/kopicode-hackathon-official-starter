@@ -216,8 +216,8 @@ export function buildSections(
         main: t("{amt}/mo", { amt: money(f.maintenanceRM) }),
         sub:
           f.maintenanceSource === "gamuda"
-            ? f.maintenanceNote
-            : t("{note} (estimated)", { note: f.maintenanceNote }),
+            ? t(f.maintenanceNote)
+            : t("{note} (estimated)", { note: t(f.maintenanceNote) }),
       }),
       value: (f) => f.maintenanceRM,
       better: "low",

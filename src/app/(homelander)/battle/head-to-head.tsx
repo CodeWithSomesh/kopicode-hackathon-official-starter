@@ -333,7 +333,7 @@ function HeadlineRow({
                 </dd>
                 {it.sub ? (
                   <dd className="text-[11px] leading-tight text-ink-soft">
-                    {it.sub(f)}
+                    {((v) => (typeof v === "string" ? t(v) : v))(it.sub(f))}
                   </dd>
                 ) : null}
               </div>

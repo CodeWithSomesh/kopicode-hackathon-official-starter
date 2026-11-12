@@ -31,23 +31,24 @@ function KpiSpark({ k, i }: { k: Kpi; i: number }) {
 }
 
 export function KpiRow({ items, days }: { items: Kpi[]; days: number }) {
+  const t = useT();
   return (
     <section id="overview" aria-labelledby="overview-title" className="scroll-mt-20">
       <h2 id="overview-title" className="sr-only">
-        Key numbers, last {days} days
+        {t("Key numbers, last {days} days", { days })}
       </h2>
       <Card className="gap-0 overflow-hidden py-0">
         <dl className="grid grid-cols-1 gap-px bg-border sm:grid-cols-2 xl:grid-cols-4">
           {items.map((k, i) => (
             <div key={k.id} className={cn("flex min-w-0 flex-col gap-1.5 overflow-hidden bg-card p-4")}>
-              <dt className="text-xs font-medium text-muted-foreground">{k.label}</dt>
+              <dt className="text-xs font-medium text-muted-foreground">{t(k.label)}</dt>
               <dd className="flex flex-wrap items-center gap-2">
                 <span className="text-2xl font-semibold tracking-tight tabular-nums">{fmtKpi(k)}</span>
                 <Delta value={k.delta} kind={k.kind === "rate" ? "rate" : "count"} />
               </dd>
               <dd className="text-xs text-muted-foreground">
-                {k.note}
-                <span className="sr-only">. Previous period: {fmtPrev(k)}.</span>
+                {t(k.note)}
+                <span className="sr-only">. {t("Previous period")}: {fmtPrev(k)}.</span>
               </dd>
               <dd className="mt-auto pt-1">
                 <KpiSpark k={k} i={i} />
@@ -72,7 +73,7 @@ export function TrendChart({ rows, days }: { rows: ReturnType<typeof trend>; day
       audience="marketing and management"
     >
       <ChartFigure
-        label={`Visitors, onboarded buyers and leads per ${days === 90 ? "week" : "day"}. Total ${num(totalV)} visitors and ${num(totalL)} leads.`}
+        label={t("Visitors, onboarded buyers and leads per {unit}. Total {v} visitors and {l} leads.", { unit: days === 90 ? t("week") : t("day"), v: num(totalV), l: num(totalL) })}
         columns={["Period", "Visitors", "Onboarded", "Leads"]}
         rows={rows.map((r) => [r.label, r.visitors, r.onboarded, r.leads])}
         className="h-72"
@@ -95,9 +96,9 @@ export function TrendChart({ rows, days }: { rows: ReturnType<typeof trend>; day
             <YAxis yAxisId="r" orientation="right" {...axis} allowDecimals={false} width={32} />
             <Tooltip {...tooltip} />
             <Legend {...legend} />
-            <Area yAxisId="l" type="monotone" dataKey="visitors" name="Visitors" stroke="var(--chart-1)" strokeWidth={2} fill="url(#fill-visitors)" />
-            <Area yAxisId="l" type="monotone" dataKey="onboarded" name="Onboarded" stroke="var(--chart-2)" strokeWidth={2} fill="url(#fill-onb)" />
-            <Line yAxisId="r" type="monotone" dataKey="leads" name="Leads (right axis)" stroke="var(--chart-3)" strokeWidth={2} strokeDasharray="4 3" dot={false} />
+            <Area yAxisId="l" type="monotone" dataKey="visitors" name={t("Visitors")} stroke="var(--chart-1)" strokeWidth={2} fill="url(#fill-visitors)" />
+            <Area yAxisId="l" type="monotone" dataKey="onboarded" name={t("Onboarded")} stroke="var(--chart-2)" strokeWidth={2} fill="url(#fill-onb)" />
+            <Line yAxisId="r" type="monotone" dataKey="leads" name={t("Leads (right axis)")} stroke="var(--chart-3)" strokeWidth={2} strokeDasharray="4 3" dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </ChartFigure>

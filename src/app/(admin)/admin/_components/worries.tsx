@@ -1,5 +1,6 @@
 "use client";
 
+import { useT } from "@/lib/homelander/i18n/client";
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { num, pct, worryAction, type worries } from "@/lib/homelander/admin-metrics";
 import { painPointShort, type PainPoint } from "@/lib/homelander/profile";
@@ -37,6 +38,7 @@ function Head({ worries: ws }: { worries: readonly PainPoint[] }) {
 }
 
 export function Worries({ data }: { data: Data }) {
+  const t = useT();
   const { n, overall, bySegment, byTownship, townWorries, pick, pickLead, worst, townFlag, avgLead, avgLike } = data;
   const order = overall.map((r) => r.worry);
   const chart = overall.map((r) => ({ name: r.label, top: Math.round(r.topShare * 1000) / 10, any: Math.round(r.share * 1000) / 10 }));
@@ -57,11 +59,11 @@ export function Worries({ data }: { data: Data }) {
             <strong>
               {pct(pick.topShare)} of {segmentName(pick.group, pick.name)} worry most about {painPointShort[pick.top].toLowerCase()}
             </strong>{" "}
-            and they turn into leads at {pct(pickLead, 1)} ({pct(avgLead, 1)} average). Suggested campaign: {worryAction[pick.top]}.
+            and they turn into leads at {pct(pickLead, 1)} ({pct(avgLead, 1)} average). Suggested campaign: {t(worryAction[pick.top])}.
             {worst ? (
               <>
                 {" "}
-                Converts worst: buyers worried about <strong>{worst.label.toLowerCase()}</strong>, {pct(worst.leadRate, 1)} lead rate; for them, {worryAction[worst.worry].split(";")[0]!.replace(/^./, (c) => c.toLowerCase())}.
+                Converts worst: buyers worried about <strong>{worst.label.toLowerCase()}</strong>, {pct(worst.leadRate, 1)} lead rate; for them, {t(worryAction[worst.worry]).split(";")[0]!.replace(/^./, (c) => c.toLowerCase())}.
               </>
             ) : null}
           </>
@@ -222,7 +224,7 @@ export function Worries({ data }: { data: Data }) {
             {townFlag ? (
               <p className="mt-3 text-sm text-muted-foreground">
                 <strong className="font-medium text-foreground">{townFlag.town}</strong> loses buyers worried about {painPointShort[townFlag.worry].toLowerCase()}: {pct(townFlag.likeRate)} like it against{" "}
-                {pct(townFlag.avg)} overall. {worryAction[townFlag.worry]}.
+                {pct(townFlag.avg)} overall. {t(worryAction[townFlag.worry])}.
               </p>
             ) : null}
           </Panel>

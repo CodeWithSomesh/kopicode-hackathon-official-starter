@@ -75,7 +75,7 @@ export function CardDetails({
                       {w.label}
                       {i === 0 ? ` · ${tr("your biggest worry")}` : ""}
                     </span>
-                    <span className="block">{w.text}</span>
+                    <span className="block">{tr(w.text)}</span>
                   </span>
                 </li>
               ))}
@@ -133,7 +133,7 @@ export function CardDetails({
             ) : null}
           </Rows>
           <Note>
-            {basis ? `${basis.note} ` : ""}
+            {basis ? `${tr(basis.note)} ` : ""}
             {tr("{amt} per sq ft.", { amt: rm(money.psfRM) })} {unit.source === "official" ? tr("Price from gamudaland.com.my.") : tr("Sample price.")}
           </Note>
           {basis ? null : (
@@ -246,7 +246,7 @@ export function CardDetails({
                 {pick.reasons.map((r) => (
                   <li key={r} className="flex gap-2 text-sm">
                     <Sprite art="heart" scale={1.5} className="mt-1 shrink-0 text-pandan" />
-                    {r}
+                    {tr(r)}
                   </li>
                 ))}
               </ul>

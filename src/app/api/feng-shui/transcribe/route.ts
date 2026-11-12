@@ -1,6 +1,7 @@
 import { transcribe } from "ai";
 import { isDemoMode } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { sttHint, sttModel } from "../models";
 
 export const maxDuration = 30;
 
@@ -12,7 +13,6 @@ export const maxDuration = 30;
  */
 
 const MAX_BYTES = 4 * 1024 * 1024;
-const MODEL = process.env.FENG_SHUI_STT_MODEL ?? "openai/gpt-4o-transcribe";
 
 // Hints the spelling of local words; the model still detects the language itself.
 const HINT =
@@ -39,9 +39,9 @@ export async function POST(req: Request) {
 
   try {
     const result = await transcribe({
-      model: MODEL,
+      model: sttModel,
       audio: new Uint8Array(await file.arrayBuffer()),
-      providerOptions: { openai: { prompt: HINT } },
+      providerOptions: sttHint(HINT),
       maxRetries: 1,
       abortSignal: AbortSignal.timeout(20_000),
     });

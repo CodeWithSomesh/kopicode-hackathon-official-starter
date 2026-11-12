@@ -33,6 +33,7 @@ These override the list above where they differ.
 ## AI and voice (phase 5)
 
 - `src/app/api/feng-shui/route.ts` turns free text or speech into the parser's own commands (`commands.ts`). It re-parses every command and drops any it can't read, so the model can never edit the layout directly.
+- Provider: with `GROQ_API_KEY` set, both AI routes run on Groq (`openai/gpt-oss-120b` for commands, `whisper-large-v3` for speech); without it they use the AI Gateway. See `src/app/api/feng-shui/models.ts`.
 - Same credit guard as `/api/chat`: signed-in users only, unless the app is in demo mode. Locally it needs `AI_GATEWAY_API_KEY` in `.env.local`. `FENG_SHUI_AI_MODEL` overrides `AI_MODEL` for this route only.
 - If the AI fails, the page falls back to the quick parser and stops calling the AI for the rest of the session.
 - Voice in: `recorder.ts` records with MediaRecorder and stops on a pause; `src/app/api/feng-shui/transcribe/route.ts` sends the audio to a multilingual speech-to-text model on the AI Gateway (`openai/gpt-4o-transcribe`, override with `FENG_SHUI_STT_MODEL`). It detects the language itself and keeps mixed-language sentences, so there is no language picker. If that route fails, the mic falls back to the browser's own recogniser (`ms-MY`, one language at a time, needs Google's speech service).

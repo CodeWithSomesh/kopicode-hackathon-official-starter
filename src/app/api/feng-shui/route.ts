@@ -1,8 +1,9 @@
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { parse } from "@/app/(homelander)/homes/[id]/feng-shui/commands";
-import { env, isDemoMode } from "@/lib/env";
+import { isDemoMode } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { commandModel } from "./models";
 
 export const maxDuration = 30;
 
@@ -107,7 +108,7 @@ export async function POST(req: Request) {
 
   try {
     const { output } = await generateText({
-      model: process.env.FENG_SHUI_AI_MODEL ?? env.aiModel,
+      model: commandModel,
       system: system(replyLang, rooms, items, selected),
       prompt: text,
       output: Output.object({ schema: Answer }),

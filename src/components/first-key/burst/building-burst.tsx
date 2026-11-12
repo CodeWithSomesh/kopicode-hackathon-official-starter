@@ -12,7 +12,8 @@ import { useThemeColors, type ThemeColors } from "../use-theme-colors";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 import { BANDS, bandOf } from "./price-band";
 import { FLOOR_H, LOW_H, planFloor, unitsOnFloor } from "./layout";
-import { glassMaterials, InteriorMeshes, RoofTop, ShellBox, Balconies, outlineGeom, slabGeom } from "./dollhouse";
+import { InteriorMeshes, plateMaterial, slabGeom } from "./dollhouse";
+import { ROLES, towerMaterials, towerParts, wholeTower, type Role } from "../tower/tower-model";
 import type { MapView } from "./map-view";
 
 const END_PITCH = 50; // the three-quarter view, degrees from straight down
@@ -188,13 +189,28 @@ function Scene({
       env.dispose();
     };
   }, [gl, scene]);
-  const mats = useMemo(() => glassMaterials(colors, dark), [colors, dark]);
+  // The same tower the map draws (tower/tower-model.ts), split at the cut: the floors above lift away and fade.
+  const mats = useMemo(() => {
+    const solid = towerMaterials(building, colors, dark, true);
+    const fading = Object.fromEntries(
+      ROLES.map((r) => {
+        const m = solid[r].clone();
+        m.userData.base = m.opacity;
+        m.transparent = true;
+        return [r, m];
+      }),
+    ) as Record<Role, THREE.Material>;
+    return { solid, fading, fadingList: Object.values(fading), plate: plateMaterial(colors, dark) };
+  }, [building, colors, dark]);
+  const lower = useMemo(() => (floor > 1 ? towerParts(building, fp.outline, 0, floor - 1, false) : {}), [building, fp, floor]);
+  const upperParts = useMemo(() => towerParts(building, fp.outline, floor - 1, building.floors, true), [building, fp, floor]);
   // The map draws the picked block flat in the primary colour: the 3D block starts in that colour too and clears to glass.
   const tint = useMemo(
     () => new THREE.MeshLambertMaterial({ color: colors.primary, transparent: true, opacity: 0, depthWrite: false }),
     [colors.primary],
   );
-  const tintGeom = useMemo(() => outlineGeom(fp.outline, 0.05, building.heightM + 0.15, 0.01, 0.05), [fp, building.heightM]);
+  // The whole tower in one geometry, drawn over itself in the tint (same depth, drawn last), so the first frame is the map's picked tower.
+  const tintGeom = useMemo(() => wholeTower(towerParts(building, fp.outline, 0, building.floors, true)), [building, fp]);
   const plateGeom = useMemo(() => slabGeom(fp.w + 0.5, 0.3, fp.d + 0.5, 0.15), [fp]); // 15 cm fillet on the floor slab
   const ground = useMemo(
     () => new THREE.MeshStandardMaterial({ color: colors.muted, transparent: true, opacity: 0, roughness: 1 }),
@@ -315,13 +331,12 @@ function Scene({
         <circleGeometry args={[3000, 64]} />
       </mesh>
 
-      <mesh geometry={tintGeom} material={tint} renderOrder={3} />
+      {tintGeom && <mesh geometry={tintGeom} material={tint} renderOrder={3} />}
 
       {/* Floors below the cut: a glass shell with balconies. */}
       {floor > 1 && (
         <group>
-          <ShellBox outline={fp.outline} y0={0} y1={floorY} mats={mats.solid} />
-          <Balconies len={fp.straight - 1.2} d={fp.d} levels={floor - 1} from={1} material={mats.slab} />
+          <TowerMeshes parts={lower} mats={mats.solid} />
         </group>
       )}
 
@@ -384,12 +399,14 @@ function Scene({
 
       {/* Everything above the revealed floor (and its own facade): lifts, slides off and fades. */}
       <group ref={upper}>
-        <ShellBox outline={fp.outline} y0={floorY} y1={building.floors * FLOOR_H} mats={mats.fadingShell} />
-        <Balconies len={fp.straight - 1.2} d={fp.d} levels={building.floors - floor} from={floor} material={mats.fadingSlab} />
-        <RoofTop w={fp.w} d={fp.d} outline={fp.outline} y={building.floors * FLOOR_H} material={mats.fadingRoof} />
+        <TowerMeshes parts={upperParts} mats={mats.fading} />
       </group>
     </>
   );
+}
+
+function TowerMeshes({ parts, mats }: { parts: Partial<Record<Role, THREE.BufferGeometry>>; mats: Record<Role, THREE.Material> }) {
+  return ROLES.map((r) => parts[r] && <mesh key={r} geometry={parts[r]} material={mats[r]} castShadow={r !== "rail"} receiveShadow renderOrder={r === "rail" ? 2 : 0} />);
 }
 
 function UnitChip({ unit, picked }: { unit: Unit; picked: boolean }) {
@@ -423,7 +440,7 @@ function applyRig(
   size: { width: number; height: number },
   bgEl: HTMLDivElement | null,
   upper: THREE.Group | null,
-  mats: { fading: THREE.Material[]; slab: THREE.Material; fadingSlab: THREE.Material },
+  mats: { fadingList: THREE.Material[] },
   ground: THREE.Material,
   tint: THREE.Material,
   toCam: [number, number],
@@ -439,7 +456,6 @@ function applyRig(
   cam.updateProjectionMatrix();
   if (bgEl) bgEl.style.opacity = String(r.bg);
   ground.opacity = r.bg;
-  mats.slab.opacity = r.bg;
   tint.opacity = (1 - r.bg) ** 2;
   tint.visible = tint.opacity > 0.01;
   if (upper) {
@@ -448,7 +464,6 @@ function applyRig(
     upper.rotation.z = r.lift * 0.06;
     const o = 1 - smooth(0.45, 0.95, r.lift);
     upper.visible = o > 0.01;
-    for (const m of mats.fading) m.opacity = o;
-    mats.fadingSlab.opacity = o * r.bg;
+    for (const m of mats.fadingList) m.opacity = o * (m.userData.base ?? 1);
   }
 }

@@ -65,6 +65,15 @@ const buildingsGeoJson = {
     geometry: { type: "Polygon" as const, coordinates: [b.footprint] },
   })),
 };
+// One point per tower at its footprint's centroid: the model layer places that tower's own glTF there.
+const towerPoints = (variant: string) => ({
+  type: "FeatureCollection" as const,
+  features: township.buildings.map((b) => ({
+    type: "Feature" as const,
+    properties: { id: b.id, model: `tower-${b.id}-${variant}` },
+    geometry: { type: "Point" as const, coordinates: centres[b.id] },
+  })),
+});
 const railGeoJson = {
   type: "Feature" as const,
   properties: {},
@@ -163,6 +172,39 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
       setLit(NIGHT_STEPS);
     };
   }, [dark, loaded, reduced]);
+
+  // Our 12 towers as glTF models (the burst's own procedural builder, see tower/tower-model.ts), one set per light mode.
+  // Until they load, or if they fail, the fill-extrusion towers below stand in.
+  const variant = dark ? "n" : "d";
+  const [models, setModels] = useState<{ variant: string } | "failed">();
+  useEffect(() => {
+    const map = mapRef.current?.getMap();
+    if (!map || !loaded) return;
+    let dead = false;
+    const urls: string[] = [];
+    import("./tower-glb")
+      .then(async ({ towerGlb }) => {
+        for (const b of township.buildings) {
+          const { url } = await towerGlb(b, colors, dark);
+          urls.push(url);
+          if (dead) return;
+          map.addModel(`tower-${b.id}-${variant}`, url);
+        }
+        if (!dead) setModels({ variant });
+      })
+      .catch((e) => {
+        console.warn(e);
+        if (!dead) setModels("failed");
+      });
+    return () => {
+      dead = true;
+      // ponytail: the previous variant's models stay registered in the style (a few hundred KB); the blob URLs go
+      setTimeout(() => urls.forEach((u) => URL.revokeObjectURL(u)), 5000);
+    };
+    // variant is derived from dark
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colors, dark, loaded]);
+  const useModels = !!models && models !== "failed";
 
   const flyTo = (id: string, then?: () => void) => {
     const map = mapRef.current?.getMap();
@@ -275,12 +317,29 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     layout: { "line-cap": "round", "line-join": "round" },
     paint: { "line-color": colors["chart-3"], "line-width": 4, "line-emissive-strength": 1 },
   };
+  // The picked tower turns the primary colour (as the burst's first frame starts), the others keep their materials.
+  const towerModels = {
+    id: "township-models",
+    type: "model",
+    slot: "middle",
+    minzoom: 14,
+    layout: { "model-id": ["get", "model"] },
+    paint: {
+      "model-type": "common-3d",
+      "model-scale": [1, 1, 1],
+      "model-cast-shadows": true,
+      "model-receive-shadows": true,
+      "model-color": colors.primary,
+      "model-color-mix-intensity": ["case", ["==", ["get", "id"], sel], 1, 0],
+      "model-emissive-strength": ["case", ["==", ["get", "id"], sel], 0.5, night],
+    },
+  } as unknown as LayerProps;
   const towers: LayerProps = {
     id: "township-buildings",
     type: "fill-extrusion",
     slot: "middle",
     minzoom: 14,
-    filter: ["!=", ["get", "id"], sel],
+    filter: useModels ? ["==", ["get", "id"], "__none"] : ["!=", ["get", "id"], sel],
     layout: finish.layout,
     paint: {
       ...finish.paint,
@@ -296,7 +355,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     type: "fill-extrusion",
     slot: "middle",
     minzoom: 14,
-    filter: ["!=", ["get", "id"], sel],
+    filter: useModels ? ["==", ["get", "id"], "__none"] : ["!=", ["get", "id"], sel],
     layout: finish.layout,
     paint: {
       ...finish.paint,
@@ -311,7 +370,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
     type: "fill-extrusion",
     slot: "middle",
     minzoom: 14,
-    filter: ["==", ["get", "id"], sel],
+    filter: useModels ? ["==", ["get", "id"], "__none"] : ["==", ["get", "id"], sel],
     layout: finish.layout,
     paint: {
       ...finish.paint,
@@ -333,7 +392,7 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
         mapStyle="mapbox://styles/mapbox/standard"
         maxPitch={70}
         minZoom={8.5}
-        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected"]}
+        interactiveLayerIds={["township-models", "township-buildings", "township-roofs", "township-selected"]}
         cursor="auto"
         onError={(e) => {
           const err = e.error as (Error & { name?: string }) | undefined;
@@ -362,6 +421,11 @@ export default function MapboxMap({ selectedId, onSelect, paused, onArrived, sta
           <Layer {...roofs} />
           <Layer {...selected} />
         </Source>
+        {useModels && (
+          <Source id="tower-points" type="geojson" data={towerPoints(models.variant)}>
+            <Layer {...towerModels} />
+          </Source>
+        )}
         {!selectedId &&
           towns.map((x) => {
             const phone = !window.matchMedia("(min-width: 1024px)").matches; // ponytail: read at render, no resize listener

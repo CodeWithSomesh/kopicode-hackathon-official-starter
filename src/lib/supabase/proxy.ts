@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNext } from "@/app/(auth)/next-path";
 import { env, isSupabaseConfigured } from "@/lib/env";
 
-const PROTECTED_PREFIXES = ["/dashboard"];
+/** HomeLander pages that need an account (the map, Feng Shui and About stay public). */
+const PROTECTED_PREFIXES = ["/onboarding", "/swipe", "/battle", "/bank", "/profile", "/admin", "/dashboard"];
 const AUTH_PAGES = ["/login", "/signup"];
 
 /**
@@ -49,10 +51,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (isSignedIn && AUTH_PAGES.includes(pathname)) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    url.search = "";
-    return NextResponse.redirect(url);
+    // Already signed in: carry on to where they were going, else chat with Mochi.
+    const next = safeNext(request.nextUrl.searchParams.get("next"));
+    return NextResponse.redirect(new URL(next, request.url));
   }
 
   return response;

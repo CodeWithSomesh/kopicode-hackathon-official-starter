@@ -1,40 +1,70 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { env, isDemoMode } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { safeNext } from "./next-path";
 
-export type AuthState = { error?: string; message?: string } | null;
+export type AuthField = "email" | "password" | "fullName";
+export type AuthState = { error?: string; field?: AuthField; message?: string; email?: string; fullName?: string } | null;
 
 const Credentials = z.object({
-  email: z.email("Enter a valid email"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z.email("That email doesn't look right. Check it has an @ and a domain, like aisyah@gmail.com."),
+  password: z.string().min(6, "Your password needs at least 6 characters. Add a few more and try again."),
 });
 
-function safeNext(value: FormDataEntryValue | null) {
-  const next = typeof value === "string" ? value : "";
-  return next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+/** Supabase's messages are written for developers; say what happened and what to do next. */
+function friendly(message: string): { error: string; field?: AuthField } {
+  const m = message.toLowerCase();
+  if (m.includes("invalid login credentials"))
+    return { error: "That email and password don't match an account. Check both, or sign up if you're new.", field: "password" };
+  if (m.includes("email not confirmed"))
+    return { error: "Please confirm your email first. Open the link we sent you, then log in.", field: "email" };
+  if (m.includes("already registered") || m.includes("already been registered"))
+    return { error: "There's already an account with that email. Log in instead.", field: "email" };
+  if (m.includes("rate limit") || m.includes("too many"))
+    return { error: "Too many tries in a short time. Wait a minute, then try again." };
+  if (m.includes("password") && (m.includes("weak") || m.includes("short") || m.includes("least")))
+    return { error: "That password is too easy to guess. Try a longer one with a mix of words and numbers.", field: "password" };
+  return { error: `We couldn't sign you in: ${message}. Please try again.` };
+}
+
+async function origin() {
+  const h = await headers();
+  return h.get("origin") ?? env.siteUrl;
 }
 
 export async function signIn(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  if (isDemoMode) redirect("/dashboard");
+  const next = safeNext(formData.get("next"));
+  if (isDemoMode) redirect(next);
   const parsed = Credentials.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  const email = String(formData.get("email") ?? "");
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { error: issue?.message, field: issue?.path[0] as AuthField, email };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword(parsed.data);
-  if (error) return { error: error.message };
+  if (error) return { ...friendly(error.message), email };
 
-  redirect(safeNext(formData.get("next")));
+  redirect(next);
 }
 
 export async function signUp(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  if (isDemoMode) redirect("/dashboard");
-  const parsed = Credentials.extend({ fullName: z.string().trim().max(100).optional() }).safeParse(
+  const next = safeNext(formData.get("next"));
+  if (isDemoMode) redirect(next);
+  const parsed = Credentials.extend({ fullName: z.string().trim().max(100, "Keep your name under 100 characters.").optional() }).safeParse(
     Object.fromEntries(formData),
   );
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  const email = String(formData.get("email") ?? "");
+  const fullName = String(formData.get("fullName") ?? "");
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { error: issue?.message, field: issue?.path[0] as AuthField, email, fullName };
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
@@ -42,12 +72,12 @@ export async function signUp(_prev: AuthState, formData: FormData): Promise<Auth
     password: parsed.data.password,
     options: {
       data: { full_name: parsed.data.fullName },
-      emailRedirectTo: `${env.siteUrl}/auth/callback`,
+      emailRedirectTo: `${await origin()}/auth/callback?next=${encodeURIComponent(next)}`,
     },
   });
-  if (error) return { error: error.message };
+  if (error) return { ...friendly(error.message), email, fullName };
 
   // Email confirmation off in Supabase -> session exists, go straight in.
-  if (data.session) redirect("/dashboard");
-  return { message: "Check your email to confirm your account, then sign in." };
+  if (data.session) redirect(next);
+  return { message: "Almost there. We've sent you an email: open the link inside and Mochi will be waiting.", email, fullName };
 }

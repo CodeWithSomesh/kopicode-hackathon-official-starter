@@ -6,22 +6,28 @@ import { gsap } from "gsap";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { township } from "@/lib/first-key/township";
+import { developments, onMap } from "@/lib/first-key/developments";
 import type { Unit } from "@/lib/first-key/types";
 import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
+import { DevelopmentCard } from "./development-card";
 
 // Both scenes need the browser's WebGL: never render them on the server.
 const NeighbourhoodMap = dynamic(() => import("@/components/first-key/map/neighbourhood-map"), { ssr: false });
+const COVE_ID = "gamuda-cove"; // the illustrative block sits inside this development (same id as in the map)
 const BuildingBurst = dynamic(
   () => import("@/components/first-key/burst/building-burst").then((m) => m.BuildingBurst),
   { ssr: false },
 );
 
-type Props = { initialBuilding?: string; initialUnit?: string };
+type Props = { initialBuilding?: string; initialUnit?: string; initialDev?: string };
 
-export function FindClient({ initialBuilding, initialUnit }: Props) {
+export function FindClient({ initialBuilding, initialUnit, initialDev }: Props) {
   const valid = township.buildings.some((b) => b.id === initialBuilding);
   const [selectedId, setSelectedId] = useState<string | undefined>(valid ? initialBuilding : undefined);
   const [unitId, setUnitId] = useState<string | undefined>(valid ? initialUnit : undefined);
+  // A building always belongs to Gamuda Cove; otherwise ?dev= picks the development (only ones drawn on the map).
+  const devValid = developments.some((d) => d.id === initialDev && onMap(d));
+  const [devId, setDevId] = useState<string | undefined>(valid ? COVE_ID : devValid ? initialDev : undefined);
   const [burstOpen, setBurstOpen] = useState(false);
   const [burstMounted, setBurstMounted] = useState(false); // keep the 3D scene once built; it idles on demand
   const overlay = useRef<HTMLDivElement>(null);
@@ -29,13 +35,16 @@ export function FindClient({ initialBuilding, initialUnit }: Props) {
 
   const building = township.buildings.find((b) => b.id === selectedId);
 
-  // Keep the URL shareable: /find?building=c&unit=12-03
+  // Keep the URL shareable: /find?building=c&unit=12-03 or /find?dev=gamuda-cove
   useEffect(() => {
     const q = new URLSearchParams();
     if (selectedId) q.set("building", selectedId);
+    else if (devId) q.set("dev", devId);
     if (selectedId && unitId) q.set("unit", unitId);
     window.history.replaceState(null, "", q.size ? `/find?${q}` : "/find");
-  }, [selectedId, unitId]);
+  }, [selectedId, unitId, devId]);
+
+  const dev = developments.find((d) => d.id === devId);
 
   // Hand-over: the 3D view fades and settles in over the map; the map has stopped moving underneath.
   useEffect(() => {
@@ -72,6 +81,13 @@ export function FindClient({ initialBuilding, initialUnit }: Props) {
         onSelect={(id) => {
           setSelectedId(id);
           setUnitId(undefined);
+          if (id) setDevId(COVE_ID);
+        }}
+        devId={devId}
+        onSelectDev={(id) => {
+          setSelectedId(undefined);
+          setUnitId(undefined);
+          setDevId(id);
         }}
         paused={burstOpen}
         onArrived={open}
@@ -80,9 +96,22 @@ export function FindClient({ initialBuilding, initialUnit }: Props) {
 
       <header className="pointer-events-none absolute inset-x-0 top-0 p-4">
         <p className="inline-block rounded-md border bg-card/90 px-3 py-1.5 text-sm text-card-foreground shadow-sm backdrop-blur">
-          <strong>{township.name}</strong> <span className="text-muted-foreground">· made-up township, illustrative numbers</span>
+          <strong>Gamuda Land developments</strong>{" "}
+          <span className="text-muted-foreground">· Klang Valley · unit numbers are made up</span>
         </p>
       </header>
+
+      {dev && !burstOpen && (
+        <DevelopmentCard
+          dev={dev}
+          isCove={dev.id === COVE_ID}
+          onBack={() => {
+            setSelectedId(undefined);
+            setUnitId(undefined);
+            setDevId(undefined);
+          }}
+        />
+      )}
 
       <div
         ref={overlay}

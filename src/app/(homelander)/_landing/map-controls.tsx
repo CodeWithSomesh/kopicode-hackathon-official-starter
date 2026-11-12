@@ -21,7 +21,7 @@ export type ControlMap = MapLike & {
 };
 
 /** Zoom, compass and 2D/3D buttons. They drive the MapLibre map handed up by the map component. */
-export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelOpen: boolean }) {
+export function MapControls({ map, panelOpen, night: hasNight = true }: { map: ControlMap | null; panelOpen: boolean; night?: boolean }) {
   const [bearing, setBearing] = useState(0);
   const [is3D, setIs3D] = useState(true);
   const night = useMapNight();
@@ -60,7 +60,8 @@ export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelO
       >
         {is3D ? "2D" : "3D"}
       </PixButton>
-      <PixButton
+      {/* Google photoreal 3D has no night lighting: no Night button on that map */}
+      {hasNight && <PixButton
         size="sm"
         tone={night ? "kaya" : "white"}
         className="size-10 px-0 font-pixel-label text-[11px] uppercase"
@@ -69,7 +70,7 @@ export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelO
         aria-label="Night view of the map and the building"
       >
         Night
-      </PixButton>
+      </PixButton>}
     </div>
   );
 }

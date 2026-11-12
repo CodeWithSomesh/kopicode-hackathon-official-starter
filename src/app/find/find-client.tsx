@@ -18,8 +18,11 @@ import { TownshipList } from "@/app/(homelander)/_landing/township-list";
 import { useMapView } from "@/components/first-key/burst/map-view";
 
 // Both scenes need the browser's WebGL: never render them on the server.
-// Mapbox (Standard style) when the public token is set; otherwise the MapLibre map, so a missing token never means a blank page.
+// Google photorealistic 3D when its key is set, and then ONLY Google (its terms: no other map on the same screen).
+// Otherwise Mapbox (Standard style) when the public token is set, else the MapLibre map, so a missing key never means a blank page.
+const HAS_GOOGLE = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
 const HAS_MAPBOX = !!process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+const GoogleMap = dynamic(() => import("@/components/first-key/map/google-map"), { ssr: false });
 const NeighbourhoodMap = dynamic(
   () => (HAS_MAPBOX ? import("@/components/first-key/map/mapbox-map") : import("@/components/first-key/map/neighbourhood-map")),
   { ssr: false },
@@ -60,6 +63,11 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   const [view, captureView] = useMapView(map);
   const overlay = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
+  // Google only: the list and pitch card wait for the load intro; the panel waits for the fly-in to land.
+  // If Google refuses the key or fails to load, its map is unmounted and the other map takes over (never both at once).
+  const [google, setGoogle] = useState(HAS_GOOGLE);
+  const [intro, setIntro] = useState(HAS_GOOGLE);
+  const [flying, setFlying] = useState(false);
 
   const building = township.buildings.find((b) => b.id === selectedId);
 
@@ -99,33 +107,49 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
     setBurstOpen(true);
   };
 
+  const mapProps = {
+    selectedId,
+    onSelect: (id: string | undefined) => {
+      setSelectedId(id);
+      setUnitId(undefined);
+      if (id) setDevId(COVE_ID);
+    },
+    devId,
+    onMapReady: setMap,
+    onSelectDev: (id: string) => {
+      setSelectedId(undefined);
+      setUnitId(undefined);
+      setDevId(id);
+    },
+    paused: burstOpen,
+    onArrived: open,
+    startAtSelected: valid,
+  };
+
   return (
     <main className="fixed inset-0 overflow-hidden bg-sky text-ink">
       <div inert={burstOpen} className="contents">
-      <NeighbourhoodMap
-        selectedId={selectedId}
-        onSelect={(id) => {
-          setSelectedId(id);
-          setUnitId(undefined);
-          if (id) setDevId(COVE_ID);
-        }}
-        devId={devId}
-        onMapReady={setMap}
-        onSelectDev={(id) => {
-          setSelectedId(undefined);
-          setUnitId(undefined);
-          setDevId(id);
-        }}
-        paused={burstOpen}
-        onArrived={open}
-        startAtSelected={valid}
-      />
+      {google ? (
+        <GoogleMap
+          {...mapProps}
+          onIntroDone={() => setIntro(false)}
+          onFlying={setFlying}
+          onFail={() => {
+            setMap(null);
+            setGoogle(false);
+            setIntro(false);
+            setFlying(false);
+          }}
+        />
+      ) : (
+        <NeighbourhoodMap {...mapProps} />
+      )}
       </div>
 
       <h1 className="sr-only lg:hidden">Gamuda Land map</h1>
 
       {/* The tower view covers all of this: keep it out of the Tab order and the accessibility tree while it is open */}
-      <div inert={burstOpen}>
+      <div inert={burstOpen || intro} className={intro ? "opacity-0" : "opacity-100 transition-opacity duration-700"}>
         <TownshipList
           selected={devId}
           anchorName={workAnchor.name}
@@ -140,8 +164,8 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
             setDevId(undefined);
           }}
         />
-        <MapControls map={map} panelOpen={!!info && !burstOpen} />
-        {info && !burstOpen && (
+        <MapControls map={map} panelOpen={!!info && !burstOpen} night={!google} />
+        {info && !burstOpen && !flying && (
           <TownPanel
             key={info.t.id}
             info={info}
@@ -159,7 +183,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
       </div>
 
       {/* Map credit: always visible (above the tab bar on phones) */}
-      {!HAS_MAPBOX && (
+      {!HAS_MAPBOX && !google && (
       <p
         inert={burstOpen}
         className="absolute right-3 bottom-[104px] z-10 px-1.5 py-0.5 text-[10px] leading-tight text-ink lg:right-2 lg:bottom-2"

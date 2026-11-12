@@ -13,7 +13,10 @@ import { FLOOR_H } from "../burst/layout";
 
 export type Facade = "curtain" | "columns" | "balcony" | "fins";
 export type Crown = "plant" | "frame";
-export type Role = "glass" | "frame" | "podium" | "sign" | "water" | "green" | "roof" | "rail";
+export type Role = "glass" | "frame" | "podium" | "wall" | "sign" | "water" | "green" | "roof" | "tile" | "rail";
+/** Geometry per material role: what towerParts returns, and what tower/landed-model.ts' landedParts returns too. */
+export type TowerParts = Partial<Record<Role, THREE.BufferGeometry>>;
+const TEXTURED: Role[] = ["glass"]; // only these keep UVs
 export type Design = {
   facade: Facade;
   crown: Crown;
@@ -22,6 +25,9 @@ export type Design = {
   podium?: "retail" | "plain";
   /** Storeys (L-numbers, 1 = ground) drawn as an open facilities deck instead of flats (North Woods' L6 and L30). */
   decks?: number[];
+  /** Map-only level of detail for spawned site buildings (never the burst): one glass shaft instead of a prism per floor,
+   * capless slab bands, balcony slabs without rails, fins at twice the spacing. About half the bytes. */
+  lod?: boolean;
 };
 
 // The Cove block: 5 towers in the north row. a-c after Maya Bay Residences (3 serviced-apartment towers on a retail
@@ -52,10 +58,10 @@ const ARCADE = 3.6; // the five-foot way: shopfronts sit this far behind the pod
 const podiumFloors = (b: Building, d: Design) =>
   d.podium === "retail" ? (b.floors >= 28 ? 3 : 2) : d.podium === "plain" || b.floors >= 15 ? 2 : 0;
 
-type P = [number, number]; // x east, z south
-type Edge = { a: P; b: P; dir: P; n: P; len: number };
+export type P = [number, number]; // x east, z south
+export type Edge = { a: P; b: P; dir: P; n: P; len: number };
 
-function edgesOf(poly: P[]): Edge[] {
+export function edgesOf(poly: P[]): Edge[] {
   return poly.map((a, i) => {
     const b = poly[(i + 1) % poly.length];
     const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -78,21 +84,31 @@ export function offset(poly: P[], d: number): P[] {
   });
 }
 
-/** Non-indexed geometry builder with flat normals; every triangle is wound to face `n`. */
-class Mesher {
+/**
+ * Indexed geometry builder with flat normals: every flat polygon (a quad side, a cap) shares its corner vertices and is
+ * wound to face `n`. Mapbox's glTF decoder needs the index (measured: "reading 'bufferView'" without one).
+ */
+export class Mesher {
   pos: number[] = [];
   nor: number[] = [];
   uv: number[] = [];
-  tri(a: number[], b: number[], c: number[], n: number[], ua: number[], ub: number[], uc: number[]) {
+  idx: number[] = [];
+  /** A flat convex polygon, corners in order (either way round), facing n. */
+  poly(pts: number[][], n: number[], uvs: number[][]) {
+    const [a, b, c] = pts;
     const cr = [
       (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]),
       (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]),
       (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]),
     ];
-    if (cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0) [b, c, ub, uc] = [c, b, uc, ub];
-    this.pos.push(...a, ...b, ...c);
-    this.nor.push(...n, ...n, ...n);
-    this.uv.push(...ua, ...ub, ...uc);
+    const flip = cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] < 0;
+    const base = this.pos.length / 3;
+    pts.forEach((p, i) => {
+      this.pos.push(p[0], p[1], p[2]);
+      this.nor.push(n[0], n[1], n[2]);
+      this.uv.push(uvs[i][0], uvs[i][1]);
+    });
+    for (let i = 1; i < pts.length - 1; i++) this.idx.push(base, base + (flip ? i + 1 : i), base + (flip ? i : i + 1));
   }
   /** Vertical prism of a convex outline from y0 to y1; sides UV'd along the perimeter in texture tiles. */
   prism(poly: P[], y0: number, y1: number, caps: { top?: boolean; bottom?: boolean } = { top: true, bottom: true }) {
@@ -104,69 +120,58 @@ class Mesher {
       const u0 = s / TEX_W;
       const u1 = (s + e.len) / TEX_W;
       s += e.len;
-      const n = [e.n[0], 0, e.n[1]];
       const A = [e.a[0], y0, e.a[1]], B = [e.b[0], y0, e.b[1]], C = [e.b[0], y1, e.b[1]], D = [e.a[0], y1, e.a[1]];
-      this.tri(A, B, C, n, [u0, v0], [u1, v0], [u1, v1]);
-      this.tri(A, C, D, n, [u0, v0], [u1, v1], [u0, v1]);
+      this.poly([A, B, C, D], [e.n[0], 0, e.n[1]], [[u0, v0], [u1, v0], [u1, v1], [u0, v1]]);
     }
     for (const [y, up, on] of [[y1, 1, caps.top], [y0, -1, caps.bottom]] as const) {
-      if (!on) continue;
-      for (let i = 1; i < poly.length - 1; i++) {
-        const [a, b, c] = [poly[0], poly[i], poly[i + 1]];
-        this.tri([a[0], y, a[1]], [b[0], y, b[1]], [c[0], y, c[1]], [0, up, 0], [a[0] / TEX_W, a[1] / TEX_W], [b[0] / TEX_W, b[1] / TEX_W], [c[0] / TEX_W, c[1] / TEX_W]);
-      }
+      if (on) this.poly(poly.map((p) => [p[0], y, p[1]]), [0, up, 0], poly.map((p) => [p[0] / TEX_W, p[1] / TEX_W]));
     }
+  }
+  /** Another mesher's geometry, moved by (dx, 0, dz). */
+  append(m: Mesher, dx = 0, dz = 0) {
+    const base = this.pos.length / 3;
+    for (let i = 0; i < m.pos.length; i += 3) this.pos.push(m.pos[i] + dx, m.pos[i + 1], m.pos[i + 2] + dz);
+    this.nor.push(...m.nor);
+    this.uv.push(...m.uv);
+    for (const i of m.idx) this.idx.push(base + i);
   }
   /** A box `w` along edge e (centred `at` metres from e.a), `d` deep from `out` metres outside the edge, y0..y1. */
   edgeBox(e: Edge, at: number, w: number, d: number, out: number, y0: number, y1: number) {
     const c: P = [e.a[0] + e.dir[0] * at + e.n[0] * (out + d / 2), e.a[1] + e.dir[1] * at + e.n[1] * (out + d / 2)];
     const hx: P = [(e.dir[0] * w) / 2, (e.dir[1] * w) / 2];
     const hz: P = [(e.n[0] * d) / 2, (e.n[1] * d) / 2];
-    const quad: P[] = [
-      [c[0] - hx[0] - hz[0], c[1] - hx[1] - hz[1]],
-      [c[0] + hx[0] - hz[0], c[1] + hx[1] - hz[1]],
-      [c[0] + hx[0] + hz[0], c[1] + hx[1] + hz[1]],
-      [c[0] - hx[0] + hz[0], c[1] - hx[1] + hz[1]],
-    ];
     // a box is a prism of a convex quad; its "outward" test needs the quad's own centre as origin
-    const shifted = quad.map((p) => [p[0] - c[0], p[1] - c[1]] as P);
     const m = new Mesher();
-    m.prism(shifted, y0, y1);
-    for (let i = 0; i < m.pos.length; i += 3) {
-      m.pos[i] += c[0];
-      m.pos[i + 2] += c[1];
-    }
-    this.pos.push(...m.pos);
-    this.nor.push(...m.nor);
-    this.uv.push(...m.uv);
+    m.prism([[-hx[0] - hz[0], -hx[1] - hz[1]], [hx[0] - hz[0], hx[1] - hz[1]], [hx[0] + hz[0], hx[1] + hz[1]], [-hx[0] + hz[0], -hx[1] + hz[1]]], y0, y1);
+    this.append(m, c[0], c[1]);
   }
-  /** A box between two points (posts and beams of the crown frame). */
+  /** A square post (crown frame, arcade). */
   post(p: P, w: number, y0: number, y1: number) {
     const h = w / 2;
     const m = new Mesher();
     m.prism([[-h, -h], [h, -h], [h, h], [-h, h]], y0, y1);
-    for (let i = 0; i < m.pos.length; i += 3) {
-      m.pos[i] += p[0];
-      m.pos[i + 2] += p[1];
-    }
-    this.pos.push(...m.pos);
-    this.nor.push(...m.nor);
-    this.uv.push(...m.uv);
+    this.append(m, p[0], p[1]);
   }
-  geometry() {
+  /** An axis-aligned box: centre x/z, size w (x) by d (z), y0..y1. */
+  box(x: number, z: number, w: number, d: number, y0: number, y1: number) {
+    const m = new Mesher();
+    m.prism([[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]], y0, y1);
+    this.append(m, x, z);
+  }
+  /** `uv`: only textured roles need it (it is a quarter of the bytes). */
+  geometry(uv = true) {
     if (!this.pos.length) return null;
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute("normal", new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
-    // Mapbox's glTF decoder reads primitive.indices unconditionally (measured: "reading 'bufferView'" without one)
-    g.setIndex(Array.from({ length: this.pos.length / 3 }, (_, i) => i));
+    if (uv) g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv, 2));
+    g.setIndex(this.idx);
     return g;
   }
 }
 
 /** Positions (metres along the edge) of evenly spaced members about `step` apart, inside a margin. */
-const along = (len: number, step: number, margin: number) => {
+export const along = (len: number, step: number, margin: number) => {
   const n = Math.max(1, Math.round((len - 2 * margin) / step));
   return Array.from({ length: n + 1 }, (_, i) => margin + ((len - 2 * margin) * i) / n);
 };
@@ -175,8 +180,8 @@ const along = (len: number, step: number, margin: number) => {
  * Geometry per material role for floors [from, to) (0-based), plus the roof and crown when `roof`. The burst builds
  * the floors below its cut and the floors above it (which lift away) as two calls; the map builds 0..floors with roof.
  */
-export function towerParts(b: Building, outline: P[], from: number, to: number, roof: boolean): Partial<Record<Role, THREE.BufferGeometry>> {
-  const d = designOf(b);
+export function towerParts(b: Building, outline: P[], from: number, to: number, roof: boolean, design?: Design): TowerParts {
+  const d = design ?? designOf(b);
   const f = FACADE[d.facade];
   const M = Object.fromEntries(ROLES.map((r) => [r, new Mesher()])) as Record<Role, Mesher>;
   const pod = podiumFloors(b, d);
@@ -196,8 +201,8 @@ export function towerParts(b: Building, outline: P[], from: number, to: number, 
         // Shopfronts behind an arcade: glass set back, a mullion between shops, columns on the podium edge, a signage band on the canopy fascia.
         M.glass.prism(offset(outline, edge - ARCADE), y0, y1 - 0.4, { top: false, bottom: false });
         for (const e of faces) {
-          for (const t of along(e.len, 6, 0)) M.frame.edgeBox(e, t, 0.15, 0.2, edge - ARCADE, y0, y1 - 0.4);
-          for (const t of along(e.len, 5, 0.5)) M.podium.edgeBox(e, t, 0.5, 0.5, edge - 0.55, y0, y1 - 0.4);
+          if (!d.lod) for (const t of along(e.len, 6, 0)) M.frame.edgeBox(e, t, 0.15, 0.2, edge - ARCADE, y0, y1 - 0.4);
+          for (const t of along(e.len, d.lod ? 8 : 5, 0.5)) M.podium.edgeBox(e, t, 0.5, 0.5, edge - 0.55, y0, y1 - 0.4);
           const shops = along(e.len, 6, 0);
           for (let i = 0; i < shops.length - 1; i++)
             M[i % 2 ? "podium" : "sign"].edgeBox(e, (shops[i] + shops[i + 1]) / 2, shops[i + 1] - shops[i] - 0.3, 0.08, edge, y1 - 0.4 - 0.55, y1 - 0.4 - 0.08);
@@ -236,13 +241,14 @@ export function towerParts(b: Building, outline: P[], from: number, to: number, 
       if (l1) M.green.edgeBox(l1, l1.len / 2, l1.len * 0.7, 1, -1.8, y0 + 0.35, y0 + 0.95);
       continue;
     }
-    M.glass.prism(offset(o, -f.inset), y0, y1, { top: false, bottom: fl === from || deck.has(fl - 1) });
-    M.frame.prism(offset(o, f.slabOut), y0, y0 + f.slabH);
+    if (!d.lod) M.glass.prism(offset(o, -f.inset), y0, y1, { top: false, bottom: fl === from || deck.has(fl - 1) });
+    M.frame.prism(offset(o, f.slabOut), y0, y0 + f.slabH, d.lod ? { top: false, bottom: false } : undefined);
     if (fl === setFrom) M.frame.prism(offset(outline, f.slabOut), y0 - 0.05, y0 + 0.35); // the terrace slab under the setback
     if (d.facade === "balcony" && fl < setFrom) {
       for (const e of longest) {
         const w = e.len - 2.4;
         M.frame.edgeBox(e, e.len / 2, w, 1.5, 0, y0, y0 + 0.22);
+        if (d.lod) continue;
         M.rail.edgeBox(e, e.len / 2, w, 0.04, 1.44, y0 + 0.22, y0 + 1.15);
         M.frame.edgeBox(e, e.len / 2, w, 0.1, 1.4, y0 + 1.15, y0 + 1.22);
       }
@@ -251,6 +257,12 @@ export function towerParts(b: Building, outline: P[], from: number, to: number, 
 
   // Vertical members, built for this floor range only so the burst's two halves meet at the cut.
   const lo = Math.max(from, pod) * FLOOR_H;
+  if (d.lod) {
+    // one glass shaft below the setback, one above it (LOD designs have no decks)
+    const a = Math.max(from, pod), z = Math.min(to, setFrom);
+    if (z > a) M.glass.prism(offset(outline, -f.inset), a * FLOOR_H, z * FLOOR_H, { top: false, bottom: false });
+    if (to > setFrom) M.glass.prism(offset(shape(top), -f.inset), Math.max(from, setFrom) * FLOOR_H, to * FLOOR_H, { top: false, bottom: false });
+  }
   const hiCol = Math.min(to, setFrom) * FLOOR_H + (to >= setFrom ? 0.35 : 0);
   if (hiCol > lo) {
     if (d.facade === "columns")
@@ -258,7 +270,7 @@ export function towerParts(b: Building, outline: P[], from: number, to: number, 
     if (d.facade === "balcony")
       for (const e of longest) for (const t of along(e.len, 7.5, 1.2)) M.frame.edgeBox(e, t, 0.25, 1.6, -0.3, lo, hiCol);
     if (d.facade === "fins")
-      for (const e of faces) for (const t of along(e.len, 1.5, 0.5)) M.frame.edgeBox(e, t, 0.16, 0.8, -0.25, lo, hiCol + (to === top ? 0.8 : 0));
+      for (const e of faces) for (const t of along(e.len, d.lod ? 3 : 1.5, 0.5)) M.frame.edgeBox(e, t, d.lod ? 0.25 : 0.16, 0.8, -0.25, lo, hiCol + (to === top ? 0.8 : 0));
     if (d.facade === "curtain") for (const e of faces) for (const t of [0.15, e.len - 0.15]) M.frame.edgeBox(e, t, 0.3, 0.12, 0, lo, hiCol); // corner mullions
   }
 
@@ -284,15 +296,22 @@ export function towerParts(b: Building, outline: P[], from: number, to: number, 
 
   const out: Partial<Record<Role, THREE.BufferGeometry>> = {};
   for (const k of Object.keys(M) as Role[]) {
-    const g = M[k].geometry();
+    const g = M[k].geometry(TEXTURED.includes(k));
     if (g) out[k] = g;
   }
   return out;
 }
 
 /** Every part in one geometry (position + normal): the burst's picked-colour overlay covers exactly the tower. */
-export function wholeTower(parts: Partial<Record<Role, THREE.BufferGeometry>>) {
-  const gs = Object.values(parts).filter(Boolean) as THREE.BufferGeometry[];
+export function wholeTower(parts: TowerParts) {
+  // position + normal only: the roles differ in whether they carry UVs, and merging needs the same attributes
+  const gs = (Object.values(parts).filter(Boolean) as THREE.BufferGeometry[]).map((g) => {
+    const c = new THREE.BufferGeometry();
+    c.setAttribute("position", g.getAttribute("position"));
+    c.setAttribute("normal", g.getAttribute("normal"));
+    c.setIndex(g.getIndex());
+    return c;
+  });
   return gs.length ? mergeGeometries(gs, false) : null;
 }
 
@@ -301,9 +320,9 @@ export function wholeTower(parts: Partial<Record<Role, THREE.BufferGeometry>>) {
 const mix = (a: string, b: string, t: number) => "#" + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
 
 /** Window texture for one facade type, from theme tokens, with a night twin lighting about a fifth of the panes. */
-function facadeTexture(facade: Facade, colors: ThemeColors, dark: boolean, seed: number) {
-  const W = 512;
-  const H = 1024;
+function facadeTexture(facade: Facade, colors: ThemeColors, dark: boolean, seed: number, scale: number) {
+  const W = 512 * scale;
+  const H = 1024 * scale;
   const rowH = H / TEX_FLOORS;
   const base = document.createElement("canvas");
   const glow = document.createElement("canvas");
@@ -401,9 +420,18 @@ function facadeTexture(facade: Facade, colors: ThemeColors, dark: boolean, seed:
  * core-glTF PBR for the map's model (Mapbox has no environment map for clearcoat to reflect). `lit` turns the night
  * windows on.
  */
-export function towerMaterials(b: Building, colors: ThemeColors, dark: boolean, physical: boolean, lit = dark): Record<Role, THREE.Material> {
-  const d = designOf(b);
-  const { map, emissiveMap } = facadeTexture(d.facade, colors, dark, b.id.charCodeAt(0));
+export function towerMaterials(
+  b: Building,
+  colors: ThemeColors,
+  dark: boolean,
+  physical: boolean,
+  lit = dark,
+  design?: Design,
+  /** texture size: 1 = 512 x 1024 (our towers); spawned site buildings use 0.5 to stay under their size budget */
+  texScale = 1,
+): Record<Role, THREE.Material> {
+  const d = design ?? designOf(b);
+  const { map, emissiveMap } = facadeTexture(d.facade, colors, dark, b.id.charCodeAt(0), texScale);
   const frameCol = dark ? "#565c66" : d.facade === "curtain" ? "#b9bec4" : "#f2eee7";
   const glass = physical
     ? new THREE.MeshPhysicalMaterial({ map, emissiveMap, emissive: "#ffffff", emissiveIntensity: lit ? 1.1 : 0, roughness: 0.22, metalness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05 })
@@ -426,8 +454,11 @@ export function towerMaterials(b: Building, colors: ThemeColors, dark: boolean, 
     water: solid(mix(colors["chart-3"], "#5fb4d6", 0.6), 0.1),
     green: solid(mix(colors["chart-2"], "#6f9a5a", 0.7), 0.9),
     roof: solid(dark ? "#4d525a" : "#e4dfd7", 0.7),
+    // landed homes: rendered walls and clay-tile roofs (warm grey-terracotta, muted so the block reads calm)
+    wall: solid(dark ? "#5a5650" : "#efe9df", 0.85),
+    tile: solid(dark ? "#5b3f36" : mix("#a65a3f", "#d8cfc2", 0.25), 0.8),
     rail,
   };
 }
 
-export const ROLES: Role[] = ["glass", "frame", "podium", "sign", "water", "green", "roof", "rail"]; // rail last: it is see-through
+export const ROLES: Role[] = ["glass", "frame", "podium", "wall", "sign", "water", "green", "roof", "tile", "rail"]; // rail last: it is see-through

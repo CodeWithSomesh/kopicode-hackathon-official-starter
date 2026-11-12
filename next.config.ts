@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  redirects: async () => [{ source: "/dashboard/:path*", destination: "/", permanent: false }],
   images: {
     remotePatterns: [{ protocol: "https", hostname: "*.supabase.co" }],
   },

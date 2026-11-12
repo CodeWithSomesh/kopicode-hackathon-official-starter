@@ -4,7 +4,7 @@ import { safeNext } from "@/app/(auth)/next-path";
 import { env, isSupabaseConfigured } from "@/lib/env";
 
 /** HomeLander pages that need an account (the map, Feng Shui and About stay public). */
-const PROTECTED_PREFIXES = ["/onboarding", "/swipe", "/battle", "/bank", "/profile", "/admin", "/dashboard"];
+const PROTECTED_PREFIXES = ["/onboarding", "/swipe", "/battle", "/bank", "/profile", "/admin"];
 const AUTH_PAGES = ["/login", "/signup"];
 
 /**

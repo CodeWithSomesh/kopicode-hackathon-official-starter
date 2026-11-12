@@ -55,7 +55,8 @@ function generate(): Swipe[] {
       const liked = rand() < p;
       let reason: PassReason | null = null;
       if (!liked && rand() < 0.62) {
-        const mix = reasonMix[unit.townshipId]!;
+        // Projects without a tuned mix get an even spread of pass reasons.
+        const mix = reasonMix[unit.townshipId] ?? [0.3, 0.3, 0.1, 0.3];
         let x = rand();
         let k = 0;
         while (k < 3 && x > mix[k]!) x -= mix[k++]!;
@@ -126,9 +127,9 @@ export type SampleLead = {
 };
 
 export const sampleLeads: SampleLead[] = [
-  { id: "L-2041", name: "Jason Lim", unitId: "highpark-c", maxPriceRM: 760_000, createdAt: "2026-11-11T16:42:00+08:00", reasons: ["Gives back 3.2 hours a week", "Within budget with RM2,100 left each month"], status: "New" },
-  { id: "L-2038", name: "Priya Ramasamy", unitId: "gardens-t2", maxPriceRM: 820_000, createdAt: "2026-11-11T11:05:00+08:00", reasons: ["Parents moving in: needs 4 bedrooms", "Walk to KTM Kuang"], status: "Contacted" },
-  { id: "L-2033", name: "Hafiz Rahman", unitId: "cove-t1", maxPriceRM: 900_000, createdAt: "2026-11-10T20:18:00+08:00", reasons: ["Works from home 3 days a week", "Wants a landed home near the park"], status: "Viewing booked" },
-  { id: "L-2029", name: "Tan Mei Ling", unitId: "robertson-2", maxPriceRM: 950_000, createdAt: "2026-11-10T09:37:00+08:00", reasons: ["Train person, office at KLCC", "Freehold in the city centre"], status: "Viewing booked" },
-  { id: "L-2024", name: "Arjun Nair", unitId: "kundang-t1", maxPriceRM: 640_000, createdAt: "2026-11-09T14:12:00+08:00", reasons: ["First home, tight budget", "Drives to Kepong"], status: "Contacted" },
+  { id: "L-2041", name: "Jason Lim", unitId: "highpark-suites", maxPriceRM: 760_000, createdAt: "2026-11-11T16:42:00+08:00", reasons: ["Gives back 3.2 hours a week", "Within budget with RM2,100 left each month"], status: "New" },
+  { id: "L-2038", name: "Priya Ramasamy", unitId: "gardens-valeria", maxPriceRM: 820_000, createdAt: "2026-11-11T11:05:00+08:00", reasons: ["Parents moving in: needs 4 bedrooms", "Walk to KTM Kuang"], status: "Contacted" },
+  { id: "L-2033", name: "Hafiz Rahman", unitId: "cove-mori-pines", maxPriceRM: 900_000, createdAt: "2026-11-10T20:18:00+08:00", reasons: ["Works from home 3 days a week", "Wants a landed home near the park"], status: "Viewing booked" },
+  { id: "L-2029", name: "Tan Mei Ling", unitId: "robertson-residences", maxPriceRM: 950_000, createdAt: "2026-11-10T09:37:00+08:00", reasons: ["Train person, office at KLCC", "Freehold in the city centre"], status: "Viewing booked" },
+  { id: "L-2024", name: "Arjun Nair", unitId: "kundang-valerian", maxPriceRM: 640_000, createdAt: "2026-11-09T14:12:00+08:00", reasons: ["First home, tight budget", "Drives to Kepong"], status: "Contacted" },
 ];

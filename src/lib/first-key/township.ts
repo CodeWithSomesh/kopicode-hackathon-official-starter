@@ -6,7 +6,7 @@ import type { Building, Compass, LngLat, Place, Room, Township, Unit } from "./t
 // sit on real buildings in the basemap. (Site choice not checked against the live basemap.)
 
 export const PROJECT = "Seri Kopi Heights";
-const CENTER: LngLat = [101.71, 2.8209];
+const CENTER: LngLat = [101.6097, 2.8806];
 
 /**
  * Monthly instalment in RM. Assumptions: 90% loan, 35 years, 4.2% a year, monthly compounding,
@@ -23,8 +23,14 @@ export function monthlyInstalment(price: number, loanShare = 0.9, years = 35, ra
 const M_PER_DEG_LAT = 110_574;
 const M_PER_DEG_LNG = 111_320 * Math.cos((CENTER[1] * Math.PI) / 180);
 const at = (eastM: number, northM: number): LngLat => [CENTER[0] + eastM / M_PER_DEG_LNG, CENTER[1] + northM / M_PER_DEG_LAT];
+/** A w x d rectangle with every corner chamfered (cut 18% of the shorter side, at most 4.5 m), as a closed ring. */
 const rect = (e: number, n: number, w: number, d: number): LngLat[] => {
-  const p = [at(e - w / 2, n - d / 2), at(e + w / 2, n - d / 2), at(e + w / 2, n + d / 2), at(e - w / 2, n + d / 2)];
+  const c = Math.min(0.18 * Math.min(w, d), 4.5);
+  const [x0, x1, y0, y1] = [e - w / 2, e + w / 2, n - d / 2, n + d / 2];
+  const p = [
+    at(x0 + c, y0), at(x1 - c, y0), at(x1, y0 + c), at(x1, y1 - c),
+    at(x1 - c, y1), at(x0 + c, y1), at(x0, y1 - c), at(x0, y0 + c),
+  ];
   return [...p, p[0]];
 };
 

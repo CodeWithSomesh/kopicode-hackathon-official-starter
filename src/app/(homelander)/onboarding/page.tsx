@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import { RegretTest } from "./regret-test";
+import { OnboardingView } from "./onboarding-view";
 
-export const metadata: Metadata = {
-  title: "Ask Uncle",
-  description: "The Regret Test: Uncle asks five questions out loud and tells you which Gamuda Land home you won't regret.",
-};
+export const metadata: Metadata = { title: "Sit with Uncle" };
 
-export default function UnclePage() {
-  return <RegretTest />;
+/** Onboarding: Uncle chats (voice or text, any of EN/BM/中文/தமிழ்) and fills in the buyer's profile live. */
+export default function OnboardingPage() {
+  return <OnboardingView />;
 }

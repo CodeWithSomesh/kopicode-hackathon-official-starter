@@ -1,374 +1,640 @@
+import { commuteCost, type CommuteCost } from "./commute-cost";
 import {
-  affordability,
-  anchorOptions,
   availabilityOf,
-  costOfUnit,
-  driveMinutes,
-  rm,
-  samplePayslip,
+  distanceKm,
+  LOAN_RATE,
+  legalFees,
+  MARGIN,
+  monthlyInstalment,
+  nearestStation,
   townshipById,
-  transitMinutes,
+  transferStampDuty,
   units as allUnits,
+  type Anchor,
   type Availability,
+  type Region,
   type Township,
   type Unit,
 } from "./data";
-import type { HomeLanderState } from "./store";
+import { nearestByType, schoolTypeLabel, type SchoolType } from "./schools";
+import type { BattleContext } from "./battle-context";
 
 /**
- * Head-to-head analysis for the Compare ("Battle") screen.
- * Every figure is an estimate on SAMPLE units, not a loan offer.
- *
- * Each unit gets six 0-100 stats (higher is always better for the buyer, except Scarcity,
- * which is "how rare": fewer units left scores higher). The overall score is a weighted
- * average of the stats; the weights come from a preset or the buyer's sliders.
+ * Head-to-head analysis for Battle. Pure functions: one home + the buyer context in, every
+ * figure the comparison table, scores and verdict need out. Every money figure is an
+ * ESTIMATE (rates, fees and commute costs are modelled), never a quote or a loan offer.
  */
 
-export type StatKey = "commute" | "space" | "wallet" | "value" | "ready" | "scarcity";
+/* ---------------------------------------------------------------- assumptions */
 
-export const STATS: { key: StatKey; label: string; hint: string }[] = [
-  { key: "commute", label: "Commute", hint: "Hours on the road each week, both ways" },
-  { key: "space", label: "Space", hint: "Bedrooms against what you need, plus floor area" },
-  { key: "wallet", label: "Wallet", hint: "Money left each month after the instalment" },
-  { key: "value", label: "Value", hint: "Price per sqft against the median of every Gamuda Land unit listed" },
-  { key: "ready", label: "Ready-in", hint: "How soon you get the keys" },
-  { key: "scarcity", label: "Scarcity", hint: "How few units are left. Rare, so decide faster" },
-];
+/** Strata maintenance when Gamuda has not published one: RM per sq ft per month (estimate). */
+export const EST_STRATA_PSF = 0.35;
+/** Sinking fund is 10% of the maintenance charge by law (Strata Management Act 2013). */
+export const SINKING_FUND_SHARE = 0.1;
+/** Guarded-community fee for landed homes when none is published (estimate). */
+export const EST_LANDED_FEE_RM = 150;
+/** Loan agreement stamp duty: 0.5% of the loan. */
+export const LOAN_STAMP_RATE = 0.005;
+/** First-time buyer stamp duty exemption is for homes up to this price (current scheme; may change). */
+export const FIRST_HOME_EXEMPTION_CAP = 500_000;
+/** Price over the bank ceiling we still call a "stretch". */
+export const STRETCH_SHARE = 0.1;
+/** Beyond this straight-line distance a daily commute is not compared. */
+export const MAX_COMMUTE_KM = 120;
+export const DSR_LINES = [0.6, 0.7] as const;
 
-export type Weights = Record<StatKey, number>;
+/* ---------------------------------------------------------------- types */
 
-export type PresetId = "time" | "space" | "budget";
+export type EffectiveMode = "car" | "train";
 
-export const PRESETS: Record<PresetId, { label: string; blurb: string; weights: Weights }> = {
-  time: {
-    label: "Save time",
-    blurb: "Commute counts most",
-    weights: { commute: 8, space: 3, wallet: 4, value: 2, ready: 2, scarcity: 1 },
-  },
-  space: {
-    label: "Max space",
-    blurb: "Room to grow counts most",
-    weights: { commute: 3, space: 8, wallet: 4, value: 2, ready: 2, scarcity: 1 },
-  },
-  budget: {
-    label: "Tight budget",
-    blurb: "Money left over counts most",
-    weights: { commute: 3, space: 2, wallet: 8, value: 5, ready: 1, scarcity: 1 },
-  },
+export type CommuteLeg = {
+  who: "you" | "partner";
+  anchor: Anchor;
+  label: string;
+  /** False for homes too far to commute daily (Johor, Sabah vs a KL office). */
+  compared: boolean;
+  notComparedWhy: string | null;
+  cost: CommuteCost | null;
+  mode: EffectiveMode;
+  oneWayMin: number;
+  hoursPerYear: number;
+  /** Monthly cost in the mode used. */
+  monthlyRM: number;
 };
 
-/* ---------------------------------------------------------------- context */
-
-export type MoneyContext = {
-  source: "bank" | "sample";
-  netRM: number;
-  commitmentsRM: number;
-  maxPriceRM: number;
+export type SchoolCell = {
+  type: SchoolType;
+  label: string;
+  name: string;
+  km: number;
+  within: boolean | null;
 };
 
-export type AnalysisContext = {
-  anchorId: string;
-  anchorName: string;
-  officeDays: number;
-  /** The way the buyer said they travel; null means "use the faster of car and train". */
-  mode: "car" | "train" | null;
-  bedsNeeded: number;
-  wantsLanded: boolean;
-  money: MoneyContext;
-  year: number;
-};
+export type Fit = "in" | "stretch" | "over";
 
-/** Builds the context from the store: bank check if run, else the sample payslip; answers if given, else defaults. */
-export function analysisContext(
-  s: Pick<HomeLanderState, "anchorId" | "answers" | "budget">,
-  opts: { officeDays?: number; year?: number } = {},
-): AnalysisContext {
-  const anchor = anchorOptions.find((a) => a.id === s.anchorId) ?? anchorOptions[0]!;
-  const a = s.answers;
-  const sample = affordability(samplePayslip);
-  const money: MoneyContext = s.budget
-    ? {
-        source: "bank",
-        netRM: s.budget.netRM,
-        commitmentsRM: s.budget.commitmentsRM,
-        maxPriceRM: s.budget.maxPriceRM,
-      }
-    : { source: "sample", netRM: sample.netRM, commitmentsRM: sample.commitmentsRM, maxPriceRM: sample.maxPriceRM };
-  return {
-    anchorId: anchor.id,
-    anchorName: anchor.name,
-    officeDays: opts.officeDays ?? a?.officeDays ?? 5,
-    mode: a?.mode ?? null,
-    bedsNeeded: 2 + (a?.kids === "yes" ? 1 : 0) + (a?.parents === "yes" ? 1 : 0),
-    wantsLanded: a?.kids === "yes" || a?.parents === "yes",
-    money,
-    year: opts.year ?? new Date().getFullYear(),
-  };
-}
-
-/* ---------------------------------------------------------------- per unit */
-
-export type UnitAnalysis = {
+export type HomeAnalysis = {
   unit: Unit;
   township: Township;
   availability: Availability;
+  region: Region;
+  soldOut: boolean;
+
+  /* money */
   priceRM: number;
   psf: number;
-  /** Positive: cheaper per sqft than the median. As a fraction, e.g. 0.12 = 12% cheaper. */
-  psfVsMedian: number;
+  loanRM: number;
+  tenureYears: number;
   instalmentRM: number;
+  downPaymentRM: number;
+  stampDutyRM: number;
+  loanStampRM: number;
+  spaLegalRM: number;
+  loanLegalRM: number;
   upfrontRM: number;
-  leftoverRM: number;
-  overBudget: boolean;
-  driveOneWay: number;
-  trainOneWay: number;
-  station: string;
-  stationKm: number;
-  line: string;
-  driveWeekHours: number;
-  trainWeekHours: number;
-  /** The mode used for the Commute stat. */
-  usedMode: "car" | "train";
-  weekHours: number;
+  /** Savings minus cash upfront; null when savings are unknown. Negative is a shortfall. */
+  savingsGapRM: number | null;
+  firstHomeExemptionMayApply: boolean;
+  maintenanceRM: number;
+  maintenanceSource: "gamuda" | "estimated";
+  maintenanceNote: string;
+  totalMonthlyRM: number;
+  /** Take-home minus other debts minus the total monthly cost. */
+  leftRM: number;
+  dsrAfter: number;
+  fit: Fit;
+
+  /* commute */
+  you: CommuteLeg;
+  partner: CommuteLeg | null;
+
+  /* family */
   bedsShort: number;
+  bedsSpare: number;
+  schools: SchoolCell[];
+  primaryWithin: boolean | null;
+  secondaryWithin: boolean | null;
+  stationKm: number;
+  stationName: string;
+
+  /* home */
   waitYears: number;
-  stats: Record<StatKey, number>;
+  waitConflict: boolean;
+  facilities: string[];
+
+  /* market */
+  typeAvgPsf: number;
+  typeCount: number;
+  /** Fraction above (+) or below (-) the average psf of the same home type. */
+  psfVsType: number;
 };
+
+/* ---------------------------------------------------------------- helpers */
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
-const median = (xs: number[]) => {
-  const s = [...xs].sort((a, b) => a - b);
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+export function regionOf(t: Township): Region {
+  if (t.region) return t.region;
+  if (t.state === "Johor") return "johor";
+  if (t.state === "Sabah") return "sabah";
+  if (t.pos.lng > 109) return "sabah";
+  if (t.pos.lat < 2.3) return "johor";
+  return "klang-valley";
+}
+
+export const regionName: Record<Region, string> = {
+  "klang-valley": "the Klang Valley",
+  johor: "Johor",
+  sabah: "Sabah",
 };
 
-/** RM per sqft median across every unit in the catalogue, so Value does not shift when you swap fighters. */
-export const MEDIAN_PSF = median(allUnits.map((u) => u.priceRM / u.builtUpSqft));
+/** Average RM psf of every listed unit of a home type (whole catalogue, so swaps do not move it). */
+export function typeAveragePsf(type: Unit["type"]) {
+  const same = allUnits.filter((u) => u.type === type && u.builtUpSqft > 0);
+  const pool =
+    same.length >= 2 ? same : allUnits.filter((u) => u.builtUpSqft > 0);
+  const avg =
+    pool.reduce((s, u) => s + u.priceRM / u.builtUpSqft, 0) /
+    Math.max(pool.length, 1);
+  return { avg, count: pool.length, sameType: same.length >= 2 };
+}
 
-export function analyseUnit(unit: Unit, ctx: AnalysisContext): UnitAnalysis {
+export function fitOf(price: number, maxPrice: number): Fit {
+  if (maxPrice > 0 && price <= maxPrice) return "in";
+  if (maxPrice > 0 && price <= maxPrice * (1 + STRETCH_SHARE)) return "stretch";
+  return "over";
+}
+
+export function maintenanceOf(unit: Unit): {
+  rm: number;
+  source: "gamuda" | "estimated";
+  note: string;
+} {
+  if (unit.maintenancePsfRM && unit.maintenancePsfRM > 0) {
+    const base = unit.maintenancePsfRM * unit.builtUpSqft;
+    const total = Math.round(base * (1 + SINKING_FUND_SHARE));
+    return {
+      rm: total,
+      source: unit.source === "official" ? "gamuda" : "estimated",
+      note: `RM${unit.maintenancePsfRM.toFixed(2)} psf + 10% sinking fund`,
+    };
+  }
+  if (unit.serviceRM && unit.serviceRM > 0)
+    return {
+      rm: Math.round(unit.serviceRM),
+      source: unit.source === "official" ? "gamuda" : "estimated",
+      note: "Guarded-community fee",
+    };
+  if (!unit.landed)
+    return {
+      rm: Math.round(
+        unit.builtUpSqft * EST_STRATA_PSF * (1 + SINKING_FUND_SHARE),
+      ),
+      source: "estimated",
+      note: `Est. RM${EST_STRATA_PSF.toFixed(2)} psf + 10% sinking fund`,
+    };
+  return {
+    rm: EST_LANDED_FEE_RM,
+    source: "estimated",
+    note: "Est. guard and landscaping fee",
+  };
+}
+
+function commuteLeg(
+  t: Township,
+  anchor: Anchor,
+  label: string,
+  who: "you" | "partner",
+  ctx: BattleContext,
+): CommuteLeg {
+  const region = regionOf(t);
+  const km = distanceKm(t.pos, anchor.pos);
+  // Every commute anchor is in the Klang Valley, so a Johor or Sabah home is not a daily commute.
+  if (region !== "klang-valley" || km > MAX_COMMUTE_KM) {
+    return {
+      who,
+      anchor,
+      label,
+      compared: false,
+      notComparedWhy: `${t.name} is in ${regionName[region]}, about ${Math.round(km)} km from ${anchor.name}. Not a daily commute.`,
+      cost: null,
+      mode: ctx.mode === "train" ? "train" : "car",
+      oneWayMin: 0,
+      hoursPerYear: 0,
+      monthlyRM: 0,
+    };
+  }
+  const cost = commuteCost(t.pos, anchor, ctx.officeDays);
+  const mode: EffectiveMode =
+    ctx.mode === "fastest"
+      ? cost.trainMinOneWay < cost.driveMinPeak
+        ? "train"
+        : "car"
+      : ctx.mode;
+  return {
+    who,
+    anchor,
+    label,
+    compared: true,
+    notComparedWhy: null,
+    cost,
+    mode,
+    oneWayMin: mode === "car" ? cost.driveMinPeak : cost.trainMinOneWay,
+    hoursPerYear: cost.hoursPerYear[mode],
+    monthlyRM: mode === "car" ? cost.car.totalRM : cost.train.totalRM,
+  };
+}
+
+const PRIMARY: SchoolType[] = [
+  "national_primary",
+  "chinese_primary",
+  "tamil_primary",
+];
+
+/* ---------------------------------------------------------------- one home */
+
+export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
   const township = townshipById[unit.townshipId]!;
-  const anchor = anchorOptions.find((a) => a.id === ctx.anchorId) ?? anchorOptions[0]!;
   const availability = availabilityOf(unit.id);
+  const region = regionOf(township);
+  const m = ctx.money;
 
-  const psf = unit.priceRM / unit.builtUpSqft;
-  const psfVsMedian = (MEDIAN_PSF - psf) / MEDIAN_PSF;
+  const priceRM = unit.priceRM;
+  const psf = unit.builtUpSqft > 0 ? priceRM / unit.builtUpSqft : 0;
+  const loanRM = priceRM * MARGIN;
+  const tenure = Math.max(m.tenureYears, 1);
+  const instalmentRM = monthlyInstalment(loanRM, LOAN_RATE, tenure);
+  const downPaymentRM = priceRM - loanRM;
+  const stampDutyRM = transferStampDuty(priceRM);
+  const loanStampRM = Math.round(loanRM * LOAN_STAMP_RATE);
+  const spaLegalRM = legalFees(priceRM);
+  const loanLegalRM = legalFees(loanRM);
+  const upfrontRM = Math.round(
+    downPaymentRM + stampDutyRM + loanStampRM + spaLegalRM + loanLegalRM,
+  );
+  const savingsGapRM = m.savingsRM === null ? null : m.savingsRM - upfrontRM;
+  const firstHomeExemptionMayApply =
+    m.firstHome !== false && priceRM <= FIRST_HOME_EXEMPTION_CAP;
 
-  const cost = costOfUnit(unit.priceRM, ctx.money.netRM, ctx.money.commitmentsRM);
-  const overBudget = unit.priceRM > ctx.money.maxPriceRM;
+  const maint = maintenanceOf(unit);
 
-  const driveOneWay = driveMinutes(township.pos, anchor.pos);
-  const train = transitMinutes(township.pos, anchor.pos);
-  const perWeek = (oneWay: number) => (oneWay * 2 * ctx.officeDays) / 60;
-  const driveWeekHours = perWeek(driveOneWay);
-  const trainWeekHours = perWeek(train.minutes);
-  const usedMode = ctx.mode ?? (train.minutes < driveOneWay ? "train" : "car");
-  const weekHours = usedMode === "train" ? trainWeekHours : driveWeekHours;
+  const you = commuteLeg(township, ctx.work, ctx.workLabel, "you", ctx);
+  const partner = ctx.partner
+    ? commuteLeg(
+        township,
+        ctx.partner,
+        ctx.partnerLabel ?? ctx.partner.name,
+        "partner",
+        ctx,
+      )
+    : null;
+
+  const totalMonthlyRM = Math.round(
+    instalmentRM + maint.rm + you.monthlyRM + (partner?.monthlyRM ?? 0),
+  );
+  const leftRM = Math.round(m.netRM - m.commitmentsRM - totalMonthlyRM);
+  const dsrAfter = m.netRM > 0 ? (m.commitmentsRM + instalmentRM) / m.netRM : 1;
 
   const bedsShort = Math.max(ctx.bedsNeeded - unit.beds, 0);
-  const waitYears = Math.max(unit.completion - ctx.year, 0);
+  const bedsSpare = Math.max(unit.beds - ctx.bedsNeeded, 0);
 
-  // Commute: 2 h a week or less is full HP; every extra hour costs 6 points.
-  const commute = clamp(100 - Math.max(weekHours - 2, 0) * 6);
-  // Space: 65 if the bedrooms fit (minus 30 per missing bedroom), up to +30 for floor area, +5 landed when family needs it.
-  const space = clamp(
-    65 - 30 * bedsShort + Math.min(unit.builtUpSqft / 110, 30) + (ctx.wantsLanded && unit.landed ? 5 : 0),
-  );
-  // Wallet: share of take-home pay left after commitments and the instalment; capped low when over budget.
-  const leftShare = cost.leftover / ctx.money.netRM;
-  const wallet = overBudget ? Math.min(clamp(leftShare * 160), 20) : clamp(leftShare * 160);
-  // Value: 50 at the median RM/sqft, log-scaled so city condos do not all flatline; floor of 5.
-  const value = Math.max(clamp(50 + 75 * Math.log(MEDIAN_PSF / psf)), 5);
-  // Ready-in: keys this year is 100; each year of waiting costs 25.
-  const ready = clamp(100 - waitYears * 25);
-  // Scarcity: fewer units left is rarer. Sold out is 0 (you cannot buy it).
-  const scarcity = availability.left === 0 ? 0 : clamp(100 - (availability.left - 1) * 3);
+  const near = nearestByType(township.pos);
+  const schools: SchoolCell[] = (
+    Object.keys(schoolTypeLabel) as SchoolType[]
+  ).flatMap((type) => {
+    const s = near[type];
+    if (!s) return [];
+    return [
+      {
+        type,
+        label: schoolTypeLabel[type],
+        name: s.name,
+        km: s.km,
+        within: ctx.schoolMatters ? s.km <= ctx.schoolMaxKm : null,
+      },
+    ];
+  });
+  const hasSchoolData = schools.length > 0;
+  const within = (types: SchoolType[]) =>
+    hasSchoolData
+      ? schools.some((s) => types.includes(s.type) && s.km <= ctx.schoolMaxKm)
+      : null;
+
+  const st = nearestStation(township.pos);
+
+  const waitYears = Math.max(unit.completion - ctx.year, 0);
+  const typeAvg = typeAveragePsf(unit.type);
 
   return {
     unit,
     township,
     availability,
-    priceRM: unit.priceRM,
+    region,
+    soldOut: availability.left === 0,
+    priceRM,
     psf,
-    psfVsMedian,
-    instalmentRM: cost.instalment,
-    upfrontRM: cost.upfront,
-    leftoverRM: cost.leftover,
-    overBudget,
-    driveOneWay,
-    trainOneWay: train.minutes,
-    station: train.station,
-    stationKm: train.stationKm,
-    line: train.line,
-    driveWeekHours,
-    trainWeekHours,
-    usedMode,
-    weekHours,
+    loanRM,
+    tenureYears: tenure,
+    instalmentRM,
+    downPaymentRM,
+    stampDutyRM,
+    loanStampRM,
+    spaLegalRM,
+    loanLegalRM,
+    upfrontRM,
+    savingsGapRM,
+    firstHomeExemptionMayApply,
+    maintenanceRM: maint.rm,
+    maintenanceSource: maint.source,
+    maintenanceNote: maint.note,
+    totalMonthlyRM,
+    leftRM,
+    dsrAfter,
+    fit: fitOf(priceRM, m.maxPriceRM),
+    you,
+    partner,
     bedsShort,
+    bedsSpare,
+    schools,
+    primaryWithin: within(PRIMARY),
+    secondaryWithin: within(["secondary"]),
+    stationKm: st.km,
+    stationName: st.station.name,
     waitYears,
-    stats: { commute, space, wallet, value, ready, scarcity },
+    waitConflict: ctx.underConstructionOk === false && waitYears > 0,
+    facilities: township.facilities?.length
+      ? township.facilities
+      : unit.highlights,
+    typeAvgPsf: typeAvg.avg,
+    typeCount: typeAvg.count,
+    psfVsType: typeAvg.avg > 0 ? (psf - typeAvg.avg) / typeAvg.avg : 0,
   };
 }
 
-/* ---------------------------------------------------------------- the battle */
+/* ---------------------------------------------------------------- scores */
 
-export type Fighter = UnitAnalysis & { overall: number; rank: number };
+export type StatKey =
+  "monthly" | "cash" | "commute" | "space" | "family" | "value" | "ready";
 
-export type Battle = {
-  /** In lineup order. */
-  fighters: Fighter[];
-  winner: Fighter;
-  runnerUp: Fighter | null;
-  reasons: string[];
-  caveats: string[];
-  closeCall: boolean;
+export const STATS: { key: StatKey; label: string; hint: string }[] = [
+  {
+    key: "monthly",
+    label: "Monthly",
+    hint: "Money left each month after instalment, maintenance and commute",
+  },
+  {
+    key: "cash",
+    label: "Cash upfront",
+    hint: "Down payment and fees against your savings",
+  },
+  {
+    key: "commute",
+    label: "Commute",
+    hint: "Hours a year getting to work (and your partner's)",
+  },
+  {
+    key: "space",
+    label: "Space",
+    hint: "Bedrooms against what you need, floor area, landed or high-rise",
+  },
+  {
+    key: "family",
+    label: "Family",
+    hint: "Schools within your distance, parents, pets, room to grow",
+  },
+  {
+    key: "value",
+    label: "Value",
+    hint: "Price per sq ft against homes of the same type",
+  },
+  {
+    key: "ready",
+    label: "Ready",
+    hint: "Years until the keys, against what you said is OK",
+  },
+];
+
+export type Stats = Record<StatKey, number>;
+
+/** How the commute score treats hours a year: 100 at 100 h or less, 0 at 600 h. */
+export const commuteScore = (hoursPerYear: number) =>
+  clamp(100 - Math.max(hoursPerYear - 100, 0) / 5);
+
+export function statsOf(a: HomeAnalysis, ctx: BattleContext): Stats {
+  const m = ctx.money;
+
+  // Monthly: share of take-home left after debts and the full monthly cost; capped when over budget.
+  const leftShare = m.netRM > 0 ? a.leftRM / m.netRM : 0;
+  let monthly = clamp(leftShare * 200);
+  if (a.fit === "over") monthly = Math.min(monthly, 20);
+  else if (a.fit === "stretch") monthly = Math.min(monthly, 45);
+
+  // Cash: savings cover the upfront cash (100 at 118%); unknown savings: months of take-home it eats.
+  const cash =
+    m.savingsRM !== null
+      ? clamp((m.savingsRM / Math.max(a.upfrontRM, 1)) * 85)
+      : clamp(100 - (a.upfrontRM / Math.max(m.netRM, 1)) * 3.5);
+
+  // Commute: 0 when it cannot be compared; partner counts a third.
+  const commute = !a.you.compared
+    ? 0
+    : a.partner && a.partner.compared
+      ? clamp(
+          (2 * commuteScore(a.you.hoursPerYear) +
+            commuteScore(a.partner.hoursPerYear)) /
+            3,
+        )
+      : commuteScore(a.you.hoursPerYear);
+
+  // Space: 55 if the bedrooms fit, -30 per missing bedroom, up to +30 for floor area, +/- home type.
+  const typeFit =
+    ctx.homeType === "either"
+      ? 0
+      : (ctx.homeType === "landed") === a.unit.landed
+        ? 15
+        : -20;
+  const space = clamp(
+    55 - 30 * a.bedsShort + Math.min(a.unit.builtUpSqft / 100, 30) + typeFit,
+  );
+
+  // Family: schools when they matter, parents (stairs vs lifts), pets (strata rules), a spare room.
+  let family = 50;
+  if (ctx.schoolMatters || ctx.hasKids) {
+    if (a.primaryWithin !== null) {
+      const hits = Number(a.primaryWithin) + Number(a.secondaryWithin);
+      family += hits === 0 ? -15 : hits * 20;
+    }
+  } else if (a.schools.some((s) => s.type.endsWith("primary") && s.km <= 3))
+    family += 10;
+  if (ctx.parentsMovingIn) family += a.unit.landed ? -5 : 15;
+  if (ctx.pets === true) family += a.unit.landed ? 15 : -10;
+  if (a.bedsSpare > 0) family += 10;
+  if (a.bedsShort > 0) family -= 15;
+  family = clamp(family);
+
+  // Value: 50 at the type average; every 1% cheaper adds 1.5 points.
+  const value = Math.max(clamp(50 - 150 * a.psfVsType), 5);
+
+  // Ready: keys now is 100, each year of waiting -25; capped at 15 if the buyer said no to waiting.
+  let ready = clamp(100 - a.waitYears * 25);
+  if (a.waitConflict) ready = Math.min(ready, 15);
+
+  return { monthly, cash, commute, space, family, value, ready };
+}
+
+/* ---------------------------------------------------------------- weights */
+
+export type Weights = Record<StatKey, number>;
+
+export type PresetId = "uncle" | "monthly" | "commute" | "family" | "value";
+
+export const PRESETS: Record<
+  Exclude<PresetId, "uncle">,
+  { label: string; blurb: string; weights: Weights }
+> = {
+  monthly: {
+    label: "Lowest monthly cost",
+    blurb: "What you pay every month counts most, then cash upfront.",
+    weights: {
+      monthly: 10,
+      cash: 5,
+      commute: 3,
+      space: 2,
+      family: 2,
+      value: 3,
+      ready: 1,
+    },
+  },
+  commute: {
+    label: "Shortest commute",
+    blurb: "Hours on the road or train count most.",
+    weights: {
+      monthly: 4,
+      cash: 2,
+      commute: 10,
+      space: 2,
+      family: 2,
+      value: 2,
+      ready: 1,
+    },
+  },
+  family: {
+    label: "Most space / family",
+    blurb: "Bedrooms, floor area and schools count most.",
+    weights: {
+      monthly: 4,
+      cash: 2,
+      commute: 3,
+      space: 10,
+      family: 8,
+      value: 2,
+      ready: 1,
+    },
+  },
+  value: {
+    label: "Best value",
+    blurb: "Price per sq ft against similar homes counts most.",
+    weights: {
+      monthly: 5,
+      cash: 4,
+      commute: 2,
+      space: 3,
+      family: 1,
+      value: 10,
+      ready: 1,
+    },
+  },
 };
 
-export function overallScore(stats: Record<StatKey, number>, w: Weights) {
+/** Uncle's mix: weights read off the profile, so the default verdict fits this buyer. */
+export function uncleWeights(
+  ctx: BattleContext,
+  sample: HomeAnalysis | null,
+): { weights: Weights; why: string[] } {
+  const w: Weights = {
+    monthly: 6,
+    cash: 4,
+    commute: 5,
+    space: 5,
+    family: 3,
+    value: 3,
+    ready: 2,
+  };
+  const why: string[] = [];
+  if (ctx.officeDays >= 4) {
+    w.commute = 8;
+    why.push(`${ctx.officeDays} office days`);
+  } else if (ctx.officeDays <= 2) {
+    w.commute = 3;
+    why.push(
+      `only ${ctx.officeDays} office day${ctx.officeDays === 1 ? "" : "s"}`,
+    );
+  }
+  if (ctx.hasKids || ctx.schoolMatters) {
+    w.family = ctx.schoolMatters ? 8 : 6;
+    w.space = 7;
+    why.push(ctx.schoolMatters ? "school distance matters" : "kids");
+  }
+  if (ctx.parentsMovingIn) {
+    w.space = Math.max(w.space, 7);
+    w.family = Math.max(w.family, 6);
+    why.push("parents moving in");
+  }
+  if (sample && ctx.money.netRM > 0 && sample.dsrAfter > 0.55) {
+    w.monthly = 9;
+    why.push("a tight monthly budget");
+  }
+  if (
+    ctx.money.savingsRM !== null &&
+    sample &&
+    sample.savingsGapRM !== null &&
+    sample.savingsGapRM < 0
+  ) {
+    w.cash = 7;
+    why.push("savings short of the upfront cash");
+  }
+  if (ctx.underConstructionOk === false) {
+    w.ready = 7;
+    why.push("you want a ready home");
+  }
+  return { weights: w, why };
+}
+
+export function overallScore(stats: Stats, w: Weights) {
   const total = STATS.reduce((sum, s) => sum + w[s.key], 0);
   if (total <= 0) return 0;
-  return clamp(STATS.reduce((sum, s) => sum + stats[s.key] * w[s.key], 0) / total);
-}
-
-export function battle(list: Unit[], ctx: AnalysisContext, weights: Weights): Battle {
-  const analysed = list.map((u) => analyseUnit(u, ctx));
-  const scored = analysed.map((a) => ({ ...a, overall: overallScore(a.stats, weights), rank: 0 }));
-  // Sold-out homes cannot win while anything else is still for sale.
-  const order = [...scored].sort(
-    (a, b) => Number(a.availability.left === 0) - Number(b.availability.left === 0) || b.overall - a.overall,
+  return clamp(
+    STATS.reduce((sum, s) => sum + stats[s.key] * w[s.key], 0) / total,
   );
-  order.forEach((f, i) => (f.rank = i + 1));
-  const winner = order[0]!;
-  const runnerUp = order[1] ?? null;
-  return {
-    fighters: scored,
-    winner,
-    runnerUp,
-    reasons: battleReasons(winner, runnerUp, weights, ctx),
-    caveats: battleCaveats(winner, runnerUp, ctx),
-    closeCall: runnerUp ? winner.overall - runnerUp.overall < 3 : false,
-  };
 }
 
-const hrs = (h: number) => `${h.toFixed(1)} h`;
-const year = (n: number) => (n === 1 ? "1 year" : `${n} years`);
+/* ---------------------------------------------------------------- table helpers */
 
-/** 2-4 plain reasons the winner beats the runner-up, strongest (by weight x gap) first. */
-export function battleReasons(best: Fighter, next: Fighter | null, w: Weights, ctx: AnalysisContext): string[] {
-  if (!next) return [`${best.unit.name} is the only fighter in the ring.`];
-  const cands: { score: number; text: string }[] = [];
-  const gap = (k: StatKey) => (best.stats[k] - next.stats[k]) * w[k];
-
-  const dh = next.weekHours - best.weekHours;
-  if (dh >= 0.5)
-    cands.push({
-      score: gap("commute"),
-      text: `It gives you back ${hrs(dh)} a week on the ${best.usedMode === "train" ? "train" : "road"} compared with ${next.unit.name}.`,
-    });
-
-  if (next.overBudget && !best.overBudget)
-    cands.push({
-      score: gap("wallet") + 200,
-      text: `${next.unit.name} is above the ${rm(ctx.money.maxPriceRM)} the bank is likely to lend against; this one is not.`,
-    });
-  else if (best.leftoverRM - next.leftoverRM > 150)
-    cands.push({
-      score: gap("wallet"),
-      text: `You keep about ${rm(best.leftoverRM - next.leftoverRM)} more each month after the instalment.`,
-    });
-
-  if (next.bedsShort > best.bedsShort)
-    cands.push({
-      score: gap("space") + 100,
-      text: `${next.unit.name} has ${next.unit.beds} bedroom${next.unit.beds === 1 ? "" : "s"}; you need ${ctx.bedsNeeded}.`,
-    });
-  else if (best.unit.builtUpSqft - next.unit.builtUpSqft >= 200)
-    cands.push({
-      score: gap("space"),
-      text: `${(best.unit.builtUpSqft - next.unit.builtUpSqft).toLocaleString("en-MY")} sqft more room to move.`,
-    });
-
-  if (next.psf - best.psf >= 20)
-    cands.push({
-      score: gap("value"),
-      text: `Better value: about RM${Math.round(next.psf - best.psf)} less per sqft.`,
-    });
-
-  if (next.waitYears > best.waitYears)
-    cands.push({
-      score: gap("ready"),
-      text:
-        best.waitYears === 0
-          ? `Keys in ${best.unit.completion}, so no years of paying rent and instalment at the same time.`
-          : `You get the keys ${year(next.waitYears - best.waitYears)} sooner (${best.unit.completion} vs ${next.unit.completion}).`,
-    });
-
-  if (best.unit.tenure === "Freehold" && next.unit.tenure === "Leasehold")
-    cands.push({ score: 15, text: `Freehold, so no lease running down on you. ${next.unit.name} is leasehold.` });
-
-  const out = cands
-    .filter((c) => c.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4)
-    .map((c) => c.text);
-  if (out.length < 2) out.push(`On the weights you set, it edges ${next.unit.name} overall (${best.overall} vs ${next.overall}).`);
-  return out;
+/** Indices of the best value in a row (nulls skipped), or none when everyone ties. */
+export function bestIndices(
+  values: (number | null)[],
+  better: "high" | "low",
+): Set<number> {
+  const real = values.filter(
+    (v): v is number => v !== null && Number.isFinite(v),
+  );
+  if (real.length < 2) return new Set();
+  const target = better === "high" ? Math.max(...real) : Math.min(...real);
+  const idx = values.flatMap((v, i) =>
+    v !== null && Math.abs(v - target) < 1e-9 ? [i] : [],
+  );
+  return idx.length === real.length ? new Set() : new Set(idx);
 }
 
-/** Honest warnings about the winner, including where the runner-up beats it. */
-export function battleCaveats(best: Fighter, next: Fighter | null, ctx: AnalysisContext): string[] {
-  const out: string[] = [];
-  if (best.availability.left === 0) out.push("Every fighter left is sold out. Ask the sales gallery about the next phase.");
-  if (best.overBudget)
-    out.push(
-      `At ${rm(best.priceRM)} it is above the roughly ${rm(ctx.money.maxPriceRM)} the bank is likely to lend against.`,
-    );
-  else if (best.leftoverRM < ctx.money.netRM * 0.2)
-    out.push(`Tight: only ${rm(best.leftoverRM)} left each month once the instalment and your other loans are paid.`);
-  if (best.bedsShort > 0) out.push(`It has ${best.unit.beds} bedrooms and you said you need ${ctx.bedsNeeded}.`);
-  if (best.availability.left > 0 && best.availability.left <= 7)
-    out.push(`Only ${best.availability.left} left in ${best.availability.phase}. If you like it, do not sleep on it.`);
-  if (best.waitYears >= 2) out.push(`Keys in ${best.unit.completion}: ${year(best.waitYears)} of waiting, maybe while paying rent.`);
-  if (best.unit.tenure === "Leasehold") out.push("Leasehold: check how many years are left on the lease.");
-  if (best.weekHours > 10) out.push(`${hrs(best.weekHours)} a week commuting is a lot. Try a closer work anchor or the train.`);
-
-  if (next) {
-    const losses = STATS.filter((s) => s.key !== "scarcity")
-      .map((s) => ({ s, d: next.stats[s.key] - best.stats[s.key] }))
-      .filter((x) => x.d >= 15)
-      .sort((a, b) => b.d - a.d);
-    const top = losses[0];
-    if (top) out.push(`${next.unit.name} still beats it on ${top.s.label.toLowerCase()} (${next.stats[top.s.key]} vs ${best.stats[top.s.key]}).`);
-  }
-  if (ctx.money.source === "sample")
-    out.push("Money uses a sample payslip. Run the bank check to use yours.");
-  return out.slice(0, 4);
-}
-
-/** Which cells are best in a row: indices of the best value, or none when everyone ties. */
-export function bestIndices(values: number[], better: "high" | "low"): Set<number> {
-  if (values.length < 2) return new Set();
-  const target = better === "high" ? Math.max(...values) : Math.min(...values);
-  const idx = values.flatMap((v, i) => (Math.abs(v - target) < 1e-9 ? [i] : []));
-  return idx.length === values.length ? new Set() : new Set(idx);
-}
-
-/** Lineup to open with: saved Compare picks, else the first 3 liked, else the sample lineup. */
-export type LineupSource = "picks" | "liked" | "mixed" | "sample";
-
-export const SAMPLE_LINEUP = ["gardens-t1", "highpark-c", "jade-t1"];
-
-export function startingLineup(
-  s: Pick<HomeLanderState, "compare" | "liked">,
-  isUnit: (id: string) => boolean,
-): { ids: string[]; source: LineupSource } {
-  const picks = s.compare.filter(isUnit);
-  if (picks.length >= 2) return { ids: picks.slice(0, 3), source: "picks" };
-  const liked = s.liked.filter(isUnit).slice(0, 3);
-  if (liked.length >= 2) return { ids: liked, source: "liked" };
-  if (liked.length === 1) {
-    const pad = SAMPLE_LINEUP.filter((id) => id !== liked[0]).slice(0, 2);
-    return { ids: [liked[0]!, ...pad], source: "mixed" };
-  }
-  return { ids: SAMPLE_LINEUP, source: "sample" };
+/** How far the best value beats the next best in a row (absolute), or null. */
+export function leadOverNext(
+  values: (number | null)[],
+  better: "high" | "low",
+): number | null {
+  const real = values.filter(
+    (v): v is number => v !== null && Number.isFinite(v),
+  );
+  if (real.length < 2) return null;
+  const sorted = [...real].sort((a, b) => (better === "high" ? b - a : a - b));
+  const gap = Math.abs(sorted[0]! - sorted[1]!);
+  return gap > 1e-9 ? gap : null;
 }

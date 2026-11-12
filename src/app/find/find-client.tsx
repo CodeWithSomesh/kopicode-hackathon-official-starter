@@ -8,97 +8,193 @@ import { Button } from "@/components/ui/button";
 import { township } from "@/lib/first-key/township";
 import type { Unit } from "@/lib/first-key/types";
 import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
+import { anchorOptions } from "@/lib/homelander/data";
+import { useHomeLander } from "@/lib/homelander/store";
+import { townInfoById } from "@/app/(homelander)/_landing/map-data";
+import { MapControls, type ControlMap } from "@/app/(homelander)/_landing/map-controls";
+import { PitchCard } from "@/app/(homelander)/_landing/pitch-card";
+import { TownPanel } from "@/app/(homelander)/_landing/town-panel";
+import { TownshipList } from "@/app/(homelander)/_landing/township-list";
+import { useMapView } from "@/components/first-key/burst/map-view";
 
 // Both scenes need the browser's WebGL: never render them on the server.
-const NeighbourhoodMap = dynamic(() => import("@/components/first-key/map/neighbourhood-map"), { ssr: false });
+// Mapbox (Standard style) when the public token is set; otherwise the MapLibre map, so a missing token never means a blank page.
+const HAS_MAPBOX = !!process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+const NeighbourhoodMap = dynamic(
+  () => (HAS_MAPBOX ? import("@/components/first-key/map/mapbox-map") : import("@/components/first-key/map/neighbourhood-map")),
+  { ssr: false },
+);
+const COVE_ID = "cove"; // the illustrative block sits inside this township (id in src/lib/homelander/data.ts)
+// Older /find?dev= links used the First Key ids.
+const DEV_ALIAS: Record<string, string> = {
+  "gamuda-cove": "cove",
+  "gamuda-gardens": "gardens",
+  "kundang-estates": "kundang",
+  "jade-hills": "jade",
+  twentyfive7: "tf7",
+};
 const BuildingBurst = dynamic(
   () => import("@/components/first-key/burst/building-burst").then((m) => m.BuildingBurst),
   { ssr: false },
 );
 
-type Props = { initialBuilding?: string; initialUnit?: string };
+type Props = { initialBuilding?: string; initialUnit?: string; initialDev?: string };
 
-export function FindClient({ initialBuilding, initialUnit }: Props) {
+export function FindClient(props: Props) {
+  return <Find {...props} />;
+}
+
+function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   const valid = township.buildings.some((b) => b.id === initialBuilding);
   const [selectedId, setSelectedId] = useState<string | undefined>(valid ? initialBuilding : undefined);
   const [unitId, setUnitId] = useState<string | undefined>(valid ? initialUnit : undefined);
+  // A building always belongs to Gamuda Cove; otherwise ?dev= picks the township.
+  const wanted = initialDev && (DEV_ALIAS[initialDev] ?? initialDev);
+  const [devId, setDevId] = useState<string | undefined>(valid ? COVE_ID : wanted && townInfoById[wanted] ? wanted : undefined);
+  const [map, setMap] = useState<ControlMap | null>(null);
+  const hl = useHomeLander();
+  const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const [burstOpen, setBurstOpen] = useState(false);
   const [burstMounted, setBurstMounted] = useState(false); // keep the 3D scene once built; it idles on demand
+  const [leaving, setLeaving] = useState(false); // the 3D shot plays back out before the map returns
+  const [view, captureView] = useMapView(map);
   const overlay = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
 
   const building = township.buildings.find((b) => b.id === selectedId);
 
-  // Keep the URL shareable: /find?building=c&unit=12-03
+  // Keep the URL shareable: /?building=c&unit=12-03 or /?dev=cove
   useEffect(() => {
     const q = new URLSearchParams();
     if (selectedId) q.set("building", selectedId);
+    else if (devId) q.set("dev", devId);
     if (selectedId && unitId) q.set("unit", unitId);
-    window.history.replaceState(null, "", q.size ? `/find?${q}` : "/find");
-  }, [selectedId, unitId]);
+    window.history.replaceState(null, "", q.size ? `/?${q}` : "/");
+  }, [selectedId, unitId, devId]);
 
-  // Hand-over: the 3D view fades and settles in over the map; the map has stopped moving underneath.
+  const info = devId ? townInfoById[devId] : undefined;
+
+  // Hand-over: a crossfade on the matched camera pose; the 3D shot then moves on its own.
   useEffect(() => {
     const el = overlay.current;
     if (!el || !burstMounted) return;
     if (reduced) {
-      gsap.set(el, { autoAlpha: burstOpen ? 1 : 0, scale: 1 });
+      gsap.set(el, { autoAlpha: burstOpen ? 1 : 0 });
       return;
     }
-    const tween = gsap.to(el, {
-      autoAlpha: burstOpen ? 1 : 0,
-      scale: burstOpen ? 1 : 0.97,
-      duration: burstOpen ? 0.6 : 0.35,
-      ease: "power2.inOut",
-    });
+    const tween = gsap.to(el, { autoAlpha: burstOpen ? 1 : 0, duration: 0.4, ease: "power1.inOut" });
     return () => void tween.kill();
   }, [burstOpen, burstMounted, reduced]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setBurstOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setLeaving(true);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const open = () => {
+    captureView();
+    setLeaving(false);
     setBurstMounted(true);
     setBurstOpen(true);
   };
 
   return (
-    <main className="fixed inset-0 overflow-hidden bg-background text-foreground">
+    <main className="fixed inset-0 overflow-hidden bg-sky text-ink">
+      <div inert={burstOpen} className="contents">
       <NeighbourhoodMap
         selectedId={selectedId}
         onSelect={(id) => {
           setSelectedId(id);
           setUnitId(undefined);
+          if (id) setDevId(COVE_ID);
+        }}
+        devId={devId}
+        onMapReady={setMap}
+        onSelectDev={(id) => {
+          setSelectedId(undefined);
+          setUnitId(undefined);
+          setDevId(id);
         }}
         paused={burstOpen}
         onArrived={open}
         startAtSelected={valid}
       />
+      </div>
 
-      <header className="pointer-events-none absolute inset-x-0 top-0 p-4">
-        <p className="inline-block rounded-md border bg-card/90 px-3 py-1.5 text-sm text-card-foreground shadow-sm backdrop-blur">
-          <strong>{township.name}</strong> <span className="text-muted-foreground">· made-up township, illustrative numbers</span>
-        </p>
-      </header>
+      <h1 className="sr-only lg:hidden">Gamuda Land map</h1>
+
+      {/* The tower view covers all of this: keep it out of the Tab order and the accessibility tree while it is open */}
+      <div inert={burstOpen}>
+        <TownshipList
+          selected={devId}
+          anchorName={workAnchor.name}
+          onPick={(id) => {
+            setSelectedId(undefined);
+            setUnitId(undefined);
+            setDevId(id);
+          }}
+          onShowAll={() => {
+            setSelectedId(undefined);
+            setUnitId(undefined);
+            setDevId(undefined);
+          }}
+        />
+        <MapControls map={map} panelOpen={!!info && !burstOpen} />
+        {info && !burstOpen && (
+          <TownPanel
+            key={info.t.id}
+            info={info}
+            anchor={workAnchor}
+            illustrative={info.t.id === COVE_ID}
+            onClose={() => {
+              setSelectedId(undefined);
+              setUnitId(undefined);
+              setDevId(undefined);
+            }}
+          />
+        )}
+
+        {!info && !burstOpen && <PitchCard />}
+      </div>
+
+      {/* Map credit: always visible (above the tab bar on phones) */}
+      {!HAS_MAPBOX && (
+      <p
+        inert={burstOpen}
+        className="absolute right-3 bottom-[104px] z-10 px-1.5 py-0.5 text-[10px] leading-tight text-ink lg:right-2 lg:bottom-2"
+        style={{ background: "color-mix(in srgb, var(--j-surface, white) 90%, transparent)" }} // the theme's surface, so night is not a white box
+      >
+        {HAS_MAPBOX ? null : process.env.NEXT_PUBLIC_PMTILES_URL ? (
+          <>
+            <a href="https://protomaps.com" target="_blank" rel="noreferrer" className="underline">Protomaps</a> ©{" "}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">OpenStreetMap</a>
+          </>
+        ) : (
+          <>
+            <a href="https://openfreemap.org" target="_blank" rel="noreferrer" className="underline">OpenFreeMap</a>{" "}
+            <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer" className="underline">© OpenMapTiles</a> Data from{" "}
+            <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">© OpenStreetMap</a>
+          </>
+        )}
+      </p>
+      )}
 
       <div
         ref={overlay}
-        className="invisible absolute inset-0 z-10 flex flex-col bg-background opacity-0"
+        className="invisible absolute inset-0 z-10 opacity-0"
         aria-hidden={!burstOpen}
         inert={!burstOpen}
       >
-        <div className="flex items-center justify-between border-b bg-card px-4 py-2 text-card-foreground">
+        <div className="absolute inset-x-0 top-[76px] z-10 flex items-center justify-between border-b bg-card/90 px-4 py-2 text-card-foreground backdrop-blur">
           <h1 className="text-base font-semibold">
             {building ? `Block ${building.block}: ${building.floors} floors, ${building.units.length} units` : "Building"}
           </h1>
-          <Button variant="ghost" size="icon" aria-label="Back to the map" onClick={() => setBurstOpen(false)}>
+          <Button variant="ghost" size="icon" aria-label="Back to the map" onClick={() => setLeaving(true)}>
             <X />
           </Button>
         </div>
-        <div className="min-h-0 flex-1">
+        <div className="absolute inset-0">
           {building && burstMounted && (
             <BuildingBurst
               key={building.id}
@@ -106,6 +202,19 @@ export function FindClient({ initialBuilding, initialUnit }: Props) {
               selectedUnitId={unitId}
               onSelectUnit={(u: Unit) => setUnitId(u.unit)}
               active={burstOpen}
+              open={burstOpen && !leaving}
+              view={view}
+              onClosed={() =>
+                // the 3D shot is back on the map's pose: crossfade out while the map is still paused, then let it fly out
+                gsap.to(overlay.current, {
+                  autoAlpha: 0,
+                  duration: reduced ? 0 : 0.35,
+                  onComplete: () => {
+                    setLeaving(false);
+                    setBurstOpen(false);
+                  },
+                })
+              }
             />
           )}
         </div>

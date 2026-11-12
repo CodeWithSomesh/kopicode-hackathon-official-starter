@@ -8,17 +8,21 @@ import { Button } from "@/components/ui/button";
 import { township } from "@/lib/first-key/township";
 import type { Unit } from "@/lib/first-key/types";
 import { usePrefersReducedMotion } from "@/components/first-key/use-reduced-motion";
-import type { Map as MLMap } from "maplibre-gl";
 import { anchorOptions } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
 import { townInfoById } from "@/app/(homelander)/_landing/map-data";
-import { MapControls } from "@/app/(homelander)/_landing/map-controls";
+import { MapControls, type ControlMap } from "@/app/(homelander)/_landing/map-controls";
 import { TownPanel } from "@/app/(homelander)/_landing/town-panel";
 import { TownshipList } from "@/app/(homelander)/_landing/township-list";
-import { MapProvider, useMapView } from "@/components/first-key/burst/map-view";
+import { useMapView } from "@/components/first-key/burst/map-view";
 
 // Both scenes need the browser's WebGL: never render them on the server.
-const NeighbourhoodMap = dynamic(() => import("@/components/first-key/map/neighbourhood-map"), { ssr: false });
+// Mapbox (Standard style) when the public token is set; otherwise the MapLibre map, so a missing token never means a blank page.
+const HAS_MAPBOX = !!process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+const NeighbourhoodMap = dynamic(
+  () => (HAS_MAPBOX ? import("@/components/first-key/map/mapbox-map") : import("@/components/first-key/map/neighbourhood-map")),
+  { ssr: false },
+);
 const COVE_ID = "cove"; // the illustrative block sits inside this township (id in src/lib/homelander/data.ts)
 // Older /find?dev= links used the First Key ids.
 const DEV_ALIAS: Record<string, string> = {
@@ -35,13 +39,8 @@ const BuildingBurst = dynamic(
 
 type Props = { initialBuilding?: string; initialUnit?: string; initialDev?: string };
 
-// MapProvider lets the page read the map's camera at hand-over, so the 3D view starts on the same frame.
 export function FindClient(props: Props) {
-  return (
-    <MapProvider>
-      <Find {...props} />
-    </MapProvider>
-  );
+  return <Find {...props} />;
 }
 
 function Find({ initialBuilding, initialUnit, initialDev }: Props) {
@@ -51,13 +50,13 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
   // A building always belongs to Gamuda Cove; otherwise ?dev= picks the township.
   const wanted = initialDev && (DEV_ALIAS[initialDev] ?? initialDev);
   const [devId, setDevId] = useState<string | undefined>(valid ? COVE_ID : wanted && townInfoById[wanted] ? wanted : undefined);
-  const [map, setMap] = useState<MLMap | null>(null);
+  const [map, setMap] = useState<ControlMap | null>(null);
   const hl = useHomeLander();
   const workAnchor = anchorOptions.find((a) => a.id === hl.anchorId) ?? anchorOptions[0]!;
   const [burstOpen, setBurstOpen] = useState(false);
   const [burstMounted, setBurstMounted] = useState(false); // keep the 3D scene once built; it idles on demand
   const [leaving, setLeaving] = useState(false); // the 3D shot plays back out before the map returns
-  const [view, captureView] = useMapView();
+  const [view, captureView] = useMapView(map);
   const overlay = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
 
@@ -152,11 +151,12 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
       )}
 
       {/* Map credit: always visible (above the tab bar on phones) */}
+      {!HAS_MAPBOX && (
       <p
         className="absolute right-3 bottom-[104px] z-10 px-1.5 py-0.5 text-[10px] leading-tight text-ink lg:right-2 lg:bottom-2"
         style={{ background: "color-mix(in srgb, var(--j-surface, white) 90%, transparent)" }} // the theme's surface, so night is not a white box
       >
-        {process.env.NEXT_PUBLIC_PMTILES_URL ? (
+        {HAS_MAPBOX ? null : process.env.NEXT_PUBLIC_PMTILES_URL ? (
           <>
             <a href="https://protomaps.com" target="_blank" rel="noreferrer" className="underline">Protomaps</a> ©{" "}
             <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline">OpenStreetMap</a>
@@ -169,6 +169,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
           </>
         )}
       </p>
+      )}
 
       <div
         ref={overlay}

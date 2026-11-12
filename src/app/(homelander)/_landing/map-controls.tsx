@@ -1,6 +1,6 @@
 "use client";
 
-import type { Map as MLMap } from "maplibre-gl";
+import type { MapLike } from "@/components/first-key/burst/map-view";
 import { useEffect, useState } from "react";
 import { PixButton } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
@@ -10,8 +10,18 @@ import { mapSprites } from "./map-data";
 
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** What the buttons need from a map: MapLibre and Mapbox maps both fit. */
+export type ControlMap = MapLike & {
+  on(type: string, fn: () => void): unknown;
+  off(type: string, fn: () => void): unknown;
+  zoomIn(o: { animate: boolean }): unknown;
+  zoomOut(o: { animate: boolean }): unknown;
+  resetNorth(o: { animate: boolean }): unknown;
+  easeTo(o: { pitch: number; duration: number }): unknown;
+};
+
 /** Zoom, compass and 2D/3D buttons. They drive the MapLibre map handed up by the map component. */
-export function MapControls({ map, panelOpen }: { map: MLMap | null; panelOpen: boolean }) {
+export function MapControls({ map, panelOpen }: { map: ControlMap | null; panelOpen: boolean }) {
   const [bearing, setBearing] = useState(0);
   const [is3D, setIs3D] = useState(true);
   const night = useMapNight();

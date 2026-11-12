@@ -20,6 +20,7 @@ import { ZONE, groupById, groups } from "@/lib/first-key/landed";
 import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
 import { LandedModels } from "./landed-models";
 import { EnclaveSwitch } from "./enclave-switch";
+import SiteBuildings, { SITE_CLICK_IDS } from "./site-buildings";
 
 // Mapbox GL JS v3 + the Standard style (3D buildings, landmarks, building shadows, lightPreset). Used when
 // NEXT_PUBLIC_MAPBOX_TOKEN is set; neighbourhood-map.tsx (MapLibre) is the fallback. Same props, same camera helpers.
@@ -285,8 +286,9 @@ export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArr
     else map.flyTo({ ...v, bearing: map.getBearing(), duration: 1800 });
   };
   const onClick = (e: MapMouseEvent) => {
-    const id = (e as MapMouseEvent & { features?: { properties?: { id?: string } | null }[] }).features?.[0]?.properties?.id;
-    if (id) onSelect(id);
+    const p = (e as MapMouseEvent & { features?: { properties?: { id?: string; site?: string } | null }[] }).features?.[0]?.properties;
+    if (p?.id) onSelect(p.id);
+    else if (p?.site) onSelectDev(p.site); // a spawned site building or its footprint: open that township
   };
   const showTownship = devId === COVE_ID || !!selectedId;
   const from = selectedId ? centres[selectedId] : undefined;
@@ -415,7 +417,7 @@ export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArr
         mapStyle="mapbox://styles/mapbox/standard"
         maxPitch={70}
         minZoom={8.5}
-        interactiveLayerIds={["township-models", "township-buildings", "township-roofs", "township-selected", ...LANDED_PICK_LAYERS]}
+        interactiveLayerIds={["township-models", "township-buildings", "township-roofs", "township-selected", ...LANDED_PICK_LAYERS, ...SITE_CLICK_IDS]}
         cursor="auto"
         onError={(e) => {
           const err = e.error as (Error & { name?: string }) | undefined;
@@ -458,6 +460,7 @@ export default function MapboxMap({ selectedId, houseId, onSelect, paused, onArr
             </Source>
           ))}
         {showTownship && <LandedModels loaded={loaded} colors={colors} dark={dark} night={night} onReady={setLandedModels} />}
+        {loaded && <SiteBuildings colors={colors} dark={dark} dusk={dusk} />}
         {!selectedId &&
           towns.map((x) => {
             const phone = !window.matchMedia("(min-width: 1024px)").matches; // ponytail: read at render, no resize listener

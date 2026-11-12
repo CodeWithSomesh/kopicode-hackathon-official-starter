@@ -5,10 +5,20 @@ import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
+import { CommandConsole, type LogEntry } from "./command-console";
+import { runText, type Ctx, type Lang, type World } from "./commands";
 import { baguaCells, ongScore, readFengShui, type Note } from "./fengshui";
 import { FengShuiPanel } from "./fengshui-panel";
 import { FurniturePanel } from "./furniture-panel";
-import { describe, moveBy, moveTo, place, remove, rotate, type Result } from "./layout-ops";
+import {
+  describe,
+  moveBy,
+  moveTo,
+  place,
+  remove,
+  rotate,
+  type Result,
+} from "./layout-ops";
 import { PlanCanvas } from "./plan-canvas";
 import { planBounds, plans, type Plan } from "./plans";
 import {
@@ -27,7 +37,10 @@ import { clearLayout, loadLayout, saveLayout } from "./saved";
 
 type Props = { unitId: string; planId: Plan["id"]; lat: number; lng: number };
 
-const heatTag: Record<Heat["level"], { tone: "pandan" | "kaya" | "raya"; word: string }> = {
+const heatTag: Record<
+  Heat["level"],
+  { tone: "pandan" | "kaya" | "raya"; word: string }
+> = {
   cool: { tone: "pandan", word: "Cool" },
   warm: { tone: "kaya", word: "Warm" },
   hot: { tone: "raya", word: "Hot" },
@@ -47,6 +60,8 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [showBagua, setShowBagua] = useState(false);
+  const [lang, setLang] = useState<Lang>("mg");
+  const [log, setLog] = useState<LogEntry[]>([]);
 
   // The server renders the default layout; the buyer's saved one loads after hydration.
   useEffect(() => {
@@ -71,12 +86,14 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const floor = plan.floors[floorIdx];
   const floorItems = items.filter((i) => i.floor === floor.id);
   const selectedItem = floorItems.find((i) => i.uid === selected) ?? null;
-  const roomLabel = (id: string) => floor.rooms.find((r) => r.id === id)?.label ?? id;
+  const roomLabel = (id: string) =>
+    floor.rooms.find((r) => r.id === id)?.label ?? id;
 
   /** Apply a layout result; on failure say why, unless `quiet` (dragging into a wall). */
   const apply = (r: Result, quiet = false) => {
     if (r.ok) setItems(r.items);
-    else if (!quiet) toast.error(describe(r.problem, roomLabel), { id: "feng-shui-layout" });
+    else if (!quiet)
+      toast.error(describe(r.problem, roomLabel), { id: "feng-shui-layout" });
     return r.ok;
   };
 
@@ -97,7 +114,8 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     }
   };
 
-  const nudge = (dx: number, dy: number) => selected && apply(moveBy(selected, dx, dy, floor, items));
+  const nudge = (dx: number, dy: number) =>
+    selected && apply(moveBy(selected, dx, dy, floor, items));
   const turn = () => selected && apply(rotate(selected, floor, items));
   const drop = () => {
     if (!selected) return;
@@ -111,9 +129,12 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     const r = place(kind, floor, items, roomId);
     if (apply(r) && r.ok) {
       setSelected(r.item.uid);
-      toast.success(`${CATALOG[kind].label} added to the ${roomLabel(r.item.room).toLowerCase()}.`, {
-        id: "feng-shui-layout",
-      });
+      toast.success(
+        `${CATALOG[kind].label} added to the ${roomLabel(r.item.room).toLowerCase()}.`,
+        {
+          id: "feng-shui-layout",
+        },
+      );
     }
   };
   const reset = () => {
@@ -145,17 +166,26 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
       setSelected(null);
     }
   };
-  const livingFloor = plan.floors.find((f) => f.rooms.some((r) => r.kind === "living")) ?? plan.floors[0];
+  const livingFloor =
+    plan.floors.find((f) => f.rooms.some((r) => r.kind === "living")) ??
+    plan.floors[0];
   const living = livingFloor.rooms.find((r) => r.kind === "living")!;
 
-  const sun = useMemo(() => sunAt({ lat, lng, month, time, facing }), [lat, lng, month, time, facing]);
-  const patches = useMemo(() => sunPatches(floor, sun, curtains), [floor, sun, curtains]);
+  const sun = useMemo(
+    () => sunAt({ lat, lng, month, time, facing }),
+    [lat, lng, month, time, facing],
+  );
+  const patches = useMemo(
+    () => sunPatches(floor, sun, curtains),
+    [floor, sun, curtains],
+  );
   const livingHeat = useMemo(
     () => heatOf(sunShare(living, sunPatches(livingFloor, sun, curtains))),
     [living, livingFloor, sun, curtains],
   );
   const strip = useMemo(
-    () => dayStrip(livingFloor, living.id, { lat, lng, month, facing }, curtains),
+    () =>
+      dayStrip(livingFloor, living.id, { lat, lng, month, facing }, curtains),
     [livingFloor, living.id, lat, lng, month, facing, curtains],
   );
 
@@ -165,8 +195,8 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     .filter((x) => x.share > 0.005)
     .sort((a, b) => b.share - a.share);
 
-  const windowRooms = [...new Set(floor.windows.map((w) => w.room))].map(
-    (id) => floor.rooms.find((r) => r.id === id)!,
+  const windowRooms = [...new Set(floor.windows.map((w) => w.room))].map((id) =>
+    floor.rooms.find((r) => r.id === id)!,
   );
 
   const toggleCurtain = (id: string) =>
@@ -193,80 +223,190 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     [plan, items, facing, sunnyHours, curtains, living.id],
   );
   const score = ongScore(notes);
-  const floorNotes = useMemo(() => notes.filter((n) => n.floor === floor.id), [notes, floor.id]);
+  const floorNotes = useMemo(
+    () => notes.filter((n) => n.floor === floor.id),
+    [notes, floor.id],
+  );
   const flagged = useMemo(
-    () => new Set(floorNotes.filter((n) => n.tone !== "good").flatMap((n) => n.uids)),
+    () =>
+      new Set(
+        floorNotes.filter((n) => n.tone !== "good").flatMap((n) => n.uids),
+      ),
     [floorNotes],
   );
   const strips = useMemo(
-    () => floorNotes.flatMap((n) => (n.strip && n.tone === "fix" ? [n.strip] : [])),
+    () =>
+      floorNotes.flatMap((n) => (n.strip && n.tone === "fix" ? [n.strip] : [])),
     [floorNotes],
   );
-  const bagua = useMemo(() => (showBagua ? baguaCells(floor, facing) : null), [showBagua, floor, facing]);
+  const bagua = useMemo(
+    () => (showBagua ? baguaCells(floor, facing) : null),
+    [showBagua, floor, facing],
+  );
+
+  // Commands run against a snapshot of the page state and hand back the next one.
+  const world: World = {
+    items,
+    facing,
+    time,
+    month,
+    curtains,
+    floorIdx,
+    selected,
+    showBagua,
+  };
+  const ctx: Ctx = {
+    plan,
+    heat: (w) => {
+      const s = sunAt({
+        lat,
+        lng,
+        month: w.month,
+        time: w.time,
+        facing: w.facing,
+      });
+      const share = sunShare(living, sunPatches(livingFloor, s, w.curtains));
+      const day = dayStrip(
+        livingFloor,
+        living.id,
+        { lat, lng, month: w.month, facing: w.facing },
+        w.curtains,
+      );
+      return { share, hours: day.filter((d) => d.share >= 0.05).length / 2 };
+    },
+    ong: (w) => {
+      const hours =
+        dayStrip(
+          livingFloor,
+          living.id,
+          { lat, lng, month: w.month, facing: w.facing },
+          w.curtains,
+        ).filter((d) => d.share >= 0.05).length / 2;
+      const ns = readFengShui({
+        plan,
+        items: w.items,
+        facing: w.facing,
+        livingSunHours: hours,
+        livingCurtains: w.curtains.has(living.id),
+      });
+      return {
+        score: ongScore(ns),
+        top: ns.find((n) => n.tone === "fix")?.title.toLowerCase(),
+      };
+    },
+  };
+
+  const applyWorld = (w: World) => {
+    setItems(w.items);
+    setFacing(w.facing);
+    setTime(w.time);
+    setMonth(w.month);
+    setCurtains(w.curtains);
+    setFloorIdx(w.floorIdx);
+    setSelected(w.selected);
+    setShowBagua(w.showBagua);
+  };
+
+  const runCommand = (text: string) => {
+    const r = runText(text, world, ctx);
+    applyWorld(r.world);
+    setLog((prev) => [
+      ...prev.slice(-30),
+      { id: Date.now(), said: text, replies: r.replies },
+    ]);
+  };
 
   const pickNote = (n: Note) => {
     const idx = plan.floors.findIndex((f) => f.id === n.floor);
     if (idx >= 0 && idx !== floorIdx) setFloorIdx(idx);
     setSelected(n.uids[0] ?? null);
-    document.getElementById("fs-plan")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    document
+      .getElementById("fs-plan")
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
 
   return (
     <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-      <PixPanel id="fs-plan" className="grid min-w-0 scroll-mt-4 gap-3 p-3 sm:p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Floor">
-            {plan.floors.map((f, i) => (
-              <PixButton
-                key={f.id}
-                size="sm"
-                role="tab"
-                aria-selected={i === floorIdx}
-                tone={i === floorIdx ? "ink" : "white"}
-                onClick={() => {
-                  setFloorIdx(i);
-                  setSelected(null);
-                }}
-              >
-                {f.label}
-              </PixButton>
-            ))}
+      <div className="grid min-w-0 gap-4">
+        <PixPanel
+          id="fs-plan"
+          className="grid min-w-0 scroll-mt-4 gap-3 p-3 sm:p-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div
+              className="flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="Floor"
+            >
+              {plan.floors.map((f, i) => (
+                <PixButton
+                  key={f.id}
+                  size="sm"
+                  role="tab"
+                  aria-selected={i === floorIdx}
+                  tone={i === floorIdx ? "ink" : "white"}
+                  onClick={() => {
+                    setFloorIdx(i);
+                    setSelected(null);
+                  }}
+                >
+                  {f.label}
+                </PixButton>
+              ))}
+            </div>
+            <PixTag tone="lilac">{plan.label}</PixTag>
           </div>
-          <PixTag tone="lilac">{plan.label}</PixTag>
-        </div>
 
-        <PlanCanvas
-          floor={floor}
-          bounds={bounds}
-          patches={patches}
-          sun={sun}
-          facing={facing}
-          items={floorItems}
-          selected={selected}
-          onSelect={setSelected}
-          onDrag={dragTo}
-          onKeyDown={onPlanKey}
-          bagua={bagua}
-          flagged={flagged}
-          strips={strips}
-          className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
-        />
-
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
-          <Stat label="Time" value={`${timeLabel(time)}, ${MONTHS[month - 1]}`} />
-          <Stat
-            label="Sun"
-            value={sun.up ? `${bearingLabel(sun.azimuth)}, ${Math.round(sun.elevation)}°` : "Below horizon"}
+          <PlanCanvas
+            floor={floor}
+            bounds={bounds}
+            patches={patches}
+            sun={sun}
+            facing={facing}
+            items={floorItems}
+            selected={selected}
+            onSelect={setSelected}
+            onDrag={dragTo}
+            onKeyDown={onPlanKey}
+            bagua={bagua}
+            flagged={flagged}
+            strips={strips}
+            className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
           />
-          <Stat label="Living room in sun" value={`${Math.round(livingHeat.share * 100)}%`} />
-          <div className="grid gap-1">
-            <dt className="text-xs text-ink-soft">Feels</dt>
-            <dd>
-              <PixTag tone={tag.tone}>{tag.word}</PixTag>
-            </dd>
-          </div>
-        </dl>
-      </PixPanel>
+
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+            <Stat
+              label="Time"
+              value={`${timeLabel(time)}, ${MONTHS[month - 1]}`}
+            />
+            <Stat
+              label="Sun"
+              value={
+                sun.up
+                  ? `${bearingLabel(sun.azimuth)}, ${Math.round(sun.elevation)}°`
+                  : "Below horizon"
+              }
+            />
+            <Stat
+              label="Living room in sun"
+              value={`${Math.round(livingHeat.share * 100)}%`}
+            />
+            <div className="grid gap-1">
+              <dt className="text-xs text-ink-soft">Feels</dt>
+              <dd>
+                <PixTag tone={tag.tone}>{tag.word}</PixTag>
+              </dd>
+            </div>
+          </dl>
+        </PixPanel>
+
+        <CommandConsole
+          log={log}
+          lang={lang}
+          onLang={setLang}
+          onRun={runCommand}
+        />
+      </div>
 
       <div className="grid min-w-0 gap-4">
         <FengShuiPanel
@@ -300,11 +440,16 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
                 </PixButton>
               ))}
             </div>
-            <p className="text-xs text-ink-soft">The top of the plan is the front of the home.</p>
+            <p className="text-xs text-ink-soft">
+              The top of the plan is the front of the home.
+            </p>
           </fieldset>
 
           <div className="grid gap-2">
-            <label htmlFor="fs-time" className="flex items-baseline justify-between text-sm font-semibold">
+            <label
+              htmlFor="fs-time"
+              className="flex items-baseline justify-between text-sm font-semibold"
+            >
               Time of day <span className="font-pixel">{timeLabel(time)}</span>
             </label>
             <input
@@ -323,7 +468,11 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
             <span className="text-sm font-semibold" id="fs-month-label">
               Month
             </span>
-            <div className="grid grid-cols-6 gap-1.5" role="group" aria-labelledby="fs-month-label">
+            <div
+              className="grid grid-cols-6 gap-1.5"
+              role="group"
+              aria-labelledby="fs-month-label"
+            >
               {MONTHS.map((m, i) => (
                 <button
                   key={m}
@@ -332,7 +481,9 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
                   onClick={() => setMonth(i + 1)}
                   className={cn(
                     "border-2 border-ink py-1 text-xs font-semibold",
-                    month === i + 1 ? "bg-ink text-white" : "bg-white text-ink hover:bg-cloud",
+                    month === i + 1
+                      ? "bg-ink text-white"
+                      : "bg-white text-ink hover:bg-cloud",
                   )}
                 >
                   {m}
@@ -356,7 +507,9 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
 
         <PixPanel className="grid gap-3 p-4">
           <div className="flex items-baseline justify-between gap-2">
-            <h2 className="font-pixel text-lg font-bold">Living room sun, 7 am to 7 pm</h2>
+            <h2 className="font-pixel text-lg font-bold">
+              Living room sun, 7 am to 7 pm
+            </h2>
           </div>
           <div className="flex h-8 gap-[2px] bg-ink p-[2px]" aria-hidden="true">
             {strip.map((s) => (
@@ -365,13 +518,22 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
                 title={`${timeLabel(s.time)}: ${Math.round(s.share * 100)}%`}
                 className={cn(
                   "flex-1",
-                  s.share >= 0.2 ? "bg-raya" : s.share >= 0.05 ? "bg-kaya" : "bg-cloud",
-                  time >= s.time && time < s.time + 0.5 && "outline-2 outline-white",
+                  s.share >= 0.2
+                    ? "bg-raya"
+                    : s.share >= 0.05
+                      ? "bg-kaya"
+                      : "bg-cloud",
+                  time >= s.time &&
+                    time < s.time + 0.5 &&
+                    "outline-2 outline-white",
                 )}
               />
             ))}
           </div>
-          <div className="flex justify-between text-[11px] text-ink-soft" aria-hidden="true">
+          <div
+            className="flex justify-between text-[11px] text-ink-soft"
+            aria-hidden="true"
+          >
             <span>7 am</span>
             <span>1 pm</span>
             <span>7 pm</span>
@@ -384,7 +546,9 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
         </PixPanel>
 
         <PixPanel className="grid gap-3 p-4">
-          <h2 className="font-pixel text-lg font-bold">{floor.label}: sun now</h2>
+          <h2 className="font-pixel text-lg font-bold">
+            {floor.label}: sun now
+          </h2>
           {sunnyRooms.length ? (
             <ul className="grid gap-1 text-sm">
               {sunnyRooms.map(({ room, share }) => (
@@ -395,7 +559,9 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-ink-soft">No direct sun on this floor right now.</p>
+            <p className="text-sm text-ink-soft">
+              No direct sun on this floor right now.
+            </p>
           )}
           {windowRooms.length > 0 && (
             <div className="grid gap-2">

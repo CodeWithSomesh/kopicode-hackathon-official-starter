@@ -1,11 +1,23 @@
 /**
- * HomeLander bank check: what a Malaysian bank is likely to lend for a first home.
- * Every figure here is a SAMPLE estimate for the demo. The per-bank ceilings and
- * rates are sample assumptions, not any bank's published criteria. Real banks
- * also check CCRIS and CTOS, payslip history and the property itself.
+ * HomeLander bank check: what a Malaysian bank is likely to lend for a home.
+ * Every figure here is an ESTIMATE for the demo. The product list and listed rates come
+ * from the MYHomeMath template (see banks-data.ts); the per-bank DSR caps are sample
+ * assumptions, not any bank's published criteria. Real banks also check CCRIS and CTOS,
+ * payslip history and the property itself.
  */
 
-import { DSR_LIMIT, LOAN_RATE, MARGIN, loanFromInstalment, monthlyInstalment } from "./data";
+import {
+  INCOME_BANDS,
+  lenderById,
+  lenders,
+  products,
+  type Citizenship,
+  type Employment,
+  type Lender,
+  type LoanProduct,
+  type RateTier,
+} from "./banks-data";
+import { DSR_LIMIT, LOAN_RATE, MARGIN, legalFees, loanFromInstalment, monthlyInstalment, transferStampDuty } from "./data";
 
 /* ---------------------------------------------------------------- inputs */
 
@@ -176,153 +188,290 @@ export function homeFit(priceRM: number, e: Eligibility) {
   return { loanRM, instalmentRM, leftRM, status };
 }
 
-/* ---------------------------------------------------------------- five banks (sample) */
 
-export type SampleBank = {
-  id: string;
-  name: string;
-  /** Sample rate, not a quote. */
-  rate: number;
-  /** Sample DSR ceiling by monthly take-home band: under RM3k, RM3k to 8k, RM8k and up. */
-  ceilings: [number, number, number];
+/* ---------------------------------------------------------------- every bank (MYHomeMath template) */
+
+export type { BankId, Citizenship, Employment, Lender, LoanProduct } from "./banks-data";
+export { INCOME_BANDS, lenders, products } from "./banks-data";
+
+/** How long in the current job or business. Banks want payslips, or two years of Form B. */
+export type JobTenure = "lt6m" | "6to12m" | "1to2y" | "2y_plus";
+
+/**
+ * Share of the main applicant's income a bank is likely to count. Salaried pay counts in full;
+ * self-employed income is averaged from Form B and commission from the last 6 months, and
+ * banks usually discount both because it varies. Sample assumptions.
+ */
+export const INCOME_RECOGNISED: Record<Employment, number> = {
+  salaried: 1,
+  self_employed: 0.8,
+  commission: 0.75,
 };
 
-export const INCOME_BANDS = [3_000, 8_000] as const;
+/** BNM: up to 90% on a first or second housing loan; 70% from the third. */
+export const STANDARD_MARGIN = MARGIN;
+/** First-home schemes (SJKP, My First Home and youth schemes): up to 100% on homes up to RM500k. */
+export const SCHEME_MARGIN = 1;
+export const SCHEME_PRICE_CAP = 500_000;
+/** i-MILIKI: first home up to RM500k pays no stamp duty on the transfer or the loan (SPAs to end-2027). */
+export const STAMP_EXEMPT_PRICE_CAP = 500_000;
+export const LOAN_STAMP_RATE = 0.005;
+/** "Likely" needs this much room under the bank's DSR cap. */
+export const DSR_BUFFER = 0.05;
+/** Stress test: what the instalment looks like if rates rise this much. */
+export const STRESS_RATE = 0.01;
 
-export const sampleBanks: SampleBank[] = [
-  { id: "maybank", name: "Maybank", rate: 0.0415, ceilings: [0.6, 0.65, 0.7] },
-  { id: "cimb", name: "CIMB", rate: 0.042, ceilings: [0.55, 0.65, 0.7] },
-  { id: "pbb", name: "Public Bank", rate: 0.041, ceilings: [0.6, 0.6, 0.65] },
-  { id: "rhb", name: "RHB", rate: 0.0425, ceilings: [0.6, 0.7, 0.75] },
-  { id: "hlb", name: "Hong Leong", rate: 0.042, ceilings: [0.6, 0.65, 0.75] },
-];
+export type BankCheckInput = {
+  income: IncomeInput;
+  employment: Employment;
+  jobTenure: JobTenure;
+  citizenship: Citizenship;
+  firstHome: boolean;
+  /** Null when the buyer hasn't said. */
+  savingsRM: number | null;
+  /** Loan tenure the buyer picked; null means the longest allowed. */
+  tenureYears: number | null;
+};
+
+export type Counted = {
+  /** The market check (60% DSR, sample rate) on the income a bank counts. */
+  e: Eligibility;
+  recognised: number;
+  /** Monthly take-home a bank counts: main (after the employment discount) + joint + other. */
+  netRM: number;
+  /** Gross per year, both applicants and other income: what the minimum-income rules test. */
+  annualGrossRM: number;
+  maxTenureYears: number;
+  tenureYears: number;
+};
+
+/** The income every bank works from, after the employment discount. */
+export function counted(c: BankCheckInput): Counted {
+  const recognised = INCOME_RECOGNISED[c.employment];
+  const base = eligibility(c.income);
+  const mainNetRM = Math.round(base.mainNetRM * recognised);
+  const netRM = mainNetRM + base.jointNetRM + base.otherCountedRM;
+  const maxTenureYears = base.tenureYears;
+  const tenure =
+    c.tenureYears === null ? maxTenureYears : Math.max(Math.min(c.tenureYears, maxTenureYears), Math.min(MIN_TENURE, maxTenureYears));
+  // Re-run the market check on the counted income so Swipe and Battle see the same budget.
+  const e = eligibility({
+    ...c.income,
+    grossRM: c.income.grossRM * recognised,
+    takeHomeRM: mainNetRM,
+  });
+  return { e, recognised, netRM, annualGrossRM: base.grossRM * 12, maxTenureYears, tenureYears: tenure };
+}
+
+export function dsrCapFor(lender: Lender, netRM: number) {
+  return lender.dsrCaps[incomeBand(netRM)];
+}
 
 export function incomeBand(netRM: number) {
   return netRM < INCOME_BANDS[0] ? 0 : netRM < INCOME_BANDS[1] ? 1 : 2;
 }
 
-export type BankVerdict = "yes" | "maybe" | "no";
-
-/**
- * Per-bank estimate for one home. Yes: the home loan keeps DSR at least 5 points under that
- * bank's sample ceiling. Maybe: within the last 5 points. No: over the ceiling, or tenure too short.
- */
-export function bankEstimates(input: IncomeInput, targetPriceRM: number) {
-  return sampleBanks.map((bank) => {
-    const base = eligibility(input, HEADLINE_DSR, bank.rate);
-    const ceiling = bank.ceilings[incomeBand(base.netRM)];
-    const e = eligibility(input, ceiling, bank.rate);
-    const loanRM = targetPriceRM * MARGIN;
-    const instalmentRM = e.tenureYears >= MIN_TENURE ? monthlyInstalment(loanRM, bank.rate, e.tenureYears) : Infinity;
-    const dsrWithHome = e.netRM > 0 ? (e.commitmentsRM + instalmentRM) / e.netRM : Infinity;
-    const verdict: BankVerdict =
-      dsrWithHome <= ceiling - 0.05 ? "yes" : dsrWithHome <= ceiling ? "maybe" : "no";
-    return { bank, ceiling, maxLoanRM: e.maxLoanRM, instalmentRM, dsrWithHome, verdict };
-  });
+/** Margin of finance for this product at this price. */
+export function marginFor(product: LoanProduct, priceRM: number, firstHome: boolean) {
+  return product.firstHomeScheme && firstHome && priceRM <= SCHEME_PRICE_CAP ? SCHEME_MARGIN : STANDARD_MARGIN;
 }
 
-/* ---------------------------------------------------------------- form parsing + validation */
-
-export type FormValues = {
-  gross: string;
-  other: string;
-  joint: boolean;
-  jointGross: string;
-  takeHome: string;
-  age: string;
-  car: string;
-  ptptn: string;
-  personal: string;
-  card: string;
-  housing: string;
-};
-
-export type FieldKey = Exclude<keyof FormValues, "joint">;
-
-export const emptyForm: FormValues = {
-  gross: "",
-  other: "",
-  joint: false,
-  jointGross: "",
-  takeHome: "",
-  age: "",
-  car: "",
-  ptptn: "",
-  personal: "",
-  card: "",
-  housing: "",
-};
-
-/** "9,800" -> 9800; "" -> null; anything else that isn't a plain amount -> NaN. */
-export function parseRM(raw: string): number | null {
-  const s = raw.replace(/[,\s]/g, "").replace(/^RM/i, "");
-  if (s === "") return null;
-  return /^\d+(\.\d{1,2})?$/.test(s) ? Number(s) : NaN;
+export function tierFor(product: LoanProduct, loanRM: number): RateTier | null {
+  return product.tiers.find((t) => loanRM >= t.minLoanRM && (t.maxLoanRM === null || loanRM <= t.maxLoanRM)) ?? null;
 }
 
-const amountError = (label: string) => `${label} should be a plain amount in ringgit, like 1,250. Remove letters or symbols.`;
+const productMaxLoan = (p: LoanProduct) =>
+  p.tiers.some((t) => t.maxLoanRM === null) ? Infinity : Math.max(...p.tiers.map((t) => t.maxLoanRM ?? 0));
+const productMinLoan = (p: LoanProduct) => Math.min(...p.tiers.map((t) => t.minLoanRM));
 
-export function validate(v: FormValues): Partial<Record<FieldKey, string>> {
-  const errors: Partial<Record<FieldKey, string>> = {};
-  const gross = parseRM(v.gross);
-  if (gross === null || gross === 0)
-    errors.gross = "Enter your monthly gross salary, the amount before EPF and tax. Or scan the sample payslip to try it.";
-  else if (Number.isNaN(gross)) errors.gross = amountError("Gross salary");
-  else if (gross < 500) errors.gross = `RM${gross} looks low for a month. Enter your monthly salary, not a daily or weekly rate.`;
-  else if (gross > 300_000) errors.gross = "That is over RM300,000 a month. Check for an extra zero.";
-
-  if (v.joint) {
-    const jg = parseRM(v.jointGross);
-    if (jg === null || jg === 0)
-      errors.jointGross = "Enter your joint applicant's monthly gross salary, or switch joint applicant off.";
-    else if (Number.isNaN(jg)) errors.jointGross = amountError("Their gross salary");
-    else if (jg > 300_000) errors.jointGross = "That is over RM300,000 a month. Check for an extra zero.";
-  }
-
-  const th = parseRM(v.takeHome);
-  if (th !== null) {
-    if (Number.isNaN(th)) errors.takeHome = amountError("Take-home");
-    else if (gross !== null && !Number.isNaN(gross) && th > gross)
-      errors.takeHome = "Take-home can't be more than your gross salary. Fix it, or clear it and we'll estimate it.";
-  }
-
-  const age = v.age.trim() === "" ? null : Number(v.age);
-  if (age === null) errors.age = "Enter your age in years. It sets how long the loan can run.";
-  else if (!Number.isInteger(age) || age < 18) errors.age = "Enter your age as a whole number, 18 or older.";
-  else if (age > LOAN_END_AGE - MIN_TENURE)
-    errors.age = `At ${age} the loan must end by ${LOAN_END_AGE}, so under ${MIN_TENURE} years. Ask a younger joint applicant to be the main borrower.`;
-
-  const money: [FieldKey, string][] = [
-    ["other", "Other income"],
-    ["car", "Car loan"],
-    ["ptptn", "PTPTN"],
-    ["personal", "Personal loan"],
-    ["card", "Card balance"],
-    ["housing", "Other housing loan"],
-  ];
-  for (const [k, label] of money) if (Number.isNaN(parseRM(v[k]))) errors[k] = amountError(label);
-  return errors;
-}
-
-export function toInput(v: FormValues): IncomeInput {
-  const n = (s: string) => {
-    const x = parseRM(s);
-    return x === null || Number.isNaN(x) ? 0 : x;
-  };
-  const th = parseRM(v.takeHome);
+/** Cash needed on top of the loan: down payment, stamp duty (unless i-MILIKI applies) and legal fees. */
+export function cashUpfront(priceRM: number, loanRM: number, firstHome: boolean) {
+  const exempt = firstHome && priceRM <= STAMP_EXEMPT_PRICE_CAP;
+  const downPaymentRM = Math.max(priceRM - loanRM, 0);
+  const transferDutyRM = exempt ? 0 : transferStampDuty(priceRM);
+  const loanDutyRM = exempt ? 0 : Math.round(loanRM * LOAN_STAMP_RATE);
+  const legalRM = legalFees(priceRM);
   return {
-    grossRM: n(v.gross),
-    otherIncomeRM: n(v.other),
-    joint: v.joint,
-    jointGrossRM: v.joint ? n(v.jointGross) : 0,
-    takeHomeRM: th === null || Number.isNaN(th) ? null : th,
-    age: Number(v.age) || 0,
-    commitments: {
-      carRM: n(v.car),
-      ptptnRM: n(v.ptptn),
-      personalRM: n(v.personal),
-      cardBalanceRM: n(v.card),
-      housingRM: n(v.housing),
-    },
+    downPaymentRM,
+    transferDutyRM,
+    loanDutyRM,
+    legalRM,
+    exempt,
+    totalRM: downPaymentRM + transferDutyRM + loanDutyRM + legalRM,
   };
 }
+
+export type Verdict = "likely" | "borderline" | "unlikely";
+
+export type ProductResult = {
+  product: LoanProduct;
+  lender: Lender;
+  dsrCap: number;
+  tenureYears: number;
+  /** Largest loan this product would give, on DSR and the product's loan range. */
+  maxLoanRM: number;
+  maxPriceRM: number;
+  /** Rate on the target loan, or on the max loan when there's no target. */
+  rate: number;
+  /** Target home, when one is set. */
+  target: null | {
+    priceRM: number;
+    margin: number;
+    loanRM: number;
+    instalmentRM: number;
+    stressInstalmentRM: number;
+    dsrWithHome: number;
+    leftRM: number;
+  };
+  verdict: Verdict;
+  /** Why it isn't "likely", most important first. Empty when likely. */
+  reasons: string[];
+};
+
+const pct = (x: number) => `${Math.round(x * 100)}%`;
+/** One decimal, so a DSR just over or under a cap never reads "70%, over this bank's 70%". */
+const pct1 = (x: number) => `${(x * 100).toFixed(1).replace(/\.0$/, "")}%`;
+const rmK = (n: number) =>
+  n >= 1_000_000 ? `RM${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 2)}M` : `RM${Math.round(n / 1000)}k`;
+
+/** Check one product for this buyer and (optionally) a target price. */
+export function checkProduct(product: LoanProduct, c: BankCheckInput, k: Counted, priceRM: number | null): ProductResult {
+  const lender = lenderById[product.bankId];
+  const dsrCap = dsrCapFor(lender, k.netRM);
+  const commitmentsRM = monthlyCommitments(c.income.commitments);
+  const tenure = k.tenureYears;
+  const capacityRM = tenure >= MIN_TENURE ? Math.max(k.netRM * dsrCap - commitmentsRM, 0) : 0;
+
+  // Largest loan: try each rate tier, keep what fits inside that tier.
+  let maxLoanRM = 0;
+  let maxRate = product.tiers[0]!.rate;
+  for (const tier of product.tiers) {
+    const byDsr = capacityRM > 0 ? loanFromInstalment(capacityRM, tier.rate, tenure) : 0;
+    const loan = Math.min(byDsr, tier.maxLoanRM ?? Infinity);
+    if (loan >= tier.minLoanRM && loan > maxLoanRM) {
+      maxLoanRM = loan;
+      maxRate = tier.rate;
+    }
+  }
+  maxLoanRM = Math.floor(maxLoanRM / 1_000) * 1_000;
+  const schemeOk = product.firstHomeScheme && c.firstHome;
+  const maxPriceRM =
+    maxLoanRM <= 0
+      ? 0
+      : Math.floor(
+          (schemeOk && maxLoanRM <= SCHEME_PRICE_CAP ? maxLoanRM / SCHEME_MARGIN : maxLoanRM / STANDARD_MARGIN) / 10_000,
+        ) * 10_000;
+
+  const blockers: string[] = [];
+  const warnings: string[] = [];
+
+  if (product.purpose === "refinance") blockers.push("For refinancing a home you own, not buying one");
+  if (product.purpose === "build") blockers.push("For building on your own land, not buying from a developer");
+  if (product.firstHomeOnly && !c.firstHome) blockers.push("First-time buyers only");
+  if (!product.citizens.includes(c.citizenship))
+    blockers.push(product.citizens.length === 1 ? "Malaysians only" : "Malaysians and PRs only");
+  if (product.employment && !product.employment.includes(c.employment)) blockers.push("Salaried applicants only");
+  const age = c.income.age;
+  if (age < product.minAge || age > product.maxAge) blockers.push(`Applicants aged ${product.minAge} to ${product.maxAge}`);
+  if (product.minAnnualIncomeRM && k.annualGrossRM < product.minAnnualIncomeRM)
+    blockers.push(`Needs ${rmK(product.minAnnualIncomeRM)} a year in income; you have ${rmK(k.annualGrossRM)}`);
+  if (tenure < MIN_TENURE) blockers.push(`The loan must end by age ${LOAN_END_AGE}: under ${MIN_TENURE} years left`);
+  if (c.employment === "self_employed" && c.jobTenure !== "2y_plus")
+    blockers.push("Banks want 2 years of business records and Form B");
+  if (c.employment === "commission" && c.jobTenure === "lt6m") blockers.push("Banks want 6 months of commission statements");
+  if (c.employment === "salaried" && c.jobTenure === "lt6m")
+    warnings.push("Most banks want you confirmed in the job, or 3 to 6 months of payslips");
+  if (product.notes.some((n) => n.startsWith("Married"))) warnings.push("For married buyers");
+  if (capacityRM <= 0 && tenure >= MIN_TENURE)
+    blockers.push(`Your loans already use ${pct(commitmentsRM / Math.max(k.netRM, 1))} of take-home, over this bank's ${pct(dsrCap)}`);
+
+  let target: ProductResult["target"] = null;
+  let rate = maxRate;
+  if (priceRM !== null && priceRM > 0) {
+    const margin = marginFor(product, priceRM, c.firstHome);
+    const loanRM = Math.round(priceRM * margin);
+    const tier = tierFor(product, loanRM);
+    rate = tier?.rate ?? maxRate;
+    const years = Math.max(tenure, 1);
+    const instalmentRM = monthlyInstalment(loanRM, rate, years);
+    const dsrWithHome = k.netRM > 0 ? (commitmentsRM + instalmentRM) / k.netRM : Infinity;
+    target = {
+      priceRM,
+      margin,
+      loanRM,
+      instalmentRM,
+      stressInstalmentRM: monthlyInstalment(loanRM, rate + STRESS_RATE, years),
+      dsrWithHome,
+      leftRM: k.netRM - commitmentsRM - instalmentRM,
+    };
+    if (!tier) {
+      const lo = productMinLoan(product);
+      const hi = productMaxLoan(product);
+      blockers.push(
+        loanRM < lo
+          ? `Lends from ${rmK(lo)}; this home needs ${rmK(loanRM)}`
+          : `Lends up to ${rmK(hi)}; this home needs ${rmK(loanRM)}`,
+      );
+    }
+    if (capacityRM > 0 && dsrWithHome > dsrCap)
+      blockers.push(`DSR with this home ${pct1(dsrWithHome)}, over this bank's ${pct(dsrCap)}`);
+    else if (capacityRM > 0 && dsrWithHome > dsrCap - DSR_BUFFER)
+      warnings.push(`DSR ${pct1(dsrWithHome)} is within ${Math.round(DSR_BUFFER * 100)} points of the ${pct(dsrCap)} cap`);
+  } else if (maxLoanRM <= 0 && capacityRM > 0) {
+    blockers.push(`Lends from ${rmK(productMinLoan(product))}, more than your DSR allows`);
+  }
+
+  const verdict: Verdict = blockers.length ? "unlikely" : warnings.length ? "borderline" : "likely";
+  return {
+    product,
+    lender,
+    dsrCap,
+    tenureYears: tenure,
+    maxLoanRM,
+    maxPriceRM,
+    rate,
+    target,
+    verdict,
+    reasons: [...blockers, ...warnings],
+  };
+}
+
+const verdictRank: Record<Verdict, number> = { likely: 0, borderline: 1, unlikely: 2 };
+
+/** Best first: likely before borderline before unlikely; then the lowest instalment (or biggest loan), then the lowest rate. */
+export function compareResults(a: ProductResult, b: ProductResult) {
+  const v = verdictRank[a.verdict] - verdictRank[b.verdict];
+  if (v) return v;
+  if (a.target && b.target) {
+    const d = a.target.instalmentRM - b.target.instalmentRM;
+    if (Math.abs(d) >= 1) return d;
+  } else {
+    const d = b.maxLoanRM - a.maxLoanRM;
+    if (d) return d;
+  }
+  return a.rate - b.rate;
+}
+
+export type BankResult = {
+  lender: Lender;
+  best: ProductResult;
+  /** This bank's other products, best first. */
+  others: ProductResult[];
+};
+
+/** Every bank from the template, each with its best product for this buyer, best bank first. */
+export function checkAllBanks(c: BankCheckInput, priceRM: number | null) {
+  const k = counted(c);
+  const all = products.map((p) => checkProduct(p, c, k, priceRM)).sort(compareResults);
+  const banks: BankResult[] = lenders
+    .map((lender) => {
+      const mine = all.filter((r) => r.lender.id === lender.id);
+      return { lender, best: mine[0]!, others: mine.slice(1) };
+    })
+    .filter((b) => b.best)
+    .sort((a, b) => compareResults(a.best, b.best));
+  const counts = { likely: 0, borderline: 0, unlikely: 0 };
+  banks.forEach((b) => counts[b.best.verdict]++);
+  return { k, banks, products: all, counts };
+}
+

@@ -1,333 +1,211 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import Link from "next/link";
+import { useEffect, useSyncExternalStore } from "react";
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
-import {
-  cardMinimum,
-  eligibility,
-  emptyForm,
-  parseRM,
-  toInput,
-  validate,
-  type FieldKey,
-  type FormValues,
-  type IncomeInput,
-} from "@/lib/homelander/bank";
-import { rm, unitById, units, type Payslip } from "@/lib/homelander/data";
-import { homelander, useHomeLander } from "@/lib/homelander/store";
+import { MIN_TENURE, checkAllBanks, type BankCheckInput } from "@/lib/homelander/bank";
+import { unitById, type Unit } from "@/lib/homelander/data";
+import { toIncomeInput, type Profile } from "@/lib/homelander/profile";
+import { homelander, useHomeLander, type HomeLanderState } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
-import { MoneyField, PixSwitch } from "./fields";
-import { BankTable, HomesInRange, ResultsEmpty, Summary } from "./results";
-import { PayslipScan } from "./scan";
+import { BankQuestions, YourNumbers } from "./inputs";
+import { setPrefs, useBankPrefs, type BankPrefs } from "./prefs";
+import { BankList, HowItWorks, NeedAnswers, NextSteps, ResultCard, TargetPicker } from "./results";
 
-const steps: { title: string; fields: FieldKey[] }[] = [
-  { title: "Your pay", fields: ["gross", "other", "takeHome"] },
-  { title: "Who's borrowing", fields: ["jointGross", "age"] },
-  { title: "What you already owe", fields: ["car", "ptptn", "personal", "card", "housing"] },
-];
-
-const stepOf = (k: FieldKey) => steps.findIndex((s) => s.fields.includes(k));
-
-const focusField = (k: FieldKey) =>
-  window.setTimeout(() => document.getElementById(`bank-${k}`)?.focus({ preventScroll: false }), 50);
+const noopSubscribe = () => () => {};
+const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);
+/** Onboarded and Uncle actually heard something: the bank works from real answers only. */
+const knowsBuyer = (s: HomeLanderState) => !!s.onboardedAt && Object.values(s.profile).some(filled);
 
 export function BankView() {
-  const { liked } = useHomeLander();
-  const [values, setValues] = useState<FormValues>(emptyForm);
-  const [attempted, setAttempted] = useState(false);
-  const [step, setStep] = useState(0);
-  const [committed, setCommitted] = useState<IncomeInput | null>(null);
-  const [targetId, setTargetId] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
+  const s = useHomeLander();
+  const prefs = useBankPrefs();
+  if (!mounted) return <Header />;
+  if (!knowsBuyer(s)) return <UncleGate />;
+  return <Bank s={s} prefs={prefs} />;
+}
 
-  const errors = validate(values);
-  const shownErrors = attempted ? errors : {};
-  const result = committed ? eligibility(committed) : null;
-
-  // Save to the quest whenever a fresh result settles, so Compare and Uncle can use it.
-  useEffect(() => {
-    if (!committed) return;
-    const t = window.setTimeout(() => {
-      const e = eligibility(committed);
-      homelander.setBudget({
-        grossRM: e.grossRM,
-        netRM: e.netRM,
-        commitmentsRM: e.commitmentsRM,
-        maxLoanRM: e.maxLoanRM,
-        maxPriceRM: e.maxPriceRM,
-      });
-      toast.success("Saved to your quest", {
-        id: "homelander-bank-saved",
-        description: `Budget up to ${rm(e.maxPriceRM)}. Battle and Uncle will use it.`,
-      });
-    }, 700);
-    return () => window.clearTimeout(t);
-  }, [committed]);
-
-  function update(next: FormValues) {
-    setValues(next);
-    // Once results are on screen they follow the form live, as long as it is valid.
-    if (committed && Object.keys(validate(next)).length === 0) setCommitted(toInput(next));
-  }
-
-  const set = (k: FieldKey) => (v: string) => update({ ...values, [k]: v });
-
-  function submit(v: FormValues = values) {
-    setAttempted(true);
-    const errs = validate(v);
-    const first = (Object.keys(errs) as FieldKey[]).sort((a, b) => stepOf(a) - stepOf(b))[0];
-    if (first) {
-      setStep(stepOf(first));
-      setNotice(errs[first] ?? "");
-      focusField(first);
-      return;
-    }
-    setNotice("");
-    setCommitted(toInput(v));
-    window.setTimeout(() => {
-      if (window.matchMedia("(max-width: 1023px)").matches)
-        document.getElementById("bank-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 50);
-  }
-
-  function next() {
-    const bad = steps[step]!.fields.find((k) => errors[k]);
-    if (bad) {
-      setAttempted(true);
-      focusField(bad);
-      return;
-    }
-    setStep(step + 1);
-    window.setTimeout(() => document.getElementById(`bank-step-${step + 1}`)?.focus(), 50);
-  }
-
-  function onRead(p: Payslip) {
-    const v: FormValues = {
-      ...values,
-      gross: String(p.grossRM),
-      takeHome: String(p.grossRM - p.epfRM - p.socsoRM - p.taxRM),
-      car: String(p.carLoanRM),
-      ptptn: String(p.ptptnRM),
-    };
-    setValues(v);
-    if (v.age.trim() === "") {
-      setStep(1);
-      setNotice("Payslip read. Add your age so we can work out how long the loan can run.");
-      focusField("age");
-      return;
-    }
-    submit(v);
-  }
-
-  const card = parseRM(values.card);
-  const target =
-    (targetId ? unitById[targetId] : undefined) ??
-    defaultTarget(liked, result?.maxPriceRM ?? 0);
-
+function Header() {
   return (
-    <div className="grid gap-10">
-      <header className="flex items-center gap-4">
-        <PixPanel tone="kaya" flat className="flex size-16 shrink-0 items-center justify-center">
-          <Sprite art="bank" scale={5} />
-        </PixPanel>
-        <div className="grid gap-1">
-          <h1 className="font-pixel text-3xl leading-none font-bold lg:text-4xl">The Bank</h1>
-          <p className="text-sm text-ink lg:text-base">
-            Tell the banker what you earn and owe. Find out how much gold you can borrow for a Gamuda Land home.
-          </p>
-        </div>
-      </header>
-
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-10">
-        <form
-          noValidate
-          onSubmit={(ev) => {
-            ev.preventDefault();
-            submit();
-          }}
-          className="grid gap-6"
-          aria-label="Income details"
-        >
-          <PixPanel className="grid gap-5 p-5">
-            <PayslipScan onRead={onRead} />
-
-            <div className="flex items-center gap-2 lg:hidden" aria-hidden>
-              {steps.map((s, i) => (
-                <span key={s.title} className={cn("h-2.5 flex-1", i <= step ? "bg-ink" : "bg-ink/15")} />
-              ))}
-            </div>
-            <p className="sr-only lg:hidden" aria-live="polite">
-              Step {step + 1} of {steps.length}: {steps[step]!.title}
-            </p>
-            {notice ? (
-              <p role="status" className="border-l-4 border-kaya-deep bg-kaya/40 px-3 py-2 text-sm font-medium">
-                {notice}
-              </p>
-            ) : null}
-
-            <Step index={0} step={step}>
-              <MoneyField
-                id="bank-gross"
-                label="Monthly gross salary"
-                hint="Before EPF and tax, as on your payslip."
-                placeholder="0"
-                value={values.gross}
-                onChange={set("gross")}
-                error={shownErrors.gross}
-              />
-              <MoneyField
-                id="bank-other"
-                label="Other fixed income (optional)"
-                hint="Fixed allowances or rental. We count 80%, as banks often count only part of it."
-                placeholder="0"
-                value={values.other}
-                onChange={set("other")}
-                error={shownErrors.other}
-              />
-              <MoneyField
-                id="bank-takeHome"
-                label="Take-home pay (optional)"
-                hint="Leave blank and we estimate it: EPF 11%, SOCSO and a rough PCB. Typing it is more accurate."
-                placeholder="We'll estimate"
-                value={values.takeHome}
-                onChange={set("takeHome")}
-                error={shownErrors.takeHome}
-              />
-            </Step>
-
-            <Step index={1} step={step}>
-              <PixSwitch
-                id="bank-joint"
-                label="Apply with someone (joint loan)"
-                checked={values.joint}
-                onChange={(joint) => update({ ...values, joint })}
-              />
-              {values.joint ? (
-                <MoneyField
-                  id="bank-jointGross"
-                  label="Their monthly gross salary"
-                  hint="We estimate their take-home the same way."
-                  placeholder="0"
-                  value={values.jointGross}
-                  onChange={set("jointGross")}
-                  error={shownErrors.jointGross}
-                />
-              ) : null}
-              <MoneyField
-                id="bank-age"
-                label="Your age"
-                hint="The loan runs up to 35 years and must end by age 70."
-                prefix=""
-                suffix="years"
-                placeholder="30"
-                maxLength={2}
-                value={values.age}
-                onChange={set("age")}
-                error={shownErrors.age}
-              />
-            </Step>
-
-            <Step index={2} step={step}>
-              <p className="text-sm text-ink-soft">
-                Monthly payments{values.joint ? " for both of you" : ""}. Leave blank if none.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2 [&>*]:min-w-0">
-                <MoneyField id="bank-car" label="Car loan" placeholder="0" value={values.car} onChange={set("car")} error={shownErrors.car} />
-                <MoneyField id="bank-ptptn" label="PTPTN" placeholder="0" value={values.ptptn} onChange={set("ptptn")} error={shownErrors.ptptn} />
-                <MoneyField
-                  id="bank-personal"
-                  label="Personal loan"
-                  placeholder="0"
-                  value={values.personal}
-                  onChange={set("personal")}
-                  error={shownErrors.personal}
-                />
-                <MoneyField
-                  id="bank-housing"
-                  label="Other housing loan"
-                  placeholder="0"
-                  value={values.housing}
-                  onChange={set("housing")}
-                  error={shownErrors.housing}
-                />
-              </div>
-              <MoneyField
-                id="bank-card"
-                label="Credit card balance owed"
-                hint={
-                  card && !Number.isNaN(card)
-                    ? `Banks count 5% a month: ${rm(cardMinimum(card))}.`
-                    : "The total balance. Banks count 5% of it as a monthly payment."
-                }
-                placeholder="0"
-                value={values.card}
-                onChange={set("card")}
-                error={shownErrors.card}
-              />
-            </Step>
-
-            {/* Phones: stepped. Desktop: every section is visible, one submit. */}
-            <div className="flex gap-3 lg:hidden">
-              {step > 0 ? (
-                <PixButton type="button" size="lg" onClick={() => setStep(step - 1)} className="flex-1">
-                  Back
-                </PixButton>
-              ) : null}
-              {step < steps.length - 1 ? (
-                <PixButton type="button" tone="ink" size="lg" onClick={next} className="flex-[2]">
-                  Next
-                </PixButton>
-              ) : (
-                <PixButton type="submit" tone="pandan" size="lg" className="flex-[2]">
-                  Ask the bank
-                </PixButton>
-              )}
-            </div>
-            <PixButton type="submit" tone="pandan" size="lg" className="hidden w-full lg:inline-flex">
-              {committed ? "Ask again" : "Ask the bank"}
-            </PixButton>
-          </PixPanel>
-        </form>
-
-        <div id="bank-results" className="grid scroll-mt-4 gap-6 lg:sticky lg:top-4 lg:-m-3 lg:max-h-[calc(100svh-2rem)] lg:overflow-y-auto lg:p-3 lg:pb-5">
-          {result && committed ? (
-            <>
-              <Summary e={result} />
-              <BankTable input={committed} target={target} onTarget={setTargetId} />
-            </>
-          ) : (
-            <ResultsEmpty />
-          )}
-        </div>
+    <header className="flex items-center gap-4">
+      <PixPanel tone="kaya" flat className="flex size-16 shrink-0 items-center justify-center">
+        <Sprite art="bank" scale={5} />
+      </PixPanel>
+      <div className="grid gap-1">
+        <h1 className="font-pixel text-3xl leading-none lg:text-4xl">The Bank</h1>
+        <p className="text-sm text-ink lg:text-base">
+          What 23 Malaysian banks are likely to lend you, worked out from what you told Uncle.
+        </p>
       </div>
+    </header>
+  );
+}
 
-      {result ? <HomesInRange e={result} /> : null}
+function UncleGate() {
+  return (
+    <div className="grid gap-8">
+      <Header />
+      <PixPanel className="mx-auto grid w-full max-w-xl justify-items-center gap-4 p-6 text-center sm:p-10">
+        <Sprite art="uncle" scale={6} label="Uncle" />
+        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Uncle needs to know you first</h2>
+        <p className="max-w-md text-[15px] text-ink">
+          The bank check runs on your real pay, loans and age, the ones you tell Uncle. No answers, no guesses, so
+          there&apos;s nothing to check yet.
+        </p>
+        <div className="p-1 pb-2">
+          <PixButton asChild tone="pandan" size="lg">
+            <Link href="/onboarding">
+              <Sprite art="uncle" scale={2} />
+              Sit with Uncle
+            </Link>
+          </PixButton>
+        </div>
+      </PixPanel>
     </div>
   );
 }
 
-function Step({ index, step, children }: { index: number; step: number; children: React.ReactNode }) {
+/** Liked and compared homes, compared first, in the order the buyer added them. */
+function shortlist(s: HomeLanderState): Unit[] {
+  const ids = [...s.compare, ...s.liked.filter((id) => !s.compare.includes(id))];
+  return ids.map((id) => unitById[id]).filter((u): u is Unit => !!u);
+}
+
+function buildInput(p: Profile, prefs: BankPrefs): BankCheckInput | null {
+  const income = toIncomeInput(p);
+  if (!income || !income.grossRM || !prefs.employment || !prefs.jobTenure || !prefs.citizenship) return null;
+  if (p.firstHome === undefined || income.age < 18) return null;
+  return {
+    income,
+    employment: prefs.employment,
+    jobTenure: prefs.jobTenure,
+    citizenship: prefs.citizenship,
+    firstHome: p.firstHome,
+    savingsRM: p.savingsRM ?? null,
+    tenureYears: prefs.tenureYears ?? null,
+  };
+}
+
+function openQuestions(p: Profile, prefs: BankPrefs) {
+  const open: string[] = [];
+  if (!p.grossRM) open.push("Your salary");
+  if (p.age === undefined) open.push("Your age");
+  if (!prefs.employment) open.push("How you're paid");
+  if (!prefs.jobTenure) open.push("Time in the job");
+  if (!prefs.citizenship) open.push("Citizenship");
+  if (p.firstHome === undefined) open.push("First home or not");
+  return open;
+}
+
+function Bank({ s, prefs }: { s: HomeLanderState; prefs: BankPrefs }) {
+  const homes = shortlist(s);
+  const target = prefs.target;
+  const targetUnit =
+    target?.kind === "home" ? (unitById[target.id] ?? null) : target === undefined ? (homes[0] ?? null) : null;
+  const targetPriceRM = target?.kind === "price" ? target.priceRM : (targetUnit?.priceRM ?? null);
+
+  const input = buildInput(s.profile, prefs);
+  const result = input ? checkAllBanks(input, targetPriceRM) : null;
+  const open = openQuestions(s.profile, prefs);
+
+  // Keep the shared budget in step with these numbers, so Swipe and Battle use the same limit.
+  const budgetE = result?.k.e;
+  useEffect(() => {
+    if (!budgetE) return;
+    const t = window.setTimeout(() => {
+      const cur = homelander.snapshot().budget;
+      const next = {
+        grossRM: budgetE.grossRM,
+        netRM: budgetE.netRM,
+        commitmentsRM: budgetE.commitmentsRM,
+        maxLoanRM: budgetE.maxLoanRM,
+        maxPriceRM: budgetE.maxPriceRM,
+      };
+      if (!cur || (Object.keys(next) as (keyof typeof next)[]).some((key) => cur[key] !== next[key]))
+        homelander.setBudget(next);
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [budgetE]);
+
+  const top = result?.banks[0];
+  const best = top?.best;
+  const inRange =
+    best && best.verdict !== "unlikely"
+      ? (homes.filter((u) => u.priceRM <= best.maxPriceRM).sort((a, b) => b.priceRM - a.priceRM)[0] ?? null)
+      : null;
+  const maxTenure = result?.k.maxTenureYears ?? 0;
+
   return (
-    <fieldset className={cn("grid gap-4", index !== step && "hidden lg:grid")}>
-      <legend
-        id={`bank-step-${index}`}
-        tabIndex={-1}
-        className="mb-4 flex items-center gap-2 font-pixel text-xl leading-none focus-visible:outline-none"
-      >
-        <span className="inline-flex size-7 items-center justify-center bg-ink text-sm text-white">{index + 1}</span>
-        {steps[index]!.title}
-      </legend>
-      {children}
-    </fieldset>
+    <div className="grid gap-8">
+      <Header />
+
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-8">
+        {/* Phones: open questions first, then results, then the answered questions and numbers. Desktop: questions and numbers in the left column. */}
+        <div className="contents lg:grid lg:min-w-0 lg:gap-6">
+          <div className={cn("min-w-0 lg:order-none", open.length ? "order-1" : "order-3")}>
+            <BankQuestions profile={s.profile} prefs={prefs} />
+          </div>
+          <div className="order-3 min-w-0 lg:order-none">
+            <YourNumbers profile={s.profile} />
+          </div>
+        </div>
+
+        <div className="order-2 grid min-w-0 grid-cols-1 gap-6 lg:order-none">
+          <TargetPicker homes={homes} target={target} targetUnit={targetUnit} targetPriceRM={targetPriceRM} />
+
+          {result && top ? (
+            <>
+              <ResultCard
+                top={top}
+                k={result.k}
+                targetUnit={targetUnit}
+                savingsRM={input?.savingsRM ?? null}
+                firstHome={input?.firstHome ?? false}
+              />
+              {maxTenure >= MIN_TENURE ? (
+                <TenurePicker value={prefs.tenureYears} max={maxTenure} current={result.k.tenureYears} />
+              ) : null}
+              <BankList banks={result.banks} k={result.k} hasTarget={targetPriceRM !== null} />
+              <NextSteps inRange={inRange} top={top} />
+            </>
+          ) : (
+            <NeedAnswers open={open} />
+          )}
+        </div>
+      </div>
+
+      {result ? <HowItWorks k={result.k} /> : null}
+    </div>
   );
 }
 
-/** The home the bank table checks first: your cheapest liked home, else the priciest one in range. */
-function defaultTarget(liked: string[], maxPriceRM: number) {
-  const likedUnits = units.filter((u) => liked.includes(u.id)).sort((a, b) => a.priceRM - b.priceRM);
-  if (likedUnits[0]) return likedUnits[0];
-  const sorted = [...units].sort((a, b) => a.priceRM - b.priceRM);
-  return sorted.filter((u) => u.priceRM <= maxPriceRM).at(-1) ?? sorted[0]!;
+function TenurePicker({ value, max, current }: { value: number | undefined; max: number; current: number }) {
+  const options = Array.from(new Set([max, 30, 25, 20, 15, 10].filter((y) => y <= max && y >= MIN_TENURE)));
+  return (
+    <PixPanel flat className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
+      <label htmlFor="bank-tenure" className="text-sm font-medium">
+        Loan tenure
+      </label>
+      <div className="pix-frame pix-flat focus-within:outline-[3px] focus-within:outline-offset-[6px] focus-within:outline-kaya focus-within:outline-solid">
+        <select
+          id="bank-tenure"
+          value={value === undefined ? "max" : String(current)}
+          onChange={(e) => setPrefs({ tenureYears: e.target.value === "max" ? undefined : Number(e.target.value) })}
+          className="h-10 bg-transparent px-3 text-sm font-medium tabular-nums focus-visible:outline-none"
+        >
+          <option value="max">Longest allowed ({max} years)</option>
+          {options
+            .filter((y) => y !== max)
+            .map((y) => (
+              <option key={y} value={y}>
+                {y} years
+              </option>
+            ))}
+        </select>
+      </div>
+      <p className="text-xs text-ink-soft">Shorter means a bigger instalment but far less interest.</p>
+    </PixPanel>
+  );
 }

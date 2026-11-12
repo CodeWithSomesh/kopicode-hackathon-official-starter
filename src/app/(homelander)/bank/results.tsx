@@ -1,121 +1,366 @@
 "use client";
 
-import { UnitPhoto } from "@/components/homelander/unit-photo";
 import Link from "next/link";
+import { useState } from "react";
+import { UnitPhoto } from "@/components/homelander/unit-photo";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import {
-  HIGH_DSR,
+  DSR_BUFFER,
   INCOME_BANDS,
+  LOAN_END_AGE,
+  MAX_TENURE,
   MIN_TENURE,
-  OTHER_INCOME_COUNTED,
-  bankEstimates,
-  debtToClear,
-  homeFit,
-  type BankVerdict,
-  type Eligibility,
-  type HomeStatus,
-  type IncomeInput,
+  SCHEME_PRICE_CAP,
+  STRESS_RATE,
+  cashUpfront,
+  incomeBand,
+  type BankResult,
+  type Counted,
+  type ProductResult,
+  type Verdict,
 } from "@/lib/homelander/bank";
-import { MARGIN, rm, townshipById, units, type Unit } from "@/lib/homelander/data";
-import { homelander, useHomeLander } from "@/lib/homelander/store";
+import { PROPERTYGURU_HOME_LOANS, RINGGITPLUS_HOME_LOANS, lenders } from "@/lib/homelander/banks-data";
+import { rm, townshipById, type Unit } from "@/lib/homelander/data";
 import { cn } from "@/lib/utils";
 import { coin } from "./fields";
+import { setPrefs, type Target } from "./prefs";
+
+export const HONEST = "Estimates, not a loan offer. Banks also check your CCRIS and CTOS records.";
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
+const ratePct = (r: number) => `${(r * 100).toFixed(2)}%`;
 
-export const HONEST = "Estimates, not a loan offer. Banks check CCRIS/CTOS too.";
+export const verdictLook: Record<Verdict, { tone: "pandan" | "kaya" | "raya"; label: string; bar: string }> = {
+  likely: { tone: "pandan", label: "Likely yes", bar: "bg-pandan" },
+  borderline: { tone: "kaya", label: "Borderline", bar: "bg-kaya" },
+  unlikely: { tone: "raya", label: "Unlikely", bar: "bg-raya" },
+};
 
-/* ---------------------------------------------------------------- empty state */
-
-export function ResultsEmpty() {
+/** External link: new tab, no referrer. */
+function Out({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
   return (
-    <PixPanel className="grid justify-items-start gap-3 p-5">
-      <Sprite art="bank" scale={5} className="text-ink-soft" />
-      <p className="font-pixel text-4xl leading-none text-ink-soft/60 tabular-nums">RM ---,---</p>
-      <p className="max-w-prose text-sm text-ink-soft">
-        Fill in your pay, or scan the sample payslip, and the bank will tell you how much gold it is likely to lend.
-      </p>
+    <a href={href} target="_blank" rel="noreferrer" className={className}>
+      {children}
+      <span className="sr-only"> (opens in a new tab)</span>
+    </a>
+  );
+}
+
+/* ---------------------------------------------------------------- target home */
+
+export function TargetPicker({
+  homes,
+  target,
+  targetUnit,
+  targetPriceRM,
+}: {
+  homes: Unit[];
+  target: Target | undefined;
+  targetUnit: Unit | null;
+  targetPriceRM: number | null;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const typing = target?.kind === "price" || (homes.length === 0 && !target);
+  const priceShown = draft ?? (target?.kind === "price" ? target.priceRM.toLocaleString("en-MY") : "");
+  return (
+    <PixPanel className="grid gap-3 p-4 sm:p-5" aria-labelledby="bank-target-title">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="bank-target-title" className="font-pixel text-xl leading-tight">
+          The home to check
+        </h2>
+        {targetPriceRM ? <p className="font-pixel text-lg tabular-nums">{rm(targetPriceRM)}</p> : null}
+      </div>
+      {homes.length ? (
+        <ul className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pt-1 pb-2" aria-label="Your liked and compared homes">
+          {homes.map((u) => {
+            const on = targetUnit?.id === u.id;
+            return (
+              <li key={u.id} className="snap-start">
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => {
+                    setDraft(null);
+                    setPrefs({ target: { kind: "home", id: u.id } });
+                  }}
+                  className={cn(
+                    "pix-frame pix-flat flex w-52 items-center gap-2.5 p-2 text-left",
+                    "focus-visible:outline-[3px] focus-visible:outline-offset-[6px] focus-visible:outline-kaya focus-visible:outline-solid",
+                  )}
+                  style={on ? ({ "--pix-fill": "var(--color-ink)" } as React.CSSProperties) : undefined}
+                >
+                  <UnitPhoto
+                    photo={u.photo}
+                    unoptimized
+                    alt=""
+                    width={48}
+                    height={48}
+                    className="pix-img size-12 shrink-0 rounded-[8px] object-cover"
+                  />
+                  <span className={cn("grid min-w-0 gap-0.5", on ? "text-white" : "text-ink")}>
+                    <span className="truncate text-sm font-medium">{u.name}</span>
+                    <span className={cn("text-xs tabular-nums", on ? "text-white/80" : "text-ink-soft")}>
+                      {rm(u.priceRM)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          <li className="snap-start">
+            <button
+              type="button"
+              aria-pressed={typing}
+              onClick={() => {
+                setDraft("");
+                window.setTimeout(() => document.getElementById("bank-price")?.focus(), 30);
+              }}
+              className={cn(
+                "pix-frame pix-flat flex h-full min-h-16 w-36 items-center justify-center p-2 text-sm font-medium",
+                "focus-visible:outline-[3px] focus-visible:outline-offset-[6px] focus-visible:outline-kaya focus-visible:outline-solid",
+              )}
+              style={typing ? ({ "--pix-fill": "var(--color-ink)", color: "white" } as React.CSSProperties) : undefined}
+            >
+              Type a price
+            </button>
+          </li>
+        </ul>
+      ) : (
+        <p className="text-sm text-ink-soft">
+          No liked homes yet. Type a price, or{" "}
+          <Link href="/swipe" className="font-medium text-ink underline underline-offset-2">
+            swipe some homes
+          </Link>{" "}
+          and pick one here.
+        </p>
+      )}
+      {typing || draft !== null ? (
+        <div className="grid gap-1.5">
+          <label htmlFor="bank-price" className="text-sm font-medium">
+            Home price
+          </label>
+          <div className="pix-frame pix-flat flex h-12 items-center gap-2 px-3 focus-within:outline-[3px] focus-within:outline-offset-[6px] focus-within:outline-kaya focus-within:outline-solid">
+            <span className="font-pixel text-lg text-ink-soft">RM</span>
+            <input
+              id="bank-price"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="650,000"
+              value={priceShown}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                const n = Number(e.target.value.replace(/[,\s]/g, "").replace(/^RM/i, ""));
+                if (Number.isFinite(n) && n >= 50_000 && n <= 20_000_000) setPrefs({ target: { kind: "price", priceRM: n } });
+              }}
+              onBlur={() => setDraft(null)}
+              className="h-full w-0 min-w-0 flex-1 bg-transparent text-lg font-medium tabular-nums focus-visible:outline-none"
+            />
+          </div>
+          <p className="text-xs text-ink-soft">From RM50,000. We update the banks as you type.</p>
+        </div>
+      ) : targetUnit ? (
+        <p className="text-xs text-ink-soft">
+          {targetUnit.type}, {targetUnit.beds} bed, {targetUnit.builtUpSqft.toLocaleString("en-MY")} sq ft in{" "}
+          {townshipById[targetUnit.townshipId]?.name}.{targetUnit.source === "sample" ? " Sample price." : ""}
+        </p>
+      ) : null}
     </PixPanel>
   );
 }
 
-/* ---------------------------------------------------------------- headline */
+/* ---------------------------------------------------------------- the result card */
 
-export function Summary({ e }: { e: Eligibility }) {
-  const clear = debtToClear(e);
-  const zero = e.maxLoanRM <= 0;
+export function ResultCard({
+  top,
+  k,
+  targetUnit,
+  savingsRM,
+  firstHome,
+}: {
+  top: BankResult;
+  k: Counted;
+  targetUnit: Unit | null;
+  savingsRM: number | null;
+  firstHome: boolean;
+}) {
+  const r = top.best;
+  const look = verdictLook[r.verdict];
+  const t = r.target;
+  const cash = t ? cashUpfront(t.priceRM, t.loanRM, firstHome) : null;
+  const gap = cash && savingsRM !== null ? cash.totalRM - savingsRM : null;
+  const today = new Date().toLocaleDateString("en-MY", { day: "numeric", month: "short", year: "numeric" });
+  const [copied, setCopied] = useState(false);
+
+  const summary = [
+    `HomeLander bank check, ${today}`,
+    `Best match: ${top.lender.name}, ${r.product.name} (${look.label})`,
+    t ? `Home: ${targetUnit?.name ?? "Typed price"} at ${rm(t.priceRM)}` : null,
+    t ? `Loan ${rm(t.loanRM)} (${pct(t.margin)}), ${rm(t.instalmentRM)} a month over ${r.tenureYears} years at ${ratePct(r.rate)}` : null,
+    t ? `DSR with this home ${pct(t.dsrWithHome)} (bank cap ${pct(r.dsrCap)})` : null,
+    `Max loan ${rm(r.maxLoanRM)}, homes up to ${rm(r.maxPriceRM)}`,
+    HONEST,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   return (
-    <PixPanel className="grid gap-4 p-5" aria-live="polite">
-      <div className="grid gap-2">
-        <h2 className="font-pixel text-lg leading-tight">You can borrow up to</h2>
-        <p className="flex items-center gap-3 font-pixel text-4xl leading-none font-bold tabular-nums sm:text-5xl">
-          <Sprite art={coin} scale={4} className="shrink-0" />
-          {rm(e.maxLoanRM)}
-        </p>
-        {zero ? (
-          <p className="text-sm">
-            {e.tenureYears < MIN_TENURE
-              ? `The loan has to end by age 70, which leaves under ${MIN_TENURE} years. Most banks won't lend that short.`
-              : `Your loans already use ${pct(e.dsrNow)} of take-home, over the ${pct(e.dsr)} most banks allow. Paying off about ${rm(clear)} a month of debt gets you back in the game.`}
-          </p>
-        ) : (
-          <p className="text-sm">
-            That buys a home up to <strong className="tabular-nums">{rm(e.maxPriceRM)}</strong> with a{" "}
-            {Math.round(MARGIN * 100)}% loan (first home). Instalment up to{" "}
-            <strong className="tabular-nums">{rm(e.maxInstalmentRM)}</strong> a month over {e.tenureYears} years at{" "}
-            {(e.rate * 100).toFixed(1)}% (sample rate).
-          </p>
-        )}
-      </div>
+    <article aria-labelledby="bank-card-title" className="relative">
+      <PixPanel className="overflow-hidden p-0">
+        {/* Jade band: the bank and the verdict. */}
+        <div className="flex items-start justify-between gap-3 bg-pandan-deep px-5 pt-4 pb-3.5 text-white">
+          <div className="grid min-w-0 gap-1">
+            <p className="text-xs text-white/80">Your best match of {lenders.length} banks</p>
+            <h2 id="bank-card-title" className="truncate font-pixel text-2xl leading-none sm:text-3xl">
+              {top.lender.name}
+            </h2>
+            <p className="truncate text-sm text-white/90">
+              {r.product.name} · {r.product.category === "islamic" ? "Islamic" : "Conventional"} ·{" "}
+              {r.product.type === "flexi" ? "Flexi" : "Term"}
+            </p>
+          </div>
+          <PixTag tone={look.tone} className="shrink-0">
+            {look.label}
+          </PixTag>
+        </div>
 
-      <DsrGauge e={e} />
+        <div className="grid gap-5 p-5">
+          {t ? (
+            <div className="flex items-center gap-3">
+              {targetUnit ? (
+                <UnitPhoto
+                  photo={targetUnit.photo}
+                  unoptimized
+                  alt=""
+                  width={64}
+                  height={64}
+                  className="pix-img size-16 shrink-0 rounded-[10px] border-2 border-ink object-cover"
+                />
+              ) : (
+                <span className="flex size-16 shrink-0 items-center justify-center rounded-[10px] border-2 border-ink bg-cloud">
+                  <Sprite art="house" scale={4} className="text-ink" />
+                </span>
+              )}
+              <div className="grid min-w-0 gap-0.5">
+                <p className="truncate font-medium">{targetUnit?.name ?? "The home you typed"}</p>
+                <p className="text-sm text-ink-soft tabular-nums">
+                  {rm(t.priceRM)} · loan {rm(t.loanRM)} ({pct(t.margin)})
+                </p>
+              </div>
+            </div>
+          ) : null}
 
-      <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 border-t-2 border-dashed border-ink/20 pt-3 text-sm">
-        <dt>Gross income{e.jointNetRM > 0 ? " (both of you)" : ""}</dt>
-        <dd className="text-right tabular-nums">{rm(e.grossRM)}</dd>
-        <dt>
-          Take-home counted
-          <span className="block text-xs text-ink-soft">
-            {e.takeHomeEstimated
-              ? `Estimate: EPF ${rm(e.mainBreakdown.epfRM)}, SOCSO+EIS ${rm(e.mainBreakdown.socsoRM)}, PCB about ${rm(e.mainBreakdown.pcbRM)}`
-              : "Your take-home as typed"}
-            {e.jointNetRM > 0 ? `; joint applicant about ${rm(e.jointNetRM)}` : ""}
-            {e.otherCountedRM > 0 ? `; other income at ${Math.round(OTHER_INCOME_COUNTED * 100)}%` : ""}
-          </span>
-        </dt>
-        <dd className="text-right tabular-nums">{rm(e.netRM)}</dd>
-        <dt>Loans you already pay</dt>
-        <dd className="text-right tabular-nums">{rm(e.commitmentsRM)}</dd>
-        <dt>Loan tenure</dt>
-        <dd className="text-right tabular-nums">{e.tenureYears} years</dd>
-      </dl>
-      <p className="text-xs font-medium text-ink-soft">{HONEST}</p>
-    </PixPanel>
+          <div className="grid gap-1">
+            <p className="text-sm text-ink-soft">{t ? "Monthly instalment" : "You could borrow up to"}</p>
+            <p className="flex items-center gap-3 font-pixel text-5xl leading-none tabular-nums sm:text-6xl">
+              <Sprite art={coin} scale={4} className="shrink-0" />
+              {t ? rm(t.instalmentRM) : rm(r.maxLoanRM)}
+            </p>
+            <p className="text-sm text-ink tabular-nums">
+              {t
+                ? `${r.tenureYears} years at ${ratePct(r.rate)}. If rates rise ${Math.round(STRESS_RATE * 100)}%, ${rm(t.stressInstalmentRM)}.`
+                : `Homes up to ${rm(r.maxPriceRM)}, ${r.tenureYears} years at ${ratePct(r.rate)}.`}
+            </p>
+          </div>
+
+          {t ? <DsrBar dsr={t.dsrWithHome} cap={r.dsrCap} nowShare={k.netRM > 0 ? (t.dsrWithHome * k.netRM - t.instalmentRM) / k.netRM : 0} /> : null}
+
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px] border-2 border-ink bg-ink sm:grid-cols-3">
+            <Stat label="Max loan" value={rm(r.maxLoanRM)} />
+            <Stat label="Max home price" value={rm(r.maxPriceRM)} />
+            <Stat label="Take-home counted" value={rm(k.netRM)} />
+            {t ? <Stat label="Left each month" value={rm(t.leftRM)} warn={t.leftRM < 1_500} /> : null}
+            {cash ? (
+              <Stat
+                label={cash.exempt ? "Cash upfront (no stamp duty)" : "Cash upfront"}
+                value={rm(cash.totalRM)}
+                warn={gap !== null && gap > 0}
+              />
+            ) : null}
+            {cash ? (
+              <Stat
+                label="Your savings"
+                value={savingsRM === null ? "Not told" : gap !== null && gap > 0 ? `${rm(gap)} short` : rm(savingsRM)}
+                warn={gap !== null && gap > 0}
+              />
+            ) : null}
+          </dl>
+
+          {r.reasons.length ? (
+            <ul className="grid gap-1.5 text-sm">
+              {r.reasons.map((x) => (
+                <li key={x} className="flex gap-2">
+                  <span aria-hidden className={cn("mt-1.5 size-2 shrink-0", look.bar)} />
+                  {x}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm">
+              Passes this bank&apos;s age, income and citizenship rules, with room under its {pct(r.dsrCap)} DSR cap.
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-3 p-1">
+            <PixButton asChild tone="pandan" size="md">
+              <Out href={top.lender.officialUrl}>Visit {top.lender.name}</Out>
+            </PixButton>
+            <PixButton asChild size="md">
+              <Out href={r.product.ringgitPlusUrl}>This loan on RinggitPlus</Out>
+            </PixButton>
+            <PixButton
+              type="button"
+              size="md"
+              tone="sky"
+              onClick={() => {
+                void navigator.clipboard?.writeText(summary).then(
+                  () => setCopied(true),
+                  () => setCopied(false),
+                );
+                window.setTimeout(() => setCopied(false), 2000);
+              }}
+            >
+              {copied ? "Copied" : "Copy summary"}
+            </PixButton>
+          </div>
+
+          <footer className="flex flex-wrap items-center justify-between gap-2 border-t-2 border-dashed border-ink/20 pt-3 text-xs text-ink-soft">
+            <span>HomeLander bank check · {today}</span>
+            <span className="font-medium">{HONEST}</span>
+          </footer>
+        </div>
+      </PixPanel>
+    </article>
   );
 }
 
-/** DSR bar in 5% blocks with 60% and 70% marks. */
-function DsrGauge({ e }: { e: Eligibility }) {
-  const now = Math.min(e.dsrNow, 1);
-  const room = Math.max(e.dsr - now, 0);
+function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="grid gap-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="font-pixel text-base leading-none">Debt service ratio</h3>
-        <p className="text-sm tabular-nums">
-          {pct(e.dsrNow)} used now
-        </p>
+    <div className="grid min-w-0 gap-0.5 bg-[var(--j-surface,white)] px-3 py-2.5">
+      <dt className="truncate text-xs text-ink-soft">{label}</dt>
+      <dd className={cn("font-pixel text-base leading-tight tabular-nums sm:text-lg", warn && "text-raya-deep")}>{value}</dd>
+    </div>
+  );
+}
+
+/** DSR with the new home, in 5% blocks, with the bank's cap marked. */
+function DsrBar({ dsr, cap, nowShare }: { dsr: number; cap: number; nowShare: number }) {
+  const shown = Math.min(dsr, 1);
+  return (
+    <div className="grid gap-1.5">
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span>Debt service ratio with this home</span>
+        <span className={cn("font-pixel text-lg tabular-nums", dsr > cap && "text-raya-deep")}>{pct(dsr)}</span>
       </div>
-      <div className="relative pb-6">
+      <div className="relative pb-5">
         <div
           role="meter"
-          aria-label="Debt service ratio before the home loan"
-          aria-valuenow={Math.round(e.dsrNow * 100)}
+          aria-label="Debt service ratio with this home"
+          aria-valuenow={Math.round(dsr * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuetext={`${pct(e.dsrNow)} of take-home already goes to loans. Most banks allow ${pct(e.dsr)}, some up to ${pct(HIGH_DSR)}.`}
-          className="flex gap-[3px] bg-ink p-[3px]"
+          aria-valuetext={`${pct(dsr)} of take-home goes to loans, against this bank's ${pct(cap)} cap`}
+          className="flex gap-[3px] rounded-[6px] bg-ink p-[3px]"
         >
           {Array.from({ length: 20 }, (_, i) => {
             const mid = (i + 0.5) / 20;
@@ -123,227 +368,444 @@ function DsrGauge({ e }: { e: Eligibility }) {
               <span
                 key={i}
                 className={cn(
-                  "h-5 flex-1",
-                  mid < now ? "bg-raya" : mid < e.dsr ? "bg-pandan" : mid < HIGH_DSR ? "bg-kaya" : "bg-ink-soft/50",
+                  "h-4 flex-1 first:rounded-l-[3px] last:rounded-r-[3px]",
+                  mid < nowShare ? "bg-teh" : mid < shown ? (shown > cap ? "bg-raya" : shown > cap - DSR_BUFFER ? "bg-kaya" : "bg-pandan") : "bg-ink-soft/40",
                 )}
               />
             );
           })}
         </div>
-        {[e.dsr, HIGH_DSR].map((m) => (
-          <span
-            key={m}
-            aria-hidden
-            className="absolute top-0 flex -translate-x-1/2 flex-col items-center"
-            style={{ left: `calc(3px + ${m} * (100% - 6px))` }}
-          >
-            <span className="h-[34px] w-[3px] bg-ink" />
-            <span className="font-pixel-label text-[10px] leading-none">{pct(m)}</span>
-          </span>
-        ))}
+        <span
+          aria-hidden
+          className="absolute top-0 flex -translate-x-1/2 flex-col items-center"
+          style={{ left: `calc(3px + ${cap} * (100% - 6px))` }}
+        >
+          <span className="h-[28px] w-[3px] bg-ink" />
+          <span className="text-[10px] leading-none font-medium">cap {pct(cap)}</span>
+        </span>
       </div>
-      <ul className="grid gap-1 text-xs text-ink-soft sm:grid-cols-3">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
         <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-3 shrink-0 bg-raya" /> Loans now {pct(now)}
+          <span aria-hidden className="size-2.5 bg-teh" /> Loans you pay now
         </li>
         <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-3 shrink-0 bg-pandan" /> Room for a home {pct(room)}
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-3 shrink-0 bg-kaya" /> Some banks, to {pct(HIGH_DSR)}
+          <span aria-hidden className="size-2.5 bg-pandan" /> This home
         </li>
       </ul>
     </div>
   );
 }
 
-/* ---------------------------------------------------------------- five banks */
+/* ---------------------------------------------------------------- every bank */
 
-const verdictTone: Record<BankVerdict, { tone: "pandan" | "kaya" | "raya"; label: string }> = {
-  yes: { tone: "pandan", label: "Likely yes" },
-  maybe: { tone: "kaya", label: "Maybe" },
-  no: { tone: "raya", label: "Likely no" },
-};
+type Cat = "all" | "conventional" | "islamic";
+type Kind = "all" | "flexi" | "term";
 
-export function BankTable({
-  input,
-  target,
-  onTarget,
-}: {
-  input: IncomeInput;
-  target: Unit;
-  onTarget: (id: string) => void;
-}) {
-  const rows = bankEstimates(input, target.priceRM);
+export function BankList({ banks, k, hasTarget }: { banks: BankResult[]; k: Counted; hasTarget: boolean }) {
+  const [cat, setCat] = useState<Cat>("all");
+  const [kind, setKind] = useState<Kind>("all");
+  const rows = banks
+    .map((b) => {
+      const list = [b.best, ...b.others].filter(
+        (r) => (cat === "all" || r.product.category === cat) && (kind === "all" || r.product.type === kind),
+      );
+      return list[0] ? { lender: b.lender, best: list[0], others: list.slice(1) } : null;
+    })
+    .filter((x): x is BankResult => x !== null);
+  const counts = { likely: 0, borderline: 0, unlikely: 0 };
+  rows.forEach((b) => counts[b.best.verdict]++);
+  const band = incomeBand(k.netRM);
+
   return (
-    <PixPanel className="grid gap-3 p-5">
+    <section aria-labelledby="bank-list-title" className="grid gap-4">
+      <PixPanel flat className="grid gap-3 p-4">
       <div className="grid gap-2">
-        <h2 className="font-pixel text-lg leading-tight">What five banks might say</h2>
-        <label htmlFor="bank-target" className="text-sm">
-          For this home
-        </label>
-        <div className="pix-frame pix-flat focus-within:outline-[3px] focus-within:outline-offset-[6px] focus-within:outline-kaya focus-within:outline-solid">
-          <select
-            id="bank-target"
-            value={target.id}
-            onChange={(ev) => onTarget(ev.target.value)}
-            className="h-11 w-full bg-transparent px-3 text-sm font-medium focus-visible:outline-none"
-          >
-            {[...units]
-              .sort((a, b) => a.priceRM - b.priceRM)
-              .map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}, {rm(u.priceRM)}
-                </option>
-              ))}
-          </select>
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+          <h2 id="bank-list-title" className="font-pixel text-2xl leading-none">
+            Every bank, best first
+          </h2>
+          <p className="text-sm tabular-nums">
+            <span className="font-medium text-pandan-deep">{counts.likely} likely</span> ·{" "}
+            <span className="font-medium text-kaya-deep">{counts.borderline} borderline</span> ·{" "}
+            <span className="font-medium text-raya-deep">{counts.unlikely} unlikely</span>
+          </p>
+        </div>
+        <VerdictStrip counts={counts} />
+      </div>
+
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter loans">
+        {(
+          [
+            ["all", "All"],
+            ["conventional", "Conventional"],
+            ["islamic", "Islamic"],
+          ] as const
+        ).map(([v, label]) => (
+          <Chip key={v} on={cat === v} onClick={() => setCat(v)}>
+            {label}
+          </Chip>
+        ))}
+        <span aria-hidden className="mx-1 w-px self-stretch bg-ink/15" />
+        {(
+          [
+            ["all", "Any type"],
+            ["flexi", "Flexi"],
+            ["term", "Term"],
+          ] as const
+        ).map(([v, label]) => (
+          <Chip key={v} on={kind === v} onClick={() => setKind(v)}>
+            {label}
+          </Chip>
+        ))}
+      </div>
+      </PixPanel>
+
+      <ol className="grid gap-3">
+        {rows.map((b, i) => (
+          <li key={b.lender.id}>
+            <BankRow rank={i + 1} b={b} band={band} hasTarget={hasTarget} />
+          </li>
+        ))}
+      </ol>
+      <p className="text-xs text-ink-soft">
+        Rates and loan conditions as listed by RinggitPlus when the MYHomeMath template was built; check today&apos;s
+        rate with the bank. DSR caps are our sample assumptions by take-home band (under {rm(INCOME_BANDS[0])},{" "}
+        {rm(INCOME_BANDS[0])} to {rm(INCOME_BANDS[1])}, above). {HONEST}
+      </p>
+    </section>
+  );
+}
+
+function VerdictStrip({ counts }: { counts: Record<Verdict, number> }) {
+  const total = counts.likely + counts.borderline + counts.unlikely || 1;
+  return (
+    <div aria-hidden className="flex h-3 gap-[3px] overflow-hidden rounded-[6px] bg-ink p-[3px]">
+      {(["likely", "borderline", "unlikely"] as const).map((v) =>
+        counts[v] ? (
+          <span key={v} className={cn("rounded-[3px]", verdictLook[v].bar)} style={{ flex: counts[v] / total }} />
+        ) : null,
+      )}
+    </div>
+  );
+}
+
+function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cn(
+        "min-h-9 rounded-full border-2 border-ink px-3 text-sm font-medium",
+        "focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-kaya focus-visible:outline-solid",
+        on ? "bg-ink text-white" : "bg-[var(--j-surface,white)] text-ink hover:bg-cloud",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; band: number; hasTarget: boolean }) {
+  const r = b.best;
+  const look = verdictLook[r.verdict];
+  const t = r.target;
+  return (
+    <PixPanel flat className="overflow-hidden p-0">
+      <div className="flex">
+        <span aria-hidden className={cn("w-2 shrink-0", look.bar)} />
+        <div className="grid min-w-0 flex-1 gap-3 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink font-pixel text-base text-white tabular-nums">
+              {rank}
+            </span>
+            <div className="grid min-w-0 flex-1 gap-0.5">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h3 className="font-pixel text-lg leading-tight">{b.lender.name}</h3>
+                <PixTag tone={look.tone}>{look.label}</PixTag>
+              </div>
+              <p className="truncate text-sm text-ink-soft">
+                {r.product.name} · {r.product.category === "islamic" ? "Islamic" : "Conventional"} ·{" "}
+                {r.product.type === "flexi" ? "Flexi" : "Term"}
+              </p>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+            {hasTarget ? (
+              <Fig label="Monthly" value={t ? rm(t.instalmentRM) : "n/a"} strong />
+            ) : (
+              <Fig label="Max loan" value={rm(r.maxLoanRM)} strong />
+            )}
+            <Fig label="Rate" value={ratePct(r.rate)} />
+            {hasTarget ? (
+              <Fig
+                label={`DSR / cap`}
+                value={t ? `${pct(t.dsrWithHome)} / ${pct(r.dsrCap)}` : pct(r.dsrCap)}
+                warn={!!t && t.dsrWithHome > r.dsrCap}
+              />
+            ) : (
+              <Fig label="DSR cap" value={pct(r.dsrCap)} />
+            )}
+            <Fig label="Max home price" value={rm(r.maxPriceRM)} />
+          </dl>
+
+          {r.reasons.length ? (
+            <p className="text-sm">
+              <span className="sr-only">Why: </span>
+              {r.reasons.slice(0, 2).join(". ")}.
+            </p>
+          ) : null}
+
+          <details className="group">
+            <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-sm text-sm font-medium underline underline-offset-2 focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-kaya focus-visible:outline-solid [&::-webkit-details-marker]:hidden">
+              <span aria-hidden className="inline-flex transition-transform group-open:rotate-90">
+                <svg width="8" height="10" viewBox="0 0 8 10" fill="currentColor"><path d="M0 0l8 5-8 5z" /></svg>
+              </span>
+              Assumptions{b.others.length ? ` and ${b.others.length} more ${b.others.length === 1 ? "loan" : "loans"}` : ""}
+            </summary>
+            <div className="mt-3 grid gap-4">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-[10px] bg-cloud p-3 text-sm sm:grid-cols-4">
+                <div className="grid gap-0.5">
+                  <dt className="text-xs text-ink-soft">DSR cap by take-home</dt>
+                  <dd className="tabular-nums">
+                    {b.lender.dsrCaps.map((c, i) => (
+                      <span key={i} className={cn(i === band ? "font-bold" : "text-ink-soft")}>
+                        {pct(c)}
+                        {i < 2 ? " / " : ""}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+                <Fig label="Margin" value={t ? pct(t.margin) : r.product.firstHomeScheme ? `90%, 100% to ${rm(SCHEME_PRICE_CAP)}` : "90%"} />
+                <Fig label="Tenure" value={`${r.tenureYears} yrs (max ${MAX_TENURE}, to age ${LOAN_END_AGE})`} />
+                <Fig
+                  label="Min income"
+                  value={r.product.minAnnualIncomeRM ? `${rm(r.product.minAnnualIncomeRM)}/yr` : "Not listed"}
+                />
+                <Fig label="Age to apply" value={`${r.product.minAge} to ${r.product.maxAge}`} />
+                <Fig
+                  label="Who"
+                  value={
+                    r.product.citizens.length === 3
+                      ? "Any nationality"
+                      : r.product.citizens.length === 2
+                        ? "Malaysians, PRs"
+                        : "Malaysians"
+                  }
+                />
+                <Fig label="Rate tiers" value={r.product.tiers.map((x) => ratePct(x.rate)).join(", ")} />
+                <Fig label="Loan range" value={loanRange(r)} />
+              </dl>
+              {r.product.notes.length ? <p className="text-xs text-ink-soft">{r.product.notes.join(". ")}.</p> : null}
+
+              {b.others.length ? (
+                <div className="-mx-1 overflow-x-auto px-1">
+                  <table className="w-full min-w-[440px] text-sm">
+                    <caption className="sr-only">Other {b.lender.name} loans for you</caption>
+                    <thead>
+                      <tr className="text-left text-xs text-ink-soft">
+                        <th scope="col" className="py-1 pr-2 font-normal">Loan</th>
+                        <th scope="col" className="py-1 pr-2 text-right font-normal">Rate</th>
+                        <th scope="col" className="py-1 pr-2 text-right font-normal">{hasTarget ? "Monthly" : "Max loan"}</th>
+                        <th scope="col" className="py-1 text-right font-normal">Verdict</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {b.others.map((o) => (
+                        <tr key={o.product.id} className="border-t-2 border-ink/10 align-top">
+                          <th scope="row" className="py-2 pr-2 text-left font-medium">
+                            <Out href={o.product.ringgitPlusUrl} className="underline underline-offset-2">
+                              {o.product.name}
+                            </Out>
+                            {o.reasons[0] ? (
+                              <span className="block text-xs font-normal text-ink-soft">{o.reasons[0]}</span>
+                            ) : null}
+                          </th>
+                          <td className="py-2 pr-2 text-right tabular-nums">{ratePct(o.rate)}</td>
+                          <td className="py-2 pr-2 text-right tabular-nums">
+                            {hasTarget ? (o.target ? rm(o.target.instalmentRM) : "n/a") : rm(o.maxLoanRM)}
+                          </td>
+                          <td className="py-2 text-right">
+                            <PixTag tone={verdictLook[o.verdict].tone}>{verdictLook[o.verdict].label}</PixTag>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          </details>
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <Out href={b.lender.officialUrl} className="font-medium text-pandan-deep underline underline-offset-2">
+              {b.lender.name} official site
+            </Out>
+            <Out href={r.product.ringgitPlusUrl} className="font-medium underline underline-offset-2">
+              {r.product.name} on RinggitPlus
+            </Out>
+          </div>
         </div>
       </div>
-
-      <div className="-mx-1 overflow-x-auto px-1">
-        <table className="w-full min-w-[420px] text-sm">
-          <caption className="sr-only">
-            Sample estimate per bank for {target.name}: assumed DSR ceiling, maximum loan and likely answer
-          </caption>
-          <thead>
-            <tr className="text-left text-xs text-ink-soft">
-              <th scope="col" className="py-1.5 pr-2 font-normal">Bank</th>
-              <th scope="col" className="py-1.5 pr-2 text-right font-normal">DSR cap</th>
-              <th scope="col" className="py-1.5 pr-2 text-right font-normal">Rate</th>
-              <th scope="col" className="py-1.5 pr-2 text-right font-normal">Max loan</th>
-              <th scope="col" className="py-1.5 text-right font-normal">This home</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.bank.id} className="border-t-2 border-ink/10">
-                <th scope="row" className="py-2 pr-2 text-left font-medium">{r.bank.name}</th>
-                <td className="py-2 pr-2 text-right tabular-nums">{pct(r.ceiling)}</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{(r.bank.rate * 100).toFixed(2)}%</td>
-                <td className="py-2 pr-2 text-right tabular-nums">{rm(r.maxLoanRM)}</td>
-                <td className="py-2 text-right">
-                  <PixTag tone={verdictTone[r.verdict].tone}>{verdictTone[r.verdict].label}</PixTag>
-                  <span className="block pt-0.5 text-xs text-ink-soft tabular-nums">
-                    {Number.isFinite(r.dsrWithHome) ? `DSR ${pct(r.dsrWithHome)}` : "Tenure too short"}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-ink-soft">
-        Sample assumptions, not the banks&apos; published criteria. Caps change by take-home band (under{" "}
-        {rm(INCOME_BANDS[0])}, up to {rm(INCOME_BANDS[1])}, above). Likely yes leaves 5 points of room under the cap;
-        maybe is within 5 points. {HONEST}
-      </p>
     </PixPanel>
   );
 }
 
-/* ---------------------------------------------------------------- homes */
+function loanRange(r: ProductResult) {
+  const lo = Math.min(...r.product.tiers.map((x) => x.minLoanRM));
+  const his = r.product.tiers.map((x) => x.maxLoanRM);
+  const hi = his.includes(null) ? null : Math.max(...(his as number[]));
+  return hi === null ? `From ${rm(lo)}` : `${rm(lo)} to ${rm(hi)}`;
+}
 
-const statusTag: Record<HomeStatus, { tone: "pandan" | "kaya" | "raya"; label: string }> = {
-  in: { tone: "pandan", label: "In range" },
-  stretch: { tone: "kaya", label: "Stretch" },
-  out: { tone: "raya", label: "Out of range" },
-};
-
-export function HomesInRange({ e }: { e: Eligibility }) {
-  const { liked, compare } = useHomeLander();
-  const list = units
-    .map((u) => ({ u, fit: homeFit(u.priceRM, e) }))
-    .sort((a, b) => a.u.priceRM - b.u.priceRM);
-  const counts = { in: 0, stretch: 0, out: 0 };
-  list.forEach((x) => counts[x.fit.status]++);
-
+function Fig({ label, value, strong, warn }: { label: string; value: string; strong?: boolean; warn?: boolean }) {
   return (
-    <section aria-labelledby="homes-title" className="grid gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 id="homes-title" className="font-pixel text-2xl leading-none">
-          Homes in your range
-        </h2>
-        <p className="text-sm text-ink tabular-nums">
-          {counts.in} in range, {counts.stretch} stretch, {counts.out} out of range
-        </p>
-      </div>
-      <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {list.map(({ u, fit }) => {
-          const isLiked = liked.includes(u.id);
-          const inBattle = compare.includes(u.id);
-          return (
-            <li key={u.id}>
-              <PixPanel flat className="grid h-full gap-3 p-3">
-                <div className="flex gap-3">
-                  <UnitPhoto
-                    photo={u.photo}
-                    unoptimized
-                    alt=""
-                    width={72}
-                    height={72}
-                    className="pix-img size-[72px] shrink-0 border-[3px] border-ink object-cover"
-                  />
-                  <div className="grid min-w-0 content-start gap-1">
-                    <PixTag tone={statusTag[fit.status].tone} className="justify-self-start">
-                      {statusTag[fit.status].label}
-                    </PixTag>
-                    <p className="truncate font-medium">{u.name}</p>
-                    <p className="truncate text-xs text-ink-soft">{townshipById[u.townshipId]?.name}</p>
-                  </div>
-                </div>
-                <dl className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <dt className="text-ink-soft">Price</dt>
-                    <dd className="text-sm font-medium tabular-nums">{rm(u.priceRM)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-ink-soft">Monthly</dt>
-                    <dd className="text-sm font-medium tabular-nums">{rm(fit.instalmentRM)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-ink-soft">Left each month</dt>
-                    <dd className={cn("text-sm font-medium tabular-nums", fit.leftRM < 1_500 && "text-raya-deep")}>
-                      {rm(fit.leftRM)}
-                    </dd>
-                  </div>
-                </dl>
-                {fit.status !== "in" && e.maxPriceRM > 0 ? (
-                  <p className="text-xs text-ink-soft tabular-nums">{rm(u.priceRM - e.maxPriceRM)} over your limit</p>
-                ) : null}
-                <div className="mt-auto flex gap-3 pt-1">
-                  <PixButton
-                    type="button"
-                    size="sm"
-                    tone={isLiked ? "raya" : "white"}
-                    aria-pressed={isLiked}
-                    onClick={() => (isLiked ? homelander.unlike(u.id) : homelander.like(u.id))}
-                    className="flex-1"
-                  >
-                    <Sprite art="heart" scale={2} className={isLiked ? "text-white" : "text-raya"} />
-                    {isLiked ? "Liked" : "Like"}
-                  </PixButton>
-                  <PixButton asChild size="sm" tone="lilac" className="flex-1">
-                    <Link
-                      href="/battle"
-                      onClick={() =>
-                        homelander.setCompare([...compare.filter((x) => x !== u.id), u.id].slice(-3))
-                      }
-                    >
-                      <Sprite art="bars" scale={2} />
-                      {inBattle ? "In battle" : "Battle"}
-                    </Link>
-                  </PixButton>
-                </div>
-              </PixPanel>
+    <div className="grid min-w-0 gap-0.5">
+      <dt className="text-xs text-ink-soft">{label}</dt>
+      <dd
+        className={cn(
+          "tabular-nums",
+          strong ? "font-pixel text-lg leading-tight" : "font-medium",
+          warn && "text-raya-deep",
+        )}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- next steps */
+
+export function NextSteps({ inRange, top }: { inRange: Unit | null; top: BankResult }) {
+  return (
+    <PixPanel className="grid grid-cols-1 gap-4 p-5" aria-labelledby="bank-next-title">
+      <h2 id="bank-next-title" className="font-pixel text-xl leading-tight">
+        Where to go from here
+      </h2>
+      <ol className="grid gap-3 text-sm">
+        <li className="flex gap-3">
+          <Num n={1} />
+          <span>
+            Read {top.lender.name}&apos;s home-loan terms on their{" "}
+            <Out href={top.lender.officialUrl} className="font-medium underline underline-offset-2">
+              official site
+            </Out>{" "}
+            and ask for today&apos;s rate.
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <Num n={2} />
+          <span>
+            Compare more loans on{" "}
+            <Out href={RINGGITPLUS_HOME_LOANS} className="font-medium underline underline-offset-2">
+              RinggitPlus
+            </Out>{" "}
+            and read{" "}
+            <Out href={PROPERTYGURU_HOME_LOANS} className="font-medium underline underline-offset-2">
+              PropertyGuru&apos;s home-loan guides
+            </Out>
+            .
+          </span>
+        </li>
+        <li className="flex gap-3">
+          <Num n={3} />
+          <span>
+            Get your free CCRIS report from Bank Negara and check CTOS before you apply, so nothing surprises the
+            bank.
+          </span>
+        </li>
+      </ol>
+      {inRange ? (
+        <div className="p-1">
+          <PixButton asChild tone="kaya" size="lg" className="w-full max-w-full sm:w-auto">
+            <Link href={`/homes/${inRange.id}/feng-shui`}>
+              <Sprite art="sparkle" scale={2} className="shrink-0" />
+              <span className="min-w-0 truncate">Feng Shui check: {inRange.name}</span>
+            </Link>
+          </PixButton>
+        </div>
+      ) : null}
+    </PixPanel>
+  );
+}
+
+function Num({ n }: { n: number }) {
+  return (
+    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">
+      {n}
+    </span>
+  );
+}
+
+/* ---------------------------------------------------------------- how it works */
+
+export function HowItWorks({ k }: { k: Counted }) {
+  return (
+    <section aria-labelledby="bank-how-title" className="grid gap-3 md:grid-cols-2">
+      <h2 id="bank-how-title" className="sr-only">
+        How the estimate works
+      </h2>
+      <PixPanel flat className="p-5">
+        <details>
+          <summary className="cursor-pointer font-pixel text-lg leading-tight">How we work it out</summary>
+          <ol className="mt-3 grid list-decimal gap-2 pl-5 text-sm">
+            <li>
+              Income a bank counts: your take-home{k.recognised < 1 ? ` (at ${pct(k.recognised)}, as your pay varies)` : ""},
+              a joint applicant&apos;s take-home, and 80% of fixed allowances or rental. Now{" "}
+              <strong className="tabular-nums">{rm(k.netRM)}</strong> a month.
             </li>
-          );
-        })}
-      </ul>
-      <p className="text-xs text-ink-soft">
-        Monthly is a {Math.round(MARGIN * 100)}% loan over {e.tenureYears} years at {(e.rate * 100).toFixed(1)}%
-        (sample rate). Left each month is take-home minus every loan, before food, bills and nasi lemak. Stretch means
-        up to 10% over your limit. Prices are sample data. {HONEST}
-      </p>
+            <li>
+              Each bank lets all your loans, the new one included, use up to its DSR cap of that income. What&apos;s left
+              after your current loans is the most the new instalment can be.
+            </li>
+            <li>
+              That instalment, at the loan&apos;s own rate tier, over {k.tenureYears} years (up to {MAX_TENURE}, ending by
+              age {LOAN_END_AGE}), gives the biggest loan. It can&apos;t go outside the loan&apos;s listed range.
+            </li>
+            <li>
+              Max home price is that loan over the margin: 90% for a first or second home loan, up to 100% on first-home
+              schemes for homes to {rm(SCHEME_PRICE_CAP)}.
+            </li>
+            <li>
+              Likely yes passes the loan&apos;s rules with {Math.round(DSR_BUFFER * 100)} points to spare under the cap.
+              Borderline is inside the last {Math.round(DSR_BUFFER * 100)} points, or a new job. Unlikely breaks a rule.
+            </li>
+          </ol>
+        </details>
+      </PixPanel>
+      <PixPanel flat className="p-5">
+        <details>
+          <summary className="cursor-pointer font-pixel text-lg leading-tight">What to bring to the bank</summary>
+          <ul className="mt-3 grid list-disc gap-2 pl-5 text-sm">
+            <li>IC (or passport) copy</li>
+            <li>Last 3 months&apos; payslips, plus the latest EA form or EPF statement</li>
+            <li>Last 6 months&apos; bank statements showing your salary going in</li>
+            <li>New in the job: your offer or confirmation letter (most banks want 3 months in service)</li>
+            <li>Self-employed: business registration, 6 months&apos; statements, Form B and accounts for 2 years</li>
+            <li>The booking receipt or offer letter from the developer</li>
+          </ul>
+          <p className="mt-3 text-xs text-ink-soft">
+            Loan must end by age {LOAN_END_AGE}; most banks won&apos;t lend under {MIN_TENURE} years.
+          </p>
+        </details>
+      </PixPanel>
     </section>
+  );
+}
+
+/* ---------------------------------------------------------------- empty states */
+
+export function NeedAnswers({ open }: { open: string[] }) {
+  return (
+    <PixPanel className="grid justify-items-start gap-3 p-6">
+      <Sprite art="bank" scale={5} className="text-ink-soft" />
+      <p className="font-pixel text-4xl leading-none text-ink-soft/50 tabular-nums">RM ---,---</p>
+      <p className="max-w-prose text-sm">
+        Answer {open.length === 1 ? "one more question" : `${open.length} more questions`} and we&apos;ll check all {lenders.length}{" "}
+        banks for you: {open.join(", ").toLowerCase()}.
+      </p>
+    </PixPanel>
   );
 }

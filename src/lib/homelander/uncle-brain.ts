@@ -52,10 +52,14 @@ function systemPrompt(profile: Profile) {
   return `You are Uncle, a warm, cheeky Malaysian kopitiam uncle who helps first-time buyers find a Gamuda Land home in the HomeLander app. You are on a voice call, so everything you say is spoken.
 
 How you talk
+- You are a cheeky, dramatic, lovable kopitiam uncle who has watched forty years of people buy houses over kopi-O: loud opinions, big heart, a bit over the top. You are your own character; don't imitate any real comedian or quote anyone's catchphrases.
 - Short: 1 to 3 sentences, at most one question per turn. No lists, no markdown, no emoji.
 - Reply in the language of the buyer's latest message: English (Malaysian English, a little "lah", "boleh", "can or not"), Bahasa Melayu, Mandarin (simplified Chinese) or Tamil. If they switch language, you switch too. Set "lang" to match.
-- Friendly and practical, like an uncle who has seen many people buy houses. Never pushy.
-- Never give financial advice or promise loan approval. Money figures are only for estimates.
+- Use Malaysian interjections naturally, at most one per reply and not in every reply: "Haiyaa…" or "Aiyo" when something makes you despair a little (a bad money decision), "Walao" when something shocks you, and "Wah" or "Fuyoh" only when you're impressed (good news). In Bahasa Melayu use "Alamak" for despair and "Wah" for good news, in Mandarin "哎呀" for despair and "哇" for good news, in Tamil "ஐயோ" for despair. They are reactions to what the buyer just said, so never use one in a greeting. Put it at the start, then make your point.
+- Roast bad money decisions playfully, the way a fond uncle teases at the coffee shop: a monster car loan or a maxed-out card gets a dramatic one-liner (e.g. "Haiyaa… the car is eating your house money already!"), then you move on to the next question. When a message has both good and bad news, the bad money decision wins: open with "Haiyaa…" or "Aiyo", not "Wah", and leave their salary out of it (never "steady salary", "good income" or similar). Good decisions, like steady savings or no debt, get loud praise.
+- Tease the decision, never the person. Never joke about race, religion, gender, age, looks, family situation, or how much someone earns. If the buyer sounds stressed or embarrassed, drop the teasing and be reassuring.
+- Underneath the drama you are on their side: warm and practical, never pushy, never preachy.
+- Never give financial advice or promise loan approval. Money figures are only for estimates. Your teasing is banter, not advice: don't tell them to sell, cancel, refinance or pay off anything.
 
 Your job
 Collect what a home buyer must think about, conversationally, skipping anything already known:
@@ -78,10 +82,26 @@ ${missing.length ? missing.join("\n") : "(nothing essential: wrap up warmly, tel
 If this is the first turn and the buyer hasn't spoken yet, greet them in English with a little Malay and ask who they will be living with.`;
 }
 
-async function generate(model: Parameters<typeof generateText>[0]["model"], messages: UncleMessage[], profile: Profile, opts: { retries: number; groqReasoning?: boolean }) {
+/** Rough language of a message: script first (Tamil, Chinese), then common Malay words. */
+export function detectLang(text: string): UncleLang {
+  if (/[\u0B80-\u0BFF]/.test(text)) return "ta";
+  if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
+  const malay = text
+    .toLowerCase()
+    .match(/\b(saya|kami|kerja|rumah|tiada|takde|tak|dengan|dan|ada|nak|boleh|sebulan|gaji|hari|naik|simpanan|hutang|anak|isteri|suami|dekat|mahu|untuk|bilik|tahun|umur|ribu|seminggu|tinggal|bersama|pinjaman|kereta)\b/g);
+  return (malay?.length ?? 0) >= 2 ? "ms" : "en";
+}
+
+const langName: Record<UncleLang, string> = { en: "English", ms: "Bahasa Melayu", zh: "Mandarin (simplified Chinese)", ta: "Tamil" };
+
+/** "No other debts" in any of Uncle's languages: unset loan fields become 0. */
+const NO_DEBT = /\b(no (other )?(debts?|loans?|commitments?)|debt[- ]free|tiada (lagi )?(hutang|pinjaman)|takde (hutang|pinjaman)|tak ada hutang)\b|没有(其他)?(贷款|债务|欠债)|கடன் இல்லை/i;
+const LOAN_FIELDS = ["carRM", "ptptnRM", "personalRM", "housingRM", "cardBalanceRM"] as const;
+
+async function generate(model: Parameters<typeof generateText>[0]["model"], messages: UncleMessage[], profile: Profile, opts: { retries: number; groqReasoning?: boolean; nudge?: string }) {
   const { output } = await generateText({
     model,
-    system: systemPrompt(profile),
+    system: systemPrompt(profile) + (opts.nudge ? `\n\nIMPORTANT: ${opts.nudge}` : ""),
     messages: messages.length ? messages.slice(-HISTORY) : [{ role: "user", content: "(The buyer just sat down. Start.)" }],
     output: Output.object({ schema: turnSchema }),
     maxRetries: opts.retries,
@@ -92,22 +112,33 @@ async function generate(model: Parameters<typeof generateText>[0]["model"], mess
 }
 
 export async function uncleTurn(messages: UncleMessage[], profile: Profile): Promise<UncleTurn> {
-  let output: z.infer<typeof turnSchema> | undefined;
-  if (process.env.GROQ_API_KEY) {
+  const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content;
+  const expected = lastUser ? detectLang(lastUser) : "en";
+
+  const run = async (nudge?: string) => {
+    if (!process.env.GROQ_API_KEY) return generate(env.aiModel, messages, profile, { retries: 2, nudge });
     let lastError: unknown;
     for (const [i, id] of GROQ_MODELS.entries()) {
       const last = i === GROQ_MODELS.length - 1;
       try {
-        output = await generate(groq(id), messages, profile, { retries: last ? 2 : 0, groqReasoning: id.startsWith("openai/gpt-oss") });
-        break;
+        return await generate(groq(id), messages, profile, { retries: last ? 2 : 0, groqReasoning: id.startsWith("openai/gpt-oss"), nudge });
       } catch (e) {
         lastError = e;
         console.warn(`[uncle] ${id} failed, ${last ? "giving up" : "trying the next model"}:`, e instanceof Error ? e.message.slice(0, 160) : e);
       }
     }
-    if (!output) throw lastError;
-  } else {
-    output = await generate(env.aiModel, messages, profile, { retries: 2 });
+    throw lastError;
+  };
+
+  let output = await run();
+  // Models sometimes answer a Malay or Tamil message in English: check the reply itself and retry once.
+  if (lastUser && detectLang(output.reply) !== expected) {
+    try {
+      const retry = await run(`The buyer wrote in ${langName[expected]}. Your whole reply MUST be in ${langName[expected]}, and "lang" must be "${expected}".`);
+      if (detectLang(retry.reply) === expected) output = retry;
+    } catch {
+      // Keep the first reply rather than fail the turn.
+    }
   }
 
   // Drop the "not mentioned" nulls and check each value on its own, so one bad field never loses the rest.
@@ -117,5 +148,9 @@ export async function uncleTurn(messages: UncleMessage[], profile: Profile): Pro
     const ok = profileSchema.shape[k as keyof Profile].safeParse(v);
     if (ok.success) patch[k] = ok.data;
   }
-  return { reply: output.reply, lang: output.lang, complete: output.complete, patch: patch as Partial<Profile> };
+  // "No other debts": every loan field the buyer hasn't given yet becomes 0.
+  if (lastUser && NO_DEBT.test(lastUser)) {
+    for (const f of LOAN_FIELDS) if (profile[f] === undefined && patch[f] === undefined) patch[f] = 0;
+  }
+  return { reply: output.reply, lang: detectLang(output.reply), complete: output.complete, patch: patch as Partial<Profile> };
 }

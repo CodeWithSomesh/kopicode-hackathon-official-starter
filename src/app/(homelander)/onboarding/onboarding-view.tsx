@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useRef,
@@ -10,7 +11,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
-import { Sprite } from "@/components/homelander/sprite";
+import { Sprite, defineSprite } from "@/components/homelander/sprite";
 import { eligibility } from "@/lib/homelander/bank";
 import {
   filledKeys,
@@ -30,7 +31,7 @@ import {
 } from "./browser-voice";
 import { ProfilePanel } from "./profile-panel";
 import { Typewriter } from "./typewriter";
-import { UnclePortrait } from "./uncle-portrait";
+import { UnclePortrait, moodOf } from "./uncle-portrait";
 import { useWhisperMic } from "./use-whisper-mic";
 
 type Msg = { role: "user" | "assistant"; content: string };
@@ -47,6 +48,20 @@ const langs: { id: VoiceLang; label: string; name: string }[] = [
   { id: "zh", label: "中文", name: "Mandarin" },
   { id: "ta", label: "தமிழ்", name: "Tamil" },
 ];
+
+/**
+ * The speech bubble's pixel tail, pointing left at Uncle ("#" is the bubble fill, "k" its outline).
+ * Rotated a quarter turn it points up, for the stacked phone layout.
+ */
+const bubbleTail = defineSprite(
+  [".....kk", "...kk##", ".kk####", "k######", ".kk####", "...kk##", ".....kk"],
+  { k: "#2b1d3f" },
+);
+
+const moodTag = {
+  haiyaa: { tone: "raya", text: "Haiyaa" },
+  happy: { tone: "pandan", text: "Steady lah" },
+} as const;
 
 export function OnboardingView() {
   const router = useRouter();
@@ -66,6 +81,8 @@ export function OnboardingView() {
   const [whisper, setWhisper] = useState(true);
   const started = useRef(false);
   const logRef = useRef<HTMLOListElement>(null);
+  /** Uncle's face follows his latest line: "Haiyaa…" gets the facepalm, "Wah" the grin. */
+  const mood = line ? moodOf(line.text) : "neutral";
   const canListen = useSyncExternalStore(
     () => () => {},
     () => recognitionCtor() !== null,
@@ -226,11 +243,29 @@ export function OnboardingView() {
           <PixTag tone="lilac">{whisper ? "Whisper voice" : "Browser voice"}</PixTag>
         </div>
 
-        <PixPanel className="grid gap-4 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:p-5">
-          <div className="justify-self-center rounded-xl bg-cloud p-3">
-            <UnclePortrait speaking={speaking} scale={8} />
+        <PixPanel className="grid gap-7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-8 sm:p-5">
+          <div className="grid justify-items-center gap-2">
+            <div className="rounded-xl bg-cloud p-3">
+              <UnclePortrait speaking={speaking} mood={mood} scale={6} />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <PixTag tone="ink">Uncle</PixTag>
+              {mood !== "neutral" ? (
+                <PixTag tone={moodTag[mood].tone}>{moodTag[mood].text}</PixTag>
+              ) : (
+                <PixTag>{speaking ? "Talking" : busy ? "Thinking" : "Listening"}</PixTag>
+              )}
+            </div>
           </div>
-          <div className="grid gap-3">
+          <div
+            className="pix-frame pix-flat relative grid gap-3 px-4 py-3.5 sm:px-5 sm:py-4"
+            style={{ "--pix-fill": "var(--color-cloud)" } as CSSProperties}
+          >
+            <Sprite
+              art={bubbleTail}
+              scale={3}
+              className="absolute -top-[21px] left-1/2 -ml-[10px] rotate-90 text-cloud sm:top-1/2 sm:-left-[21px] sm:ml-0 sm:-mt-[10px] sm:rotate-0"
+            />
             <p
               className="min-h-[5.5rem] font-pixel text-lg leading-snug"
               aria-live="polite"

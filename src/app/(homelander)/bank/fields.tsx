@@ -87,6 +87,72 @@ export function MoneyField({
   );
 }
 
+/** Pick-one buttons in a pixel frame (radio group). */
+export function Segmented<T extends string>({
+  id,
+  label,
+  hint,
+  value,
+  options,
+  onChange,
+  needed,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  value: T | undefined;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+  /** Show a "Needed" tag while unanswered. */
+  needed?: boolean;
+}) {
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <span id={`${id}-label`} className="text-sm font-medium text-ink">
+          {label}
+        </span>
+        {needed && value === undefined ? (
+          <span className="border-2 border-ink bg-kaya px-1.5 py-0.5 font-pixel-label text-[10px] leading-none uppercase">
+            Needed
+          </span>
+        ) : null}
+      </div>
+      <div
+        role="radiogroup"
+        aria-labelledby={`${id}-label`}
+        aria-describedby={hint ? `${id}-hint` : undefined}
+        className="pix-frame pix-flat grid grid-cols-[repeat(auto-fit,minmax(4rem,1fr))] gap-1 p-1"
+      >
+        {options.map((o) => {
+          const on = o.value === value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onChange(o.value)}
+              className={cn(
+                "min-h-10 rounded-[10px] px-1.5 text-[13px] font-medium sm:px-2 sm:text-sm whitespace-nowrap transition-colors",
+                "focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-kaya focus-visible:outline-solid",
+                on ? "bg-ink text-white" : "text-ink hover:bg-cloud",
+              )}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      {hint ? (
+        <p id={`${id}-hint`} className="text-xs text-ink-soft">
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Pixel on/off switch. */
 export function PixSwitch({
   checked,

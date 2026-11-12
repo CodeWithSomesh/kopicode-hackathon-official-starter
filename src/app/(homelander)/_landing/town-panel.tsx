@@ -24,18 +24,24 @@ const statusTone: Record<Availability["status"], "pandan" | "kaya" | "raya" | "i
   "Sold out": "ink",
 };
 
+// Ink on the light pandan / white on raya fall under 4.5:1; the deep fills with white text pass (6.3 / 6.5).
+const DEEP_PANDAN = "bg-pandan-deep text-white";
+const DEEP: Partial<Record<Availability["status"], string>> = { Available: DEEP_PANDAN, "Last unit": "bg-raya-deep text-white" };
+
 /**
  * The township's units: bottom sheet on phones (above the tab bar), side panel on desktop.
  */
-export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: Anchor; onClose: () => void }) {
+export function TownPanel({ info, anchor, onClose, illustrative }: { info: TownInfo; anchor: Anchor; onClose: () => void; illustrative?: boolean }) {
   const s = useHomeLander();
   const { t } = info;
+  const done = t.status === "completed";
   const drive = driveMinutes(t.pos, anchor.pos);
   const train = transitMinutes(t.pos, anchor.pos);
 
   return (
     <PixPanel
       role="dialog"
+      data-obstacle
       aria-modal={false}
       aria-labelledby="town-panel-title"
       className={cn(
@@ -55,13 +61,28 @@ export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: A
           <p className="text-sm text-ink-soft">{t.area}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <PixTag tone="kaya">From {rmShort(info.from)}</PixTag>
-            <PixTag tone={info.left ? "pandan" : "ink"}>{info.left} left</PixTag>
+            {done ? (
+              <PixTag tone="ink">Completed, resale only</PixTag>
+            ) : (
+              <PixTag tone={info.left ? "pandan" : "ink"} className={info.left ? DEEP_PANDAN : undefined}>{info.left} left</PixTag>
+            )}
             <PixTag>Sample</PixTag>
           </div>
         </div>
         <PixButton size="sm" className="size-9 shrink-0 px-0" onClick={onClose} aria-label="Close township panel">
           <Sprite art="cross" scale={2} />
         </PixButton>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b-[3px] border-ink px-3 py-2">
+        <PixButton asChild size="sm" tone="raya" className="text-white" style={{ "--pix-fill": "var(--color-raya-deep)" } as React.CSSProperties}>
+          <Link href="/login">Start with Uncle</Link>
+        </PixButton>
+        {illustrative && (
+          <span className="text-xs text-ink-soft">
+            The glass block on the map is an illustrative block at Gamuda Cove (made-up units and prices). Tap a block to open it up.
+          </span>
+        )}
       </div>
 
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-[3px] border-ink bg-cloud px-3 py-2 text-sm">
@@ -101,7 +122,7 @@ export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: A
                     {u.type}, {u.beds} bed, {u.builtUpSqft.toLocaleString("en-MY")} sqft
                   </p>
                   <div className="mt-1 flex flex-wrap gap-1">
-                    <PixTag tone={statusTone[av.status]}>{av.status}</PixTag>
+                    <PixTag tone={statusTone[av.status]} className={DEEP[av.status]}>{av.status}</PixTag>
                     <PixTag>
                       {av.left}/{av.total} {av.phase}
                     </PixTag>
@@ -134,6 +155,9 @@ export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: A
                   <Sprite art="bars" scale={2} />
                   {inBattle ? "In battle" : battleFull ? "Battle full" : "Add to battle"}
                 </PixButton>
+                <PixButton asChild size="sm" tone="lilac">
+                  <Link href={`/homes/${u.id}/feng-shui`}>Feng Shui</Link>
+                </PixButton>
               </div>
             </li>
           );
@@ -142,7 +166,7 @@ export function TownPanel({ info, anchor, onClose }: { info: TownInfo; anchor: A
 
       <div className="flex items-center justify-between gap-3 border-t-[3px] border-ink p-3">
         <span className="text-xs text-ink-soft">Battle: {s.compare.length}/3 homes</span>
-        <PixButton asChild size="sm" tone="pandan">
+        <PixButton asChild size="sm" tone="pandan" className="text-white" style={{ "--pix-fill": "var(--color-pandan-deep)" } as React.CSSProperties}>
           <Link href="/swipe">See in deck</Link>
         </PixButton>
       </div>

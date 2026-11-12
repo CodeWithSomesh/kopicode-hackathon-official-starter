@@ -21,23 +21,14 @@ A full-screen 3D map in the style of **PayGap City** (https://paygap.asia/paygap
 - **A small floating pitch card** saying "Find the Gamuda home that fits your life. Mochi will help.", with **Start with Mochi** as the primary button.
 - **Login sits at the top right.** The shared header already has it, so don't add a second one.
 
-## Start from what already works
+## The map now (one landing map: the First Key engine)
 
-The files in this folder already render a MapLibre map (OpenFreeMap tiles, no API key) with:
-- 3D buildings;
-- Klang Valley rail lines;
-- township pills;
-- a details panel;
-- loading and error states.
-
-Extend it rather than starting over. Gotchas already solved, so keep them:
-- **The map worker** is served from `public/homelander/maplibre/maplibre-gl-worker.mjs` and set with `setWorkerUrl`, because Turbopack can't load it otherwise.
-- **The map container** needs `!absolute inset-0 h-full w-full`, because MapLibre's CSS forces `position: relative` and the map collapses to 0 px.
-- **First load is slow:** tiles can take a few seconds the first time.
-
-## Existing map work on `main`
-
-`main` already has a PayGap-style map at `/find` (the "First Key" work: `src/app/find/`, `src/components/first-key/`, `src/lib/first-key/`, `docs/FIRST-KEY.md`). It uses its own PMTiles basemap, building bursts and three.js. If that's your work, decide which map becomes `/` and bring the best of both here. Don't keep two landing maps. MapLibre is pinned to 6.16.0; if you change the version, re-copy `node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs` into `public/homelander/maplibre/`.
+- `/` renders `FindClient` (`src/app/find/find-client.tsx`) around `NeighbourhoodMap` (`src/components/first-key/map/neighbourhood-map.tsx`): Klang Valley overview, township fly-in, 3D block, then the three.js burst. `/find` only redirects to `/` (keeps `?building=&unit=&dev=`). Somesh's old MapLibre `map-view.tsx` is gone.
+- The files here are the overlays: `town-pill.tsx` (pills), `township-list.tsx` (left list, chips, rail legend), `town-panel.tsx` (details panel / bottom sheet), `map-controls.tsx` (zoom, compass, 2D/3D), `map-data.ts` (rail, pill leans; `pillLeanPhone` for phones). Edit these freely; the map and burst files belong to the First Key work.
+- Basemap: our PMTiles file when `NEXT_PUBLIC_PMTILES_URL` is set (Liberty's flat layers paint underneath, so a wide screen never shows blank past the file's edge); otherwise OpenFreeMap Liberty with our layers on top. The map is tilted by default (pitch 52, bearing -12). Night follows the app theme (`data-jtheme="night"` on `.homelander-world`), not the OS; both basemaps are recoloured dark with lit windows, and the map ignores the Night Market CSS canvas invert.
+- The map worker is the static `public/homelander/maplibre/maplibre-gl-worker.mjs` (`setWorkerUrl`); MapLibre is pinned to 6.16.0, re-copy the file if you change it.
+- Not built yet: search box, filters, "Check your commute cost" CTA, floating pitch card.
+- Township positions in `src/lib/homelander/data.ts` come from OpenStreetMap (cove, gardens, jade, kundang); `twentyfive.7` is unverified.
 
 ## Data
 

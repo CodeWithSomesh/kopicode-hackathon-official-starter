@@ -1,0 +1,321 @@
+"use client";
+
+import { useLayoutEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { ThemeColors } from "../use-theme-colors";
+import { FLOOR_H, LOW_H, WALL_H, WALL_T, roomFloor, type FloorPlan, type PaletteKey } from "./layout";
+
+/**
+ * Interior colours mixed from theme tokens, so a theme change recolours the rooms. Mixed towards a light "paper"
+ * in both modes (in dark that is the light foreground): the rooms stay a lit architectural model; dark mode
+ * darkens them with the lighting, not the paint.
+ */
+export function paletteFrom(c: ThemeColors, dark: boolean): Record<PaletteKey, string> {
+  const paper = dark ? c.foreground : c.background;
+  const card = dark ? c.foreground : c.card;
+  return {
+    wall: mix(card, paper, 0.5),
+    wood: mix(c["chart-2"], paper, 0.38),
+    tile: mix(c.muted, paper, 0.35),
+    carpet: mix(c["chart-4"], paper, 0.65),
+    corridor: mix(c["muted-foreground"], paper, 0.6),
+    sofa: mix(c["chart-3"], paper, 0.3),
+    cushion: mix(c["chart-2"], paper, 0.7),
+    darkWood: mix(c.primary, c["chart-2"], 0.4),
+    table: mix(c["chart-2"], c.primary, 0.3),
+    chair: mix(card, c["chart-4"], 0.15),
+    counter: card,
+    counterTop: mix(c["muted-foreground"], paper, 0.4),
+    fridge: mix(c.muted, card, 0.5),
+    bed: card,
+    blanket: mix(c["chart-1"], paper, 0.35),
+    blanket2: mix(c["chart-3"], paper, 0.55),
+    rug: mix(c["chart-4"], paper, 0.45),
+    lamp: mix(c["chart-2"], card, 0.5),
+  };
+}
+
+// ---------- glass facade (shell above and below the cut) ----------
+
+const TEX_W = 6; // metres across the texture: 4 panes of 1.5 m
+const TEX_FLOORS = 4;
+
+const mix = (a: string, b: string, t: number) => "#" + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
+
+/** Window grid drawn on a canvas from theme tokens. The emissive twin lights about a fifth of the panes at night. */
+function facadeTextures(colors: ThemeColors, dark: boolean) {
+  const W = 512;
+  const H = 1024;
+  const rowH = H / TEX_FLOORS;
+  const paneW = W / 4;
+  const base = document.createElement("canvas");
+  const glow = document.createElement("canvas");
+  base.width = glow.width = W;
+  base.height = glow.height = H;
+  const g = base.getContext("2d")!;
+  const e = glow.getContext("2d")!;
+  // Close to the map's glass texture (chart-3 into the background), so the crossfade from the map holds.
+  const glassTop = dark ? mix(colors["chart-3"], colors.background, 0.55) : mix(colors["chart-3"], colors.background, 0.3);
+  const glassLow = dark ? mix(colors["chart-3"], colors.background, 0.75) : mix(colors["chart-3"], colors.foreground, 0.15);
+  const frame = dark ? "#3b4048" : "#ece8e1";
+  const mullion = dark ? "#23272d" : "#5c646d";
+  g.fillStyle = frame;
+  g.fillRect(0, 0, W, H);
+  e.fillStyle = "#000";
+  e.fillRect(0, 0, W, H);
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let r = 0; r < TEX_FLOORS; r++) {
+    const y = r * rowH;
+    for (let c = 0; c < 4; c++) {
+      const x = c * paneW;
+      const grad = g.createLinearGradient(0, y, 0, y + rowH);
+      grad.addColorStop(0, glassTop);
+      grad.addColorStop(1, glassLow);
+      g.fillStyle = grad;
+      g.fillRect(x + 5, y + 10, paneW - 10, rowH * 0.8);
+      g.fillStyle = mullion;
+      g.fillRect(x, y, 5, rowH);
+      // a soft sky glint across the upper pane
+      g.fillStyle = dark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.22)";
+      g.fillRect(x + 5, y + 10, paneW - 10, rowH * 0.18);
+      if (rand() < 0.22) {
+        const warm = e.createLinearGradient(0, y, 0, y + rowH);
+        warm.addColorStop(0, "#ffcf8a");
+        warm.addColorStop(1, "#d98a3c");
+        e.fillStyle = warm;
+        e.fillRect(x + 5, y + 10, paneW - 10, rowH * 0.8);
+      }
+    }
+    // slab edge band at the bottom of each floor
+    g.fillStyle = dark ? "#4a5059" : "#f6f3ee";
+    g.fillRect(0, y + rowH * 0.9, W, rowH * 0.1);
+  }
+  const make = (cv: HTMLCanvasElement, srgb: boolean) => {
+    const t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  return { map: make(base, true), emissiveMap: make(glow, true) };
+}
+
+/** Floor plates and roof: a waxed finish (harvest values). */
+const GLOSS = { roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.28 } as const;
+
+export function glassMaterials(colors: ThemeColors, dark: boolean) {
+  const { map, emissiveMap } = facadeTextures(colors, dark);
+  // Harvest values: dark glass roughness .22 clearcoat 1 / .05 (it reflects the studio environment); slabs and roof waxed.
+  const side = new THREE.MeshPhysicalMaterial({
+    map,
+    emissiveMap,
+    emissive: "#ffffff",
+    emissiveIntensity: dark ? 1.1 : 0,
+    roughness: 0.22,
+    metalness: 0.15,
+    clearcoat: 1,
+    clearcoatRoughness: 0.05,
+  });
+  const roof = new THREE.MeshPhysicalMaterial({ color: dark ? "#4d525a" : "#e8e4dd", ...GLOSS });
+  // balconies are not on the map's blocks: they fade in with the 3D background (transparent from the start)
+  const slab = new THREE.MeshPhysicalMaterial({ color: dark ? "#555b64" : "#f4f1ec", ...GLOSS, transparent: true, opacity: 0 });
+  const fade = (m: THREE.MeshPhysicalMaterial) => {
+    const c = m.clone();
+    c.transparent = true;
+    return c;
+  };
+  const fSide = fade(side);
+  const fRoof = fade(roof);
+  const fSlab = fade(slab);
+  return {
+    // ExtrudeGeometry groups: caps first, then the sides (and bevels)
+    solid: [roof, side],
+    fadingShell: [fRoof, fSide],
+    slab,
+    fadingSlab: fSlab,
+    fadingRoof: fRoof,
+    fading: [fSide, fRoof] as THREE.Material[],
+    plate: new THREE.MeshPhysicalMaterial({ color: mix(paletteFrom(colors, dark).corridor, colors.background, dark ? 0.35 : 0), ...GLOSS }),
+  };
+}
+
+/**
+ * The footprint outline (metres, x east, z south) extruded from y0 to y1. `bevel` rounds the top and bottom edges;
+ * `grow` pushes the outline out (a slab that overhangs the facade). Side UVs are in texture tiles (6 m by 4 floors),
+ * so the window grid keeps its real size on any block.
+ */
+export function outlineGeom(outline: [number, number][], y0: number, y1: number, bevel: number, grow = 0) {
+  const h = Math.max(y1 - y0, 0.02);
+  const b = Math.min(bevel, h / 2 - 0.005);
+  const shape = new THREE.Shape(outline.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const g = new THREE.ExtrudeGeometry(shape, {
+    depth: h - 2 * b,
+    bevelEnabled: b > 0,
+    bevelThickness: b,
+    bevelSize: b,
+    bevelOffset: grow - b, // caps sit inset by the bevel, the body at `grow`
+    bevelSegments: 2,
+    curveSegments: 1,
+  });
+  g.translate(0, 0, b);
+  g.rotateX(-Math.PI / 2); // extrusion now runs up; shape y becomes -z
+  g.translate(0, y0, 0);
+  const pos = g.getAttribute("position");
+  const nor = g.getAttribute("normal");
+  const uv = g.getAttribute("uv");
+  for (let i = 0; i < pos.count; i++) {
+    const u = Math.abs(nor.getZ(i)) >= Math.abs(nor.getX(i)) ? pos.getX(i) : pos.getZ(i);
+    uv.setXY(i, u / TEX_W, (pos.getY(i) - y0) / (TEX_FLOORS * FLOOR_H));
+  }
+  return g;
+}
+
+/** A rounded slab (floor plate): a RoundedBox, bevelled all round. */
+export function slabGeom(w: number, h: number, d: number, r: number) {
+  return new RoundedBoxGeometry(w, h, d, 2, r);
+}
+
+/** The glass shell between two heights: the chamfered footprint, top and bottom edges bevelled 90 cm. */
+export function ShellBox({ outline, y0, y1, mats }: { outline: [number, number][]; y0: number; y1: number; mats: THREE.Material[] }) {
+  const geom = useMemo(() => outlineGeom(outline, y0, y1, 0.9), [outline, y0, y1]);
+  if (y1 - y0 <= 0.01) return null;
+  return <mesh geometry={geom} material={mats} />;
+}
+
+/** One balcony slab per floor on both long facades, instanced; `len` is the straight part of the facade (the chamfered corners have none). */
+export function Balconies({ len, d, levels, from, material }: { len: number; d: number; levels: number; from: number; material: THREE.Material }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const geom = useMemo(() => new RoundedBoxGeometry(len, 0.22, 0.9, 3, 0.08), [len]);
+  const count = Math.max(0, levels) * 2;
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < levels; i++) {
+      for (const s of [0, 1]) {
+        m.makeTranslation(0, (from + i) * FLOOR_H - 0.12, (s ? 1 : -1) * (d / 2 + 0.45));
+        mesh.setMatrixAt(i * 2 + s, m);
+      }
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [levels, from, d, count]);
+  if (count === 0) return null;
+  return <instancedMesh key={count} ref={ref} args={[geom, material, count]} />;
+}
+
+export function RoofTop({ w, d, outline, y, material }: { w: number; d: number; outline: [number, number][]; y: number; material: THREE.Material }) {
+  const geoms = useMemo(
+    () => ({
+      slab: outlineGeom(outline, 0, 0.55, 0.18, 0.3), // chamfered like the tower, overhanging 30 cm, 18 cm bevel
+      plant: new RoundedBoxGeometry(Math.min(8, w * 0.3), 2.4, Math.min(5, d * 0.3), 2, 0.12),
+      tank: new RoundedBoxGeometry(3, 1.8, 3, 2, 0.1),
+    }),
+    [outline, w, d],
+  );
+  return (
+    <group position-y={y}>
+      <mesh geometry={geoms.slab} material={material} />
+      <mesh geometry={geoms.plant} material={material} position={[-w * 0.18, 1.7, 0]} />
+      <mesh geometry={geoms.tank} material={material} position={[w * 0.22, 1.4, d * 0.1]} />
+    </group>
+  );
+}
+
+// ---------- the revealed floor ----------
+
+const box = (sx: number, sy: number, sz: number, x: number, y: number, z: number, r = 0) => {
+  const g = r > 0 ? new RoundedBoxGeometry(sx, sy, sz, r <= 0.03 ? 1 : 2, Math.min(r, sx / 2, sy / 2, sz / 2)) : new THREE.BoxGeometry(sx, sy, sz);
+  g.translate(x, y, z);
+  // merged geometries need matching attributes; RoundedBox has no groups/index differences that matter after this
+  if (g.index) return g.toNonIndexed();
+  return g;
+};
+
+const merge = (parts: THREE.BufferGeometry[]) => (parts.length ? mergeGeometries(parts, false) : null);
+
+/**
+ * Rooms, walls, glazing and furniture of one floor, merged into a few meshes (one per material).
+ * The dollhouse cut: outer walls facing away from the camera stand full height as glass; every other wall is a third high.
+ */
+export function InteriorMeshes({
+  plan,
+  toCam,
+  dark,
+  colors,
+}: {
+  plan: FloorPlan;
+  toCam: [number, number];
+  dark: boolean;
+  colors: ThemeColors;
+}) {
+  const built = useMemo(() => {
+    const P = paletteFrom(colors, dark);
+    const floors: Record<string, THREE.BufferGeometry[]> = {};
+    const add = (k: string, g: THREE.BufferGeometry) => (floors[k] ??= []).push(g);
+    for (const u of plan.units) {
+      const { x0, z0, x1, z1 } = u.rect;
+      add("wood", box(x1 - x0, 0.03, z1 - z0, (x0 + x1) / 2, 0.015, (z0 + z1) / 2));
+      for (const r of u.rooms) {
+        const rc = r.rect;
+        add(roomFloor(r.id), box(rc.x1 - rc.x0 - 0.02, 0.05, rc.z1 - rc.z0 - 0.02, (rc.x0 + rc.x1) / 2, 0.035, (rc.z0 + rc.z1) / 2));
+      }
+    }
+    const low: THREE.BufferGeometry[] = [];
+    const glass: THREE.BufferGeometry[] = [];
+    const frame: THREE.BufferGeometry[] = [];
+    for (const wl of plan.walls) {
+      const len = Math.hypot(wl.x1 - wl.x0, wl.z1 - wl.z0);
+      if (len < 0.05) continue;
+      const alongX = Math.abs(wl.z1 - wl.z0) < 1e-6;
+      const mx = (wl.x0 + wl.x1) / 2;
+      const mz = (wl.z0 + wl.z1) / 2;
+      const far = wl.nx * toCam[0] + wl.nz * toCam[1] < 0;
+      const [sx, sz] = alongX ? [len, WALL_T] : [WALL_T, len];
+      if (wl.outer && far) {
+        // curtain wall: glass with mullions every ~1.2 m, a sill and a head
+        glass.push(box(alongX ? len : 0.03, WALL_H - 0.1, alongX ? 0.03 : len, mx, WALL_H / 2, mz));
+        frame.push(box(sx + 0.02, 0.12, sz + 0.02, mx, 0.06, mz, 0.02), box(sx + 0.02, 0.1, sz + 0.02, mx, WALL_H - 0.05, mz, 0.02));
+        const n = Math.max(1, Math.round(len / 1.2));
+        for (let i = 0; i <= n; i++) {
+          const t = i / n - 0.5;
+          frame.push(box(alongX ? 0.06 : 0.1, WALL_H, alongX ? 0.1 : 0.06, mx + (alongX ? t * len : 0), WALL_H / 2, mz + (alongX ? 0 : t * len), 0.02));
+        }
+      } else {
+        low.push(box(sx, LOW_H, sz, mx, LOW_H / 2, mz, 0.05));
+      }
+    }
+    const furniture: Record<string, THREE.BufferGeometry[]> = {};
+    for (const u of plan.units)
+      for (const f of u.furniture) (furniture[f.color] ??= []).push(box(f.sx, f.sy, f.sz, f.x, f.y + f.sy / 2 + 0.06, f.z, f.r ?? 0.05));
+
+    const mat = (color: string, extra?: THREE.MeshStandardMaterialParameters) =>
+      new THREE.MeshStandardMaterial({ color, roughness: 0.75, ...extra });
+    return {
+      floors: Object.entries(floors).map(([k, g]) => ({ k, geom: merge(g), mat: mat(P[k as PaletteKey], { roughness: k === "tile" ? 0.4 : 0.8 }) })),
+      low: { geom: merge(low), mat: mat(P.wall, { roughness: 0.9 }) },
+      glass: {
+        geom: merge(glass),
+        mat: new THREE.MeshPhysicalMaterial({ color: mix(colors["chart-3"], dark ? colors.background : colors.card, dark ? 0.6 : 0.7), transparent: true, opacity: 0.32, roughness: 0.04, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05, depthWrite: false }),
+      },
+      frame: { geom: merge(frame), mat: new THREE.MeshPhysicalMaterial({ color: mix(colors.foreground, colors["muted-foreground"], 0.5), roughness: 0.22, metalness: 0.4, clearcoat: 1, clearcoatRoughness: 0.05 }) },
+      furniture: Object.entries(furniture).map(([k, g]) => ({
+        k,
+        geom: merge(g),
+        mat: mat(P[k as PaletteKey], k === "lamp" ? { emissive: P.lamp, emissiveIntensity: dark ? 2.5 : 0.3 } : undefined),
+      })),
+    };
+  }, [plan, toCam, dark, colors]);
+
+  return (
+    <>
+      {built.floors.map((f) => f.geom && <mesh key={f.k} geometry={f.geom} material={f.mat} receiveShadow />)}
+      {built.low.geom && <mesh geometry={built.low.geom} material={built.low.mat} castShadow receiveShadow />}
+      {built.frame.geom && <mesh geometry={built.frame.geom} material={built.frame.mat} castShadow />}
+      {built.glass.geom && <mesh geometry={built.glass.geom} material={built.glass.mat} renderOrder={2} />}
+      {built.furniture.map((f) => f.geom && <mesh key={f.k} geometry={f.geom} material={f.mat} castShadow receiveShadow />)}
+    </>
+  );
+}

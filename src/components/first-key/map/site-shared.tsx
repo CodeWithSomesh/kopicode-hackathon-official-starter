@@ -11,11 +11,13 @@ import type { ThemeColors } from "../use-theme-colors";
 export const SITE_MIN_ZOOM = 14.5;
 
 const M_LAT = 110_574;
-/** The building's rectangle as a closed ring. w runs along the row, d across it; rot is degrees clockwise from north
- * (rot 0 = the row runs east-west). */
+/** The model's w axis points east (bearing 90) at model-rotation 0: MODEL_W_BEARING in tower/variants.ts (not imported, it pulls in three). */
+export const W_BEARING = 90;
+
+/** The building's rectangle as a closed ring. w runs along the row at bearing `rot` (degrees clockwise from north), d across it. */
 function ring(b: SiteBuilding): [number, number][] {
   const kx = 111_320 * Math.cos((b.lat * Math.PI) / 180);
-  const t = (b.rot * Math.PI) / 180;
+  const t = ((b.rot - W_BEARING) * Math.PI) / 180; // the same turn the model gets: footprint and model agree by construction
   const s = Math.sin(t);
   const c = Math.cos(t);
   return ([[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]] as const).map(([i, j]) => {

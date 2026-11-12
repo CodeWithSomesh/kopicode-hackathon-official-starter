@@ -5,28 +5,31 @@ import { Layer, Marker, Source, useMap } from "react-map-gl/mapbox";
 import type { LayerProps } from "react-map-gl/mapbox";
 import { siteLayout } from "@/lib/first-key/site-layout";
 import type { ThemeColors } from "../use-theme-colors";
-import { SITE_MIN_ZOOM, SiteChip, siteFootprints, siteLabels, typeFill, useZoomGate } from "./site-shared";
+import { variantGlb } from "../tower/variants";
+import { SITE_MIN_ZOOM, W_BEARING, SiteChip, siteFootprints, siteLabels, typeFill, useZoomGate } from "./site-shared";
 
 // Illustrative buildings at the Gamuda sites on the Mapbox map (layout: site-layout.json, models: tower/variants.ts).
 // Per site in view only: one glb per variant is built lazily and cached per day/night; a variant that fails to build is drawn
 // as a flat-coloured extrusion instead. Models cast no shadows. Clicks go through the flat footprints (and the model/box layers
 // if Mapbox answers for them): every feature carries `site`, the township id. Design and numbers: RESEARCH-site-buildings-tech.md.
-
-// ---- STUB: the models lane's builder is not in yet. When tower/variants.ts lands, delete this block and add
-//   import { variantGlb } from "../tower/variants";
-// A rejected build means "draw the extrusion stand-in for this variant".
-const variantGlb = (key: string, colors: ThemeColors, night: boolean): Promise<string> => {
-  void colors;
-  void night;
-  return Promise.reject(new Error(`no model builder yet for ${key}`));
-};
-// ---- END STUB
-
+// The blob URL belongs to variants.ts (it caches them), so it is never revoked here.
 export const SITE_CLICK_IDS = ["site-models", "site-boxes", "site-footprints"];
 
 const BUILDINGS = siteLayout.buildings;
 const BY_SITE = new Map<string, typeof BUILDINGS>();
 for (const b of BUILDINGS) BY_SITE.set(b.site, [...(BY_SITE.get(b.site) ?? []), b]);
+
+// Phones draw models for only the PHONE_CAP buildings nearest each site's label point; the rest keep their flat footprint
+// (still the click target). Measured: the real models cost ~+16 ms a frame at x4 CPU for 60 in view.
+const PHONE_CAP = 25;
+const PHONE = "(max-width: 768px), (pointer: coarse)";
+const NEAR = new Map<(typeof BUILDINGS)[number], number>(); // rank by distance to the label point, within the site
+for (const [site, bs] of BY_SITE) {
+  const at = siteLabels.find((l) => l.site === site) ?? bs[0];
+  const kx = Math.cos((at.lat * Math.PI) / 180);
+  const d2 = (b: (typeof BUILDINGS)[number]) => ((b.lng - at.lng) * kx) ** 2 + (b.lat - at.lat) ** 2;
+  [...bs].sort((a, b) => d2(a) - d2(b)).forEach((b, i) => NEAR.set(b, i));
+}
 
 const modelId = (variant: string, night: boolean) => `site-${variant}-${night ? "n" : "d"}`;
 
@@ -37,6 +40,7 @@ export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeCol
   const [visible, setVisible] = useState(""); // ids of the sites in view, sorted and comma-joined
   const [ready, setReady] = useState<ReadonlySet<string>>(new Set()); // model ids added to the style
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set()); // variants drawn as stand-in extrusions
+  const [cap] = useState(() => (window.matchMedia(PHONE).matches ? PHONE_CAP : Infinity)); // ponytail: read once, no resize listener
   const builds = useRef(new Map<string, Promise<void>>());
 
   // Which sites are on screen (projected, so pitch is handled), only while zoomed in far enough to draw anything.
@@ -78,7 +82,7 @@ export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeCol
   useEffect(() => {
     if (!map || !visible) return;
     let dead = false;
-    const keys = [...new Set(visible.split(",").flatMap((s) => BY_SITE.get(s)!.map((b) => b.variant)))];
+    const keys = [...new Set(visible.split(",").flatMap((s) => BY_SITE.get(s)!.filter((b) => NEAR.get(b)! < cap).map((b) => b.variant)))];
     (async () => {
       for (const key of keys) {
         if (dead) return;
@@ -88,7 +92,6 @@ export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeCol
           p = variantGlb(key, colors, dark).then(
             (url) => {
               map.addModel(id, url);
-              setTimeout(() => URL.revokeObjectURL(url), 5000);
               setReady((s) => new Set(s).add(id));
             },
             () => setFailed((s) => new Set(s).add(key)),
@@ -102,18 +105,18 @@ export default function SiteBuildings({ colors, dark, dusk }: { colors: ThemeCol
     return () => {
       dead = true;
     };
-  }, [map, visible, dark, colors]);
+  }, [map, visible, dark, colors, cap]);
 
   const modelPoints = useMemo(
     () => ({
       type: "FeatureCollection" as const,
-      features: BUILDINGS.filter((b) => ready.has(modelId(b.variant, dark))).map((b) => ({
+      features: BUILDINGS.filter((b) => NEAR.get(b)! < cap && ready.has(modelId(b.variant, dark))).map((b) => ({
         type: "Feature" as const,
-        properties: { site: b.site, model: modelId(b.variant, dark), rotation: [0, 0, b.rot] },
+        properties: { site: b.site, model: modelId(b.variant, dark), rotation: [0, 0, b.rot - W_BEARING] },
         geometry: { type: "Point" as const, coordinates: [b.lng, b.lat] },
       })),
     }),
-    [ready, dark],
+    [ready, dark, cap],
   );
 
   const night = dark ? 0.9 : dusk ? 0.35 : 0;

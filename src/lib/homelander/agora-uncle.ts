@@ -1,4 +1,5 @@
 import { anchorOptions, rm, townshipById, unitById, type Unit } from "./data";
+import type { Lang } from "./i18n/config";
 import type { Answers } from "./store";
 import { oneWayMinutes } from "./verdict";
 
@@ -110,14 +111,24 @@ export function shortlistFacts(ids: string[], anchorId: string) {
     });
 }
 
-export function uncleSystemPrompt(ids: string[], anchorId: string) {
+/**
+ * The EN | Manglish switch sets Uncle's DEFAULT voice: "mglish" is the original code-switching Uncle (the lines above and
+ * below); "en" is plain Malaysian English with no Bahasa Melayu words. The buyer's own language still wins.
+ */
+const voiceRules: Record<Lang, string> = {
+  mglish: `- Code-switch naturally inside the same sentence, like a real Malaysian: mostly English, with Bahasa Melayu words and phrases (rumah, anak, mak ayah, kereta, boleh, faham, sikit, betul, tak payah) and light Manglish particles (lah, ah, one, confirm or not?). Never translate yourself or speak two separate languages; mix them.
+- If the buyer speaks mostly Bahasa Melayu, lean more into BM. If mostly English, lean English.`,
+  en: `- Speak plain, friendly Malaysian English: no Bahasa Melayu words, at most one "lah" per reply. Warm and a little cheeky, never formal.
+- If the buyer speaks Bahasa Melayu, Mandarin or Tamil, answer in their language instead.`,
+};
+
+export function uncleSystemPrompt(ids: string[], anchorId: string, style: Lang = "mglish") {
   const anchor = anchorOptions.find((a) => a.id === anchorId) ?? anchorOptions[0]!;
   const facts = shortlistFacts(ids, anchorId);
   return `You are "Uncle", a warm, cheeky Malaysian kopitiam uncle inside HomeLander, a game that helps first-time buyers choose a Gamuda Land home. You are talking out loud, by voice.
 
 HOW YOU TALK
-- Code-switch naturally inside the same sentence, like a real Malaysian: mostly English, with Bahasa Melayu words and phrases (rumah, anak, mak ayah, kereta, boleh, faham, sikit, betul, tak payah) and light Manglish particles (lah, ah, one, confirm or not?). Never translate yourself or speak two separate languages; mix them.
-- If the buyer speaks mostly Bahasa Melayu, lean more into BM. If mostly English, lean English.
+${voiceRules[style]}
 - Keep every turn short: one or two spoken sentences, under 30 words. No lists, no markdown, no emoji, no symbols. Say "RM" amounts in words a person would say, like "six hundred forty-eight k".
 
 YOUR JOB: THE REGRET TEST
@@ -137,9 +148,11 @@ RULES
 - Only talk about Gamuda Land homes. Only the homes above. Never invent prices, units, promotions or availability.
 - Prices and commutes are estimates from sample data; say "about".
 - No financial, legal or investment advice. Do not tell them how much to borrow or whether property is a good investment. If asked, say the Bank screen has the estimate and a real banker should confirm.
-- If they go off topic, bring them back kindly: "Okay okay, but back to your rumah ah."`;
+- If they go off topic, bring them back kindly: ${style === "en" ? '"Okay okay, but back to your home hunt."' : '"Okay okay, but back to your rumah ah."'}`;
 }
 
-export function uncleGreeting(count: number) {
+export function uncleGreeting(count: number, style: Lang = "mglish") {
+  if (style === "en")
+    return `Hello! Uncle here. You've got ${count} homes on your list, and I'll ask five quick questions so you pick the one you won't regret. First one: do you plan to have kids in the next five years?`;
   return `Eh, hello! Uncle here. You got ${count} homes on your list ah, five questions only and I tell you which one you won't menyesal. First one: next five years, got plan nak ada anak or not?`;
 }

@@ -56,22 +56,25 @@ export const profileSchema = z.object({
 export type Profile = z.infer<typeof profileSchema>;
 export type ProfileKey = keyof Profile;
 
+/** i18n marker (npm run i18n:check sees tr(text)); the onboarding panel calls t(label) at render. The model prompt keeps the English. */
+const tr = (s: string) => s;
+
 /** What Uncle must have before the buyer can move on to swiping, with a plain label for each. */
 export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) => boolean }[] = [
-  { key: "livingWith", label: "Who you live with" },
-  { key: "kidsPlanned", label: "Kids in the next few years" },
-  { key: "schoolMatters", label: "Whether school distance matters", when: (p) => p.kidsPlanned !== "no" || (p.kidsNow ?? 0) > 0 },
-  { key: "workArea", label: "Where you work" },
-  { key: "officeDays", label: "Office days a week" },
-  { key: "commuteMode", label: "Car or train" },
-  { key: "preferredAreas", label: "Areas you like" },
-  { key: "homeType", label: "Landed or high-rise" },
-  { key: "minBedrooms", label: "Bedrooms you need" },
-  { key: "grossRM", label: "Monthly salary" },
-  { key: "carRM", label: "Loans you're paying" },
-  { key: "savingsRM", label: "Savings for the down payment" },
-  { key: "firstHome", label: "First home or not" },
-  { key: "age", label: "Your age" },
+  { key: "livingWith", label: tr("Who you live with") },
+  { key: "kidsPlanned", label: tr("Kids in the next few years") },
+  { key: "schoolMatters", label: tr("Whether school distance matters"), when: (p) => p.kidsPlanned !== "no" || (p.kidsNow ?? 0) > 0 },
+  { key: "workArea", label: tr("Where you work") },
+  { key: "officeDays", label: tr("Office days a week") },
+  { key: "commuteMode", label: tr("Car or train") },
+  { key: "preferredAreas", label: tr("Areas you like") },
+  { key: "homeType", label: tr("Landed or high-rise") },
+  { key: "minBedrooms", label: tr("Bedrooms you need") },
+  { key: "grossRM", label: tr("Monthly salary") },
+  { key: "carRM", label: tr("Loans you're paying") },
+  { key: "savingsRM", label: tr("Savings for the down payment") },
+  { key: "firstHome", label: tr("First home or not") },
+  { key: "age", label: tr("Your age") },
 ];
 
 const filled = (v: unknown) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && v.length === 0);

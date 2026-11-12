@@ -1,7 +1,9 @@
 import { Logo } from "@/components/app/logo";
 import { isDemoMode } from "@/lib/env";
+import { getT } from "@/lib/homelander/i18n/server";
 
-export default function AuthLayout({ children }: LayoutProps<"/">) {
+export default async function AuthLayout({ children }: LayoutProps<"/">) {
+  const t = await getT();
   return (
     <div className="grid min-h-svh place-items-center bg-muted/30 px-4 py-10">
       <div className="grid w-full max-w-sm gap-6">
@@ -9,7 +11,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
         <div className="rounded-xl border bg-card p-6 shadow-xs">{children}</div>
         {isDemoMode ? (
           <p className="text-center text-xs text-muted-foreground">
-            Supabase isn&apos;t configured, so any submit opens the demo dashboard.
+            {t("Supabase isn't configured, so any submit opens the demo dashboard.")}
           </p>
         ) : null}
       </div>

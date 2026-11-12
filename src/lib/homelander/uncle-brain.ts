@@ -3,6 +3,7 @@ import { groq } from "@ai-sdk/groq";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
+import type { Lang } from "./i18n/config";
 import { missingEssentials, profileSchema, type Profile } from "./profile";
 
 /**
@@ -40,20 +41,33 @@ const patchWire = z.object(
 
 const turnSchema = z.object({
   reply: z.string().describe("What Uncle says out loud next. 1 to 3 short spoken sentences, one question at most."),
-  lang: z.enum(uncleLangs).describe("Language of the reply: en (Manglish is fine), ms, zh (Mandarin, simplified), ta (Tamil)."),
+  lang: z.enum(uncleLangs).describe("Language of the reply: en (Malaysian English), ms, zh (Mandarin, simplified), ta (Tamil)."),
   patch: patchWire.describe("Every field the buyer stated or clearly implied in their LATEST message; null for everything else."),
   complete: z.boolean().describe("True only when nothing essential is missing and Uncle has said the wrap-up line."),
 });
 
 export type UncleTurn = { reply: string; lang: UncleLang; patch: Partial<Profile>; complete: boolean };
 
-function systemPrompt(profile: Profile) {
+/**
+ * The EN | Manglish switch sets Uncle's DEFAULT style (the buyer's own language still wins). "mglish" is the original
+ * code-switching voice; "en" is plain Malaysian English with no Bahasa Melayu words.
+ */
+const styleLine: Record<Lang, string> = {
+  mglish: `English (Malaysian English, a little "lah", "boleh", "can or not")`,
+  en: `English (plain, friendly Malaysian English: no Bahasa Melayu words, at most one "lah" in a reply)`,
+};
+const openingLine: Record<Lang, string> = {
+  mglish: "greet them in English with a little Malay and ask who they will be living with",
+  en: "greet them in plain English and ask who they will be living with",
+};
+
+function systemPrompt(profile: Profile, style: Lang) {
   const missing = missingEssentials(profile).map((m) => `- ${m.key}: ${m.label}`);
   return `You are Uncle, a warm, cheeky Malaysian kopitiam uncle who helps first-time buyers find a Gamuda Land home in the HomeLander app. You are on a voice call, so everything you say is spoken.
 
 How you talk
 - Short: 1 to 3 sentences, at most one question per turn. No lists, no markdown, no emoji.
-- Reply in the language of the buyer's latest message: English (Malaysian English, a little "lah", "boleh", "can or not"), Bahasa Melayu, Mandarin (simplified Chinese) or Tamil. If they switch language, you switch too. Set "lang" to match.
+- Reply in the language of the buyer's latest message: ${styleLine[style]}, Bahasa Melayu, Mandarin (simplified Chinese) or Tamil. If they switch language, you switch too. Set "lang" to match.
 - Friendly and practical, like an uncle who has seen many people buy houses. Never pushy.
 - Never give financial advice or promise loan approval. Money figures are only for estimates.
 
@@ -75,13 +89,13 @@ ${JSON.stringify(profile)}
 Still missing:
 ${missing.length ? missing.join("\n") : "(nothing essential: wrap up warmly, tell them you'll show homes that fit, and set complete to true)"}
 
-If this is the first turn and the buyer hasn't spoken yet, greet them in English with a little Malay and ask who they will be living with.`;
+If this is the first turn and the buyer hasn't spoken yet, ${openingLine[style]}.`;
 }
 
-async function generate(model: Parameters<typeof generateText>[0]["model"], messages: UncleMessage[], profile: Profile, opts: { retries: number; groqReasoning?: boolean }) {
+async function generate(model: Parameters<typeof generateText>[0]["model"], messages: UncleMessage[], profile: Profile, style: Lang, opts: { retries: number; groqReasoning?: boolean }) {
   const { output } = await generateText({
     model,
-    system: systemPrompt(profile),
+    system: systemPrompt(profile, style),
     messages: messages.length ? messages.slice(-HISTORY) : [{ role: "user", content: "(The buyer just sat down. Start.)" }],
     output: Output.object({ schema: turnSchema }),
     maxRetries: opts.retries,
@@ -91,14 +105,14 @@ async function generate(model: Parameters<typeof generateText>[0]["model"], mess
   return output;
 }
 
-export async function uncleTurn(messages: UncleMessage[], profile: Profile): Promise<UncleTurn> {
+export async function uncleTurn(messages: UncleMessage[], profile: Profile, style: Lang = "mglish"): Promise<UncleTurn> {
   let output: z.infer<typeof turnSchema> | undefined;
   if (process.env.GROQ_API_KEY) {
     let lastError: unknown;
     for (const [i, id] of GROQ_MODELS.entries()) {
       const last = i === GROQ_MODELS.length - 1;
       try {
-        output = await generate(groq(id), messages, profile, { retries: last ? 2 : 0, groqReasoning: id.startsWith("openai/gpt-oss") });
+        output = await generate(groq(id), messages, profile, style, { retries: last ? 2 : 0, groqReasoning: id.startsWith("openai/gpt-oss") });
         break;
       } catch (e) {
         lastError = e;
@@ -107,7 +121,7 @@ export async function uncleTurn(messages: UncleMessage[], profile: Profile): Pro
     }
     if (!output) throw lastError;
   } else {
-    output = await generate(env.aiModel, messages, profile, { retries: 2 });
+    output = await generate(env.aiModel, messages, profile, style, { retries: 2 });
   }
 
   // Drop the "not mentioned" nulls and check each value on its own, so one bad field never loses the rest.

@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import * as THREE from "three";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { CATALOG, type Item, type Kind } from "./furniture";
 import type { Floor } from "./plans";
@@ -78,6 +79,7 @@ function readColors(el: Element): Colors {
 }
 
 export function Plan3D(props: Props) {
+  const t = useT();
   const wrap = useRef<HTMLDivElement>(null);
   const [colors, setColors] = useState<Colors | null>(null);
 
@@ -99,7 +101,7 @@ export function Plan3D(props: Props) {
       onKeyDown={props.onKeyDown}
       role="application"
       aria-roledescription="3D floor plan"
-      aria-label={`3D view, ${props.floor.label}. Drag to orbit, scroll to zoom. Tap a piece to select it and drag it to move.`}
+      aria-label={t("3D view, {floor}. Drag to orbit, scroll to zoom. Tap a piece to select it and drag it to move.", { floor: t(props.floor.label) })}
       className={cn(
         "relative touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pandan-deep",
         props.className,

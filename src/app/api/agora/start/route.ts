@@ -3,6 +3,7 @@ import { z } from "zod";
 import { AGENT_UID, AgoraError, agoraAppId, agoraConfigured, joinAgent, rtcToken } from "@/lib/homelander/agora";
 import { uncleGreeting, uncleSystemPrompt } from "@/lib/homelander/agora-uncle";
 import { anchorOptions, unitById } from "@/lib/homelander/data";
+import { getLang } from "@/lib/homelander/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export async function POST(req: Request) {
   if (!ids.length) return Response.json({ error: "No known homes in the shortlist" }, { status: 400 });
   const anchorId = anchorOptions.some((a) => a.id === parsed.data.anchorId) ? parsed.data.anchorId : anchorOptions[0]!.id;
 
+  const style = await getLang(); // EN | Manglish switch: Uncle's default voice
   const channel = `homelander-uncle-${randomUUID().slice(0, 12)}`;
   const uid = randomInt(10_000, 2_000_000_000);
 
@@ -32,8 +34,8 @@ export async function POST(req: Request) {
     const { agentId } = await joinAgent({
       channel,
       userUid: uid,
-      systemPrompt: uncleSystemPrompt(ids, anchorId),
-      greeting: uncleGreeting(ids.length),
+      systemPrompt: uncleSystemPrompt(ids, anchorId, style),
+      greeting: uncleGreeting(ids.length, style),
     });
     return Response.json(
       { appId: agoraAppId(), channel, uid, token: rtcToken(channel, uid), agentId, agentUid: AGENT_UID },

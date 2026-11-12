@@ -4,39 +4,59 @@ import { PixButton, PixPanel } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import { passReasons } from "@/lib/homelander/data";
 import { demandSummary, WINDOW } from "@/lib/homelander/demand";
+import { getT } from "@/lib/homelander/i18n/server";
 import { cn } from "@/lib/utils";
 import { LeadInbox } from "./lead-inbox";
 
-export const metadata: Metadata = { title: "HomeLander demand" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getT())("HomeLander demand") };
+}
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
-export default function HomeLanderDemandPage() {
+export default async function HomeLanderDemandPage() {
+  const t = await getT();
   const d = demandSummary();
-  const maxRate = Math.max(...d.byTownship.map((t) => t.rate));
+  // Data words from demand.ts / data.ts, translated here at render (literals so npm run i18n:check sees them).
+  const reason: Record<string, string> = {
+    "Too far": t("Too far"),
+    "Too pricey": t("Too pricey"),
+    "Too small": t("Too small"),
+    "Not my style": t("Not my style"),
+  };
+  const segment: Record<string, string> = {
+    "Under 35": t("Under 35"),
+    "35 to 49": t("35 to 49"),
+    "50 and over": t("50 and over"),
+  };
+  const maxRate = Math.max(...d.byTownship.map((row) => row.rate));
 
   return (
     <div className="grid gap-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="grid max-w-3xl gap-2">
           <h1 className="font-pixel text-3xl leading-none font-bold">
-            HomeLander demand
+            {t("HomeLander demand")}
           </h1>
           <p className="text-lg leading-snug">
-            {d.finding.township} loses {pct(d.finding.share)} of its explained
-            passes to &ldquo;
-            {d.finding.reason.toLowerCase()}&rdquo;.
+            {t("{township} loses {share} of its explained passes to “{reason}”.", {
+              township: d.finding.township,
+              share: pct(d.finding.share),
+              reason: reason[d.finding.reason].toLowerCase(),
+            })}
           </p>
           <p className="text-sm text-ink-soft">
-            {WINDOW.label} · {d.buyers.toLocaleString("en-MY")} buyers · sample
-            data
+            {t("{window} · {buyers} buyers · sample data", {
+              window: WINDOW.label,
+              buyers: d.buyers.toLocaleString("en-MY"),
+            })}
           </p>
         </div>
         <div className="flex items-center gap-4">
           <PixButton asChild tone="kaya" size="sm">
             <Link href="/swipe">
               <Sprite art="heart" scale={2} className="text-raya" />
-              Open the buyer app
+              {t("Open the buyer app")}
             </Link>
           </PixButton>
         </div>
@@ -46,24 +66,24 @@ export default function HomeLanderDemandPage() {
         <dl className="grid grid-cols-2 lg:grid-cols-4">
           {[
             {
-              label: "Swipes",
+              label: t("Swipes"),
               value: d.total.toLocaleString("en-MY"),
-              note: `${(d.total / d.buyers).toFixed(1)} per buyer`,
+              note: t("{n} per buyer", { n: (d.total / d.buyers).toFixed(1) }),
             },
             {
-              label: "Right-swipe rate",
+              label: t("Right-swipe rate"),
               value: pct(d.rate),
-              note: `${d.likes.toLocaleString("en-MY")} yes of ${d.total.toLocaleString("en-MY")}`,
+              note: t("{yes} yes of {total}", { yes: d.likes.toLocaleString("en-MY"), total: d.total.toLocaleString("en-MY") }),
             },
             {
-              label: "Buyers",
+              label: t("Buyers"),
               value: d.buyers.toLocaleString("en-MY"),
-              note: "Unique sessions",
+              note: t("Unique sessions"),
             },
             {
-              label: "Townships",
+              label: t("Townships"),
               value: d.byTownship.length.toString(),
-              note: "Live in the deck",
+              note: t("Live in the deck"),
             },
           ].map((k, i) => (
             <div
@@ -95,26 +115,26 @@ export default function HomeLanderDemandPage() {
           >
             <div className="flex items-baseline justify-between gap-4">
               <h2 id="want-title" className="font-pixel text-xl font-bold">
-                Which townships buyers want
+                {t("Which townships buyers want")}
               </h2>
-              <p className="text-xs text-ink-soft">Right-swipe rate</p>
+              <p className="text-xs text-ink-soft">{t("Right-swipe rate")}</p>
             </div>
             <ul className="grid gap-3">
-              {d.byTownship.map((t) => {
-                const top = t.rate === maxRate;
+              {d.byTownship.map((row) => {
+                const top = row.rate === maxRate;
                 return (
                   <li
-                    key={t.township.id}
+                    key={row.township.id}
                     className="grid grid-cols-[9rem_1fr_3rem] items-center gap-3 text-sm"
                   >
-                    <span className="truncate">{t.township.name}</span>
+                    <span className="truncate">{row.township.name}</span>
                     <span className="h-4 border-2 border-ink bg-cloud">
                       <span
                         className={cn(
                           "block h-full",
                           top ? "bg-pandan" : "bg-sky-deep",
                         )}
-                        style={{ width: `${(t.rate / maxRate) * 100}%` }}
+                        style={{ width: `${(row.rate / maxRate) * 100}%` }}
                       />
                     </span>
                     <span
@@ -123,17 +143,19 @@ export default function HomeLanderDemandPage() {
                         top && "font-bold",
                       )}
                     >
-                      {pct(t.rate)}
+                      {pct(row.rate)}
                     </span>
                   </li>
                 );
               })}
             </ul>
             <p className="text-xs text-ink-soft">
-              Bars are scaled to the top township.{" "}
-              {d.byTownship[0]!.township.name}:{" "}
-              {d.byTownship[0]!.likes.toLocaleString("en-MY")} yes of{" "}
-              {d.byTownship[0]!.swipes.toLocaleString("en-MY")} swipes.
+              {t("Bars are scaled to the top township.")}{" "}
+              {t("{township}: {yes} yes of {swipes} swipes.", {
+                township: d.byTownship[0]!.township.name,
+                yes: d.byTownship[0]!.likes.toLocaleString("en-MY"),
+                swipes: d.byTownship[0]!.swipes.toLocaleString("en-MY"),
+              })}
             </p>
           </section>
         </PixPanel>
@@ -144,21 +166,21 @@ export default function HomeLanderDemandPage() {
             className="grid content-start gap-4 p-5"
           >
             <h2 id="seg-title" className="font-pixel text-xl font-bold">
-              Who wants what
+              {t("Who wants what")}
             </h2>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-ink-soft">
-                  <th className="py-2 pr-3 font-normal">Buyer age</th>
-                  <th className="py-2 pr-3 text-right font-normal">Buyers</th>
-                  <th className="py-2 pr-3 text-right font-normal">Landed</th>
-                  <th className="py-2 text-right font-normal">High-rise</th>
+                  <th className="py-2 pr-3 font-normal">{t("Buyer age")}</th>
+                  <th className="py-2 pr-3 text-right font-normal">{t("Buyers")}</th>
+                  <th className="py-2 pr-3 text-right font-normal">{t("Landed")}</th>
+                  <th className="py-2 text-right font-normal">{t("High-rise")}</th>
                 </tr>
               </thead>
               <tbody>
                 {d.bySegment.map((s) => (
                   <tr key={s.segment} className="border-t-2 border-ink/15">
-                    <td className="py-2.5 pr-3">{s.segment}</td>
+                    <td className="py-2.5 pr-3">{segment[s.segment]}</td>
                     <td className="py-2.5 pr-3 text-right tabular-nums">
                       {s.buyers}
                     </td>
@@ -183,8 +205,7 @@ export default function HomeLanderDemandPage() {
               </tbody>
             </table>
             <p className="text-xs text-ink-soft">
-              Right-swipe rate by home type. Highlighted is what each age group
-              prefers.
+              {t("Right-swipe rate by home type. Highlighted is what each age group prefers.")}
             </p>
           </section>
         </PixPanel>
@@ -194,38 +215,38 @@ export default function HomeLanderDemandPage() {
         <section aria-labelledby="pass-title" className="grid gap-4 p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-4">
             <h2 id="pass-title" className="font-pixel text-xl font-bold">
-              Why buyers pass
+              {t("Why buyers pass")}
             </h2>
             <p className="text-xs text-ink-soft">
-              Share of passes where the buyer gave a reason
+              {t("Share of passes where the buyer gave a reason")}
             </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-ink-soft">
-                  <th className="py-2 pr-3 font-normal">Township</th>
-                  <th className="py-2 pr-3 text-right font-normal">Passes</th>
+                  <th className="py-2 pr-3 font-normal">{t("Township")}</th>
+                  <th className="py-2 pr-3 text-right font-normal">{t("Passes")}</th>
                   {passReasons.map((r) => (
                     <th key={r} className="py-2 pr-3 text-right font-normal">
-                      {r}
+                      {reason[r]}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {d.byTownship.map((t) => {
-                  const top = Math.max(...t.reasons);
+                {d.byTownship.map((row) => {
+                  const top = Math.max(...row.reasons);
                   return (
                     <tr
-                      key={t.township.id}
+                      key={row.township.id}
                       className="border-t-2 border-ink/15"
                     >
-                      <td className="py-2.5 pr-3">{t.township.name}</td>
+                      <td className="py-2.5 pr-3">{row.township.name}</td>
                       <td className="py-2.5 pr-3 text-right tabular-nums">
-                        {t.passes.toLocaleString("en-MY")}
+                        {row.passes.toLocaleString("en-MY")}
                       </td>
-                      {t.reasons.map((n, i) => (
+                      {row.reasons.map((n, i) => (
                         <td
                           key={passReasons[i]}
                           className={cn(
@@ -235,7 +256,7 @@ export default function HomeLanderDemandPage() {
                               : "text-ink-soft",
                           )}
                         >
-                          {pct(t.withReason ? n / t.withReason : 0)}
+                          {pct(row.withReason ? n / row.withReason : 0)}
                         </td>
                       ))}
                     </tr>
@@ -245,8 +266,7 @@ export default function HomeLanderDemandPage() {
             </table>
           </div>
           <p className="text-sm">
-            What to do with it: far-out townships need the rail and feeder-bus
-            story up front; city towers lose on size, so lead with layouts.
+            {t("What to do with it: far-out townships need the rail and feeder-bus story up front; city towers lose on size, so lead with layouts.")}
           </p>
         </section>
       </PixPanel>

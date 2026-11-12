@@ -1,6 +1,7 @@
 "use client";
 
 import { PixButton, PixPanel } from "@/components/homelander/pixel";
+import { useLang, useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import type { Room } from "./plans";
 import { FACINGS, MONTHS, timeLabel } from "./sun";
@@ -24,16 +25,22 @@ type Props = {
 
 /** Which way the home faces, when, and where the sun lands: the controls and their result in one card. */
 export function SunPanel(p: Props) {
+  const t = useT();
+  const lang = useLang();
   const facing = FACINGS.find((f) => f.deg === p.facing)!;
+  // Manglish leads with the Malay compass word, English leads otherwise.
+  const facingName = (f: (typeof FACINGS)[number]) => (lang === "mglish" ? `${f.malay} (${f.name})` : `${f.name} (${f.malay})`);
+  const month = t(MONTHS[p.month - 1]);
 
   return (
     <PixPanel className="grid gap-4 p-4">
-      <h2 className="font-pixel text-lg font-bold">Sun and facing</h2>
+      <h2 className="font-pixel text-lg font-bold">{t("Sun and facing")}</h2>
 
       <fieldset className="grid gap-2">
         <legend className="mb-1 text-sm font-semibold">
-          Front faces <span className="font-pixel">{facing.name}</span>{" "}
-          <span className="font-normal text-ink-soft">({facing.malay})</span>
+          {t("Front faces")}{" "}
+          <span className="font-pixel">{lang === "mglish" ? facing.malay : facing.name}</span>{" "}
+          <span className="font-normal text-ink-soft">({lang === "mglish" ? facing.name : facing.malay})</span>
         </legend>
         <div className="grid grid-cols-8 gap-1">
           {FACINGS.map((f) => (
@@ -41,7 +48,7 @@ export function SunPanel(p: Props) {
               key={f.deg}
               type="button"
               aria-pressed={f.deg === p.facing}
-              aria-label={`${f.name} (${f.malay})`}
+              aria-label={facingName(f)}
               onClick={() => p.onFacing(f.deg)}
               className={cn(
                 "border-2 border-ink py-1 font-pixel text-xs font-bold",
@@ -55,7 +62,7 @@ export function SunPanel(p: Props) {
           ))}
         </div>
         <p className="text-xs text-ink-soft">
-          The top of the plan is the front of the home.
+          {t("The top of the plan is the front of the home.")}
         </p>
       </fieldset>
 
@@ -64,7 +71,7 @@ export function SunPanel(p: Props) {
           htmlFor="fs-time"
           className="flex items-baseline justify-between text-sm font-semibold"
         >
-          Time <span className="font-pixel">{timeLabel(p.time)}</span>
+          {t("Time")} <span className="font-pixel">{timeLabel(p.time)}</span>
         </label>
         <input
           id="fs-time"
@@ -98,14 +105,16 @@ export function SunPanel(p: Props) {
         </div>
         <p className="text-xs text-ink-soft">
           {p.sunnyHours === 0
-            ? `Living room: no direct sun all day in ${MONTHS[p.month - 1]}.`
-            : `Living room: about ${p.sunnyHours} ${p.sunnyHours === 1 ? "hour" : "hours"} of direct sun in ${MONTHS[p.month - 1]}.`}
+            ? t("Living room: no direct sun all day in {month}.", { month })
+            : p.sunnyHours === 1
+              ? t("Living room: about {n} hour of direct sun in {month}.", { n: p.sunnyHours, month })
+              : t("Living room: about {n} hours of direct sun in {month}.", { n: p.sunnyHours, month })}
         </p>
       </div>
 
       <div className="grid gap-1.5">
         <span className="text-sm font-semibold" id="fs-month-label">
-          Month
+          {t("Month")}
         </span>
         <div
           className="grid grid-cols-6 gap-1"
@@ -125,7 +134,7 @@ export function SunPanel(p: Props) {
                   : "bg-white text-ink hover:bg-cloud",
               )}
             >
-              {m}
+              {t(m)}
             </button>
           ))}
         </div>
@@ -133,23 +142,23 @@ export function SunPanel(p: Props) {
 
       <div className="grid gap-2 border-t-2 border-cloud pt-3">
         <p className="text-sm">
-          <span className="font-semibold">In sun now: </span>
+          <span className="font-semibold">{t("In sun now:")} </span>
           {p.sunnyRooms.length ? (
             p.sunnyRooms.map(({ room, share }, i) => (
               <span key={room.id}>
                 {i ? " · " : ""}
-                {room.label}{" "}
+                {t(room.label)}{" "}
                 <span className="font-pixel">{Math.round(share * 100)}%</span>
               </span>
             ))
           ) : (
-            <span className="text-ink-soft">no room on this floor</span>
+            <span className="text-ink-soft">{t("no room on this floor")}</span>
           )}
         </p>
         {p.windowRooms.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-semibold text-ink-soft">
-              Curtains:
+              {t("Curtains:")}
             </span>
             {p.windowRooms.map((r) => (
               <PixButton
@@ -159,7 +168,7 @@ export function SunPanel(p: Props) {
                 aria-pressed={p.curtains.has(r.id)}
                 onClick={() => p.onCurtain(r.id)}
               >
-                {r.label}
+                {t(r.label)}
               </PixButton>
             ))}
           </div>

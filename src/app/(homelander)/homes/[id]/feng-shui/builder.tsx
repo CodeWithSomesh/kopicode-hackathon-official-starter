@@ -28,6 +28,7 @@ import {
   rotate,
   type Result,
 } from "./layout-ops";
+import dynamic from "next/dynamic";
 import { PlanCanvas } from "./plan-canvas";
 import { planBounds, plans, type Plan } from "./plans";
 import {
@@ -45,6 +46,16 @@ import {
 import { clearLayout, loadLayout, saveLayout } from "./saved";
 import { speak, type SpeechLang } from "./voice";
 import { MicButton, SpeechToolbar } from "./voice-controls";
+
+/** three.js only loads when someone opens the 3D view. */
+const Plan3D = dynamic(() => import("./plan-3d").then((m) => m.Plan3D), {
+  ssr: false,
+  loading: () => (
+    <div className="grid h-[62vh] min-h-[420px] w-full place-items-center text-sm text-ink-soft lg:h-[80vh]">
+      Loading 3D view…
+    </div>
+  ),
+});
 
 type Props = { unitId: string; planId: Plan["id"]; lat: number; lng: number };
 
@@ -71,6 +82,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [showBagua, setShowBagua] = useState(false);
+  const [view, setView] = useState<"plan" | "3d">("plan");
   const [lang, setLang] = useState<Lang>("mg");
   const [log, setLog] = useState<LogEntry[]>([]);
   const [speakOn, setSpeakOn] = useState(false);
@@ -159,7 +171,7 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     setSelected(null);
   };
 
-  const onPlanKey = (e: KeyboardEvent<HTMLCanvasElement>) => {
+  const onPlanKey = (e: KeyboardEvent<HTMLElement>) => {
     if (!selected) return;
     const step = e.shiftKey ? 0.5 : 0.1;
     const moves: Record<string, [number, number]> = {
@@ -478,46 +490,81 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           id="fs-plan"
           className="grid min-w-0 scroll-mt-4 gap-3 p-3 sm:p-4"
         >
-          {plan.floors.length > 1 ? (
-            <div
-              className="flex flex-wrap gap-2"
-              role="tablist"
-              aria-label="Floor"
-            >
-              {plan.floors.map((f, i) => (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {plan.floors.length > 1 ? (
+              <div
+                className="flex flex-wrap gap-2"
+                role="tablist"
+                aria-label="Floor"
+              >
+                {plan.floors.map((f, i) => (
+                  <PixButton
+                    key={f.id}
+                    size="sm"
+                    role="tab"
+                    aria-selected={i === floorIdx}
+                    tone={i === floorIdx ? "ink" : "white"}
+                    onClick={() => {
+                      setFloorIdx(i);
+                      setSelected(null);
+                    }}
+                  >
+                    {f.label}
+                  </PixButton>
+                ))}
+              </div>
+            ) : null}
+            <div className="ml-auto flex gap-1" role="group" aria-label="View">
+              {(
+                [
+                  ["plan", "Plan"],
+                  ["3d", "3D"],
+                ] as const
+              ).map(([v, label]) => (
                 <PixButton
-                  key={f.id}
+                  key={v}
                   size="sm"
-                  role="tab"
-                  aria-selected={i === floorIdx}
-                  tone={i === floorIdx ? "ink" : "white"}
-                  onClick={() => {
-                    setFloorIdx(i);
-                    setSelected(null);
-                  }}
+                  tone={view === v ? "ink" : "white"}
+                  aria-pressed={view === v}
+                  onClick={() => setView(v)}
                 >
-                  {f.label}
+                  {label}
                 </PixButton>
               ))}
             </div>
-          ) : null}
+          </div>
 
-          <PlanCanvas
-            floor={floor}
-            bounds={bounds}
-            patches={patches}
-            sun={sun}
-            facing={facing}
-            items={floorItems}
-            selected={selected}
-            onSelect={setSelected}
-            onDrag={dragTo}
-            onKeyDown={onPlanKey}
-            bagua={bagua}
-            flagged={flagged}
-            strips={strips}
-            className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
-          />
+          {view === "3d" ? (
+            <Plan3D
+              floor={floor}
+              bounds={bounds}
+              sun={sun}
+              items={floorItems}
+              selected={selected}
+              flagged={flagged}
+              onSelect={setSelected}
+              onDrag={dragTo}
+              onKeyDown={onPlanKey}
+              className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
+            />
+          ) : (
+            <PlanCanvas
+              floor={floor}
+              bounds={bounds}
+              patches={patches}
+              sun={sun}
+              facing={facing}
+              items={floorItems}
+              selected={selected}
+              onSelect={setSelected}
+              onDrag={dragTo}
+              onKeyDown={onPlanKey}
+              bagua={bagua}
+              flagged={flagged}
+              strips={strips}
+              className="h-[62vh] min-h-[420px] w-full lg:h-[80vh]"
+            />
+          )}
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
             <Stat

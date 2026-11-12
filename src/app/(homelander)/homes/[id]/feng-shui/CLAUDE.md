@@ -26,7 +26,7 @@ These override the list above where they differ.
 - **Three sample plans** (`plans.ts`): Terrace and Semi-D have two floors, Apartment has one. Bungalow uses Semi-D. Every unit is labelled as a sample layout.
 - **Feng shui:** rule-based notes and an Ong meter score that update live, plus a bagua overlay. No Kua number.
 - **Language:** the command box accepts mixed English, Malay and Manglish, and replies in English or Manglish. Voice input and spoken replies also cover Mandarin and Tamil through an AI route (`src/app/api/feng-shui/route.ts`, approved). The page must still work without AI.
-- **3D:** a toggle that renders the same layout state. It is built last and cut first.
+- **3D:** a Plan / 3D toggle renders the same layout state (`plan-3d.tsx`, walls from `walls.ts`). three.js loads only when 3D is opened. The sun is a real light with an invisible ceiling, so sun only enters through windows and doors. Click to select, drag to move (same collision rules), drag empty space to orbit.
 - **Saving:** `localStorage` per unit. No Supabase table.
 - **Build order:** 1 plans and sun, 2 furniture, 3 feng shui rules, 4 parser, 5 AI and voice, 6 3D.
 

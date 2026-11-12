@@ -23,9 +23,9 @@ export function monthlyInstalment(price: number, loanShare = 0.9, years = 35, ra
 const M_PER_DEG_LAT = 110_574;
 const M_PER_DEG_LNG = 111_320 * Math.cos((CENTER[1] * Math.PI) / 180);
 const at = (eastM: number, northM: number): LngLat => [CENTER[0] + eastM / M_PER_DEG_LNG, CENTER[1] + northM / M_PER_DEG_LAT];
-/** A w x d rectangle with every corner chamfered (cut ~8% of the shorter side, at most 2.5 m), as a closed ring. */
+/** A w x d rectangle with every corner chamfered (cut 18% of the shorter side, at most 4.5 m), as a closed ring. */
 const rect = (e: number, n: number, w: number, d: number): LngLat[] => {
-  const c = Math.min(0.08 * Math.min(w, d), 2.5);
+  const c = Math.min(0.18 * Math.min(w, d), 4.5);
   const [x0, x1, y0, y1] = [e - w / 2, e + w / 2, n - d / 2, n + d / 2];
   const p = [
     at(x0 + c, y0), at(x1 - c, y0), at(x1, y0 + c), at(x1, y1 - c),

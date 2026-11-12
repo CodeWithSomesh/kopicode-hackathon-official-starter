@@ -103,20 +103,26 @@ function facadeTextures(colors: ThemeColors, dark: boolean) {
   return { map: make(base, true), emissiveMap: make(glow, true) };
 }
 
+/** Floor plates and roof: a waxed finish (harvest values). */
+const GLOSS = { roughness: 0.5, clearcoat: 0.35, clearcoatRoughness: 0.28 } as const;
+
 export function glassMaterials(colors: ThemeColors, dark: boolean) {
   const { map, emissiveMap } = facadeTextures(colors, dark);
-  const side = new THREE.MeshStandardMaterial({
+  // Harvest values: dark glass roughness .22 clearcoat 1 / .05 (it reflects the studio environment); slabs and roof waxed.
+  const side = new THREE.MeshPhysicalMaterial({
     map,
     emissiveMap,
     emissive: "#ffffff",
     emissiveIntensity: dark ? 1.1 : 0,
-    roughness: 0.25,
+    roughness: 0.22,
     metalness: 0.15,
+    clearcoat: 1,
+    clearcoatRoughness: 0.05,
   });
-  const roof = new THREE.MeshStandardMaterial({ color: dark ? "#4d525a" : "#e8e4dd", roughness: 0.9 });
+  const roof = new THREE.MeshPhysicalMaterial({ color: dark ? "#4d525a" : "#e8e4dd", ...GLOSS });
   // balconies are not on the map's blocks: they fade in with the 3D background (transparent from the start)
-  const slab = new THREE.MeshStandardMaterial({ color: dark ? "#555b64" : "#f4f1ec", roughness: 0.8, transparent: true, opacity: 0 });
-  const fade = (m: THREE.MeshStandardMaterial) => {
+  const slab = new THREE.MeshPhysicalMaterial({ color: dark ? "#555b64" : "#f4f1ec", ...GLOSS, transparent: true, opacity: 0 });
+  const fade = (m: THREE.MeshPhysicalMaterial) => {
     const c = m.clone();
     c.transparent = true;
     return c;
@@ -132,7 +138,7 @@ export function glassMaterials(colors: ThemeColors, dark: boolean) {
     fadingSlab: fSlab,
     fadingRoof: fRoof,
     fading: [fSide, fRoof] as THREE.Material[],
-    plate: new THREE.MeshStandardMaterial({ color: mix(paletteFrom(colors, dark).corridor, colors.background, dark ? 0.35 : 0), roughness: 0.85 }),
+    plate: new THREE.MeshPhysicalMaterial({ color: mix(paletteFrom(colors, dark).corridor, colors.background, dark ? 0.35 : 0), ...GLOSS }),
   };
 }
 
@@ -172,17 +178,17 @@ export function slabGeom(w: number, h: number, d: number, r: number) {
   return new RoundedBoxGeometry(w, h, d, 2, r);
 }
 
-/** The glass shell between two heights: the chamfered footprint, top and bottom edges bevelled 25 cm. */
+/** The glass shell between two heights: the chamfered footprint, top and bottom edges bevelled 90 cm. */
 export function ShellBox({ outline, y0, y1, mats }: { outline: [number, number][]; y0: number; y1: number; mats: THREE.Material[] }) {
-  const geom = useMemo(() => outlineGeom(outline, y0, y1, 0.25), [outline, y0, y1]);
+  const geom = useMemo(() => outlineGeom(outline, y0, y1, 0.9), [outline, y0, y1]);
   if (y1 - y0 <= 0.01) return null;
   return <mesh geometry={geom} material={mats} />;
 }
 
-/** One balcony slab per floor on both long facades, instanced. */
-export function Balconies({ w, d, levels, from, material }: { w: number; d: number; levels: number; from: number; material: THREE.Material }) {
+/** One balcony slab per floor on both long facades, instanced; `len` is the straight part of the facade (the chamfered corners have none). */
+export function Balconies({ len, d, levels, from, material }: { len: number; d: number; levels: number; from: number; material: THREE.Material }) {
   const ref = useRef<THREE.InstancedMesh>(null);
-  const geom = useMemo(() => new RoundedBoxGeometry(w - 2.4, 0.16, 0.9, 2, 0.06), [w]);
+  const geom = useMemo(() => new RoundedBoxGeometry(len, 0.22, 0.9, 3, 0.08), [len]);
   const count = Math.max(0, levels) * 2;
   useLayoutEffect(() => {
     const mesh = ref.current;
@@ -190,7 +196,7 @@ export function Balconies({ w, d, levels, from, material }: { w: number; d: numb
     const m = new THREE.Matrix4();
     for (let i = 0; i < levels; i++) {
       for (const s of [0, 1]) {
-        m.makeTranslation(0, (from + i) * FLOOR_H - 0.09, (s ? 1 : -1) * (d / 2 + 0.45));
+        m.makeTranslation(0, (from + i) * FLOOR_H - 0.12, (s ? 1 : -1) * (d / 2 + 0.45));
         mesh.setMatrixAt(i * 2 + s, m);
       }
     }
@@ -278,7 +284,7 @@ export function InteriorMeshes({
           frame.push(box(alongX ? 0.06 : 0.1, WALL_H, alongX ? 0.1 : 0.06, mx + (alongX ? t * len : 0), WALL_H / 2, mz + (alongX ? 0 : t * len), 0.02));
         }
       } else {
-        low.push(box(sx, LOW_H, sz, mx, LOW_H / 2, mz, 0.03));
+        low.push(box(sx, LOW_H, sz, mx, LOW_H / 2, mz, 0.05));
       }
     }
     const furniture: Record<string, THREE.BufferGeometry[]> = {};
@@ -292,9 +298,9 @@ export function InteriorMeshes({
       low: { geom: merge(low), mat: mat(P.wall, { roughness: 0.9 }) },
       glass: {
         geom: merge(glass),
-        mat: new THREE.MeshStandardMaterial({ color: mix(colors["chart-3"], dark ? colors.background : colors.card, dark ? 0.6 : 0.7), transparent: true, opacity: 0.32, roughness: 0.05, metalness: 0.3, depthWrite: false }),
+        mat: new THREE.MeshPhysicalMaterial({ color: mix(colors["chart-3"], dark ? colors.background : colors.card, dark ? 0.6 : 0.7), transparent: true, opacity: 0.32, roughness: 0.04, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05, depthWrite: false }),
       },
-      frame: { geom: merge(frame), mat: mat(mix(colors.foreground, colors["muted-foreground"], 0.5), { roughness: 0.5, metalness: 0.4 }) },
+      frame: { geom: merge(frame), mat: new THREE.MeshPhysicalMaterial({ color: mix(colors.foreground, colors["muted-foreground"], 0.5), roughness: 0.22, metalness: 0.4, clearcoat: 1, clearcoatRoughness: 0.05 }) },
       furniture: Object.entries(furniture).map(([k, g]) => ({
         k,
         geom: merge(g),

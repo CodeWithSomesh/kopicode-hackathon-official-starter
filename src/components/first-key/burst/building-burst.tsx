@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Edges, Html } from "@react-three/drei";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { gsap } from "gsap";
 import type { Building, Unit } from "@/lib/first-key/types";
 import { centroid } from "@/lib/first-key/geo";
@@ -45,7 +46,11 @@ const footprintOf = (b: Building) => {
   const zs = b.footprint.map((p) => (p[1] - c[1]) * kz);
   // The map's (chamfered) footprint in metres, x east and z south, so the 3D shell has the same corners.
   const outline = b.footprint.slice(0, -1).map((_, i) => [xs[i], -zs[i]] as [number, number]);
-  return { c, kx, kz, w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs), outline };
+  // Straight run of the north facade (the chamfered corners cut it short): balconies stop there.
+  const zTop = Math.max(...zs);
+  const top = xs.filter((_, i) => Math.abs(zs[i] - zTop) < 0.05);
+  const straight = Math.max(...top) - Math.min(...top);
+  return { c, kx, kz, straight, w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs), outline };
 };
 
 const isDark = (rgb: string) => (rgb.match(/\d+/g) ?? ["255"]).slice(0, 3).reduce((t, v) => t + Number(v), 0) / 3 < 128;
@@ -72,7 +77,9 @@ export function BuildingBurst({ building, selectedUnitId, onSelectUnit, active, 
         dpr={[1, 1.5]}
         frameloop={active ? "always" : "demand"}
         camera={{ fov: view?.fov ?? 36.87, near: 1, far: 5000, position: [0, 300, 300] }}
-        gl={{ antialias: true, alpha: true }}
+        // NeutralToneMapping keeps theme colours true (R3F's default is ACES, which greys and shifts them).
+        // NeutralToneMapping keeps theme colours true (R3F's default is ACES, which greys and shifts them).
+        gl={{ antialias: true, alpha: true, toneMapping: THREE.NeutralToneMapping, toneMappingExposure: 1 }}
         aria-label={`3D view of block ${building.block}, floor ${floor}`}
       >
         <Scene
@@ -89,7 +96,7 @@ export function BuildingBurst({ building, selectedUnitId, onSelectUnit, active, 
         />
       </Canvas>
 
-      <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-6 gap-y-2 border-t bg-card/90 px-4 py-3 text-card-foreground backdrop-blur">
+      <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-x-6 gap-y-2 border-t bg-card/90 px-4 py-3 text-card-foreground backdrop-blur max-lg:pb-[112px]">
         {building.floors > 1 && (
           <label className="flex min-w-48 flex-1 items-center gap-3 text-sm">
             <span className="shrink-0 font-medium tabular-nums">
@@ -168,6 +175,19 @@ function Scene({
   const sx = fp.w / plan.w;
   const sz = fp.d / plan.d;
 
+  // A built-in studio (no HDR download) for the glass and clearcoat to reflect.
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    Object.assign(scene, { environment: env, environmentIntensity: 0.6 });
+    pmrem.dispose();
+    return () => {
+      Object.assign(scene, { environment: null });
+      env.dispose();
+    };
+  }, [gl, scene]);
   const mats = useMemo(() => glassMaterials(colors, dark), [colors, dark]);
   // The map draws the picked block flat in the primary colour: the 3D block starts in that colour too and clears to glass.
   const tint = useMemo(
@@ -175,7 +195,7 @@ function Scene({
     [colors.primary],
   );
   const tintGeom = useMemo(() => outlineGeom(fp.outline, 0.05, building.heightM + 0.15, 0.01, 0.05), [fp, building.heightM]);
-  const plateGeom = useMemo(() => slabGeom(fp.w + 0.5, 0.3, fp.d + 0.5, 0.08), [fp]); // 8 cm fillet on the floor slab
+  const plateGeom = useMemo(() => slabGeom(fp.w + 0.5, 0.3, fp.d + 0.5, 0.15), [fp]); // 15 cm fillet on the floor slab
   const ground = useMemo(
     () => new THREE.MeshStandardMaterial({ color: colors.muted, transparent: true, opacity: 0, roughness: 1 }),
     [colors.muted],
@@ -185,7 +205,8 @@ function Scene({
     // Fit the floor plate between the top bar and the bottom panel.
     const r = 0.5 * Math.hypot(fp.w, fp.d) * 0.92;
     const t = Math.tan(((view?.fov ?? 36.87) * D2R) / 2);
-    const usable = Math.max(0.4, (size.height - 190) / size.height);
+    // Phones: the shell's tab bar (~100 px, z-30) covers the panel's lower part, so reserve it too.
+    const usable = Math.max(0.4, (size.height - 190 - (size.width < 1024 ? 100 : 0)) / size.height);
     const dist = r / Math.min(t * usable, t * (size.width / size.height) * 0.9);
     return { bearing: b1, pitch: END_PITCH, dist, tx: 0, ty: floorY + 0.9, tz: 0, off: 40, bg: 1, lift: 1 };
   };
@@ -300,7 +321,7 @@ function Scene({
       {floor > 1 && (
         <group>
           <ShellBox outline={fp.outline} y0={0} y1={floorY} mats={mats.solid} />
-          <Balconies w={fp.w} d={fp.d} levels={floor - 1} from={1} material={mats.slab} />
+          <Balconies len={fp.straight - 1.2} d={fp.d} levels={floor - 1} from={1} material={mats.slab} />
         </group>
       )}
 
@@ -344,7 +365,7 @@ function Scene({
                     <boxGeometry args={[x1 - x0 - 0.1, 0.02, z1 - z0 - 0.1]} />
                     <meshBasicMaterial color={colors.primary} transparent opacity={isPick ? 0.5 : 0.22} depthWrite={false} />
                     {isPick && (
-                      <Edges scale={[1, 1, 1]} color={colors.primary} lineWidth={3}>
+                      <Edges scale={[1, 1, 1]} threshold={24} color={colors.primary} lineWidth={3}>
                         <boxGeometry args={[x1 - x0 - 0.1, LOW_H * 2, z1 - z0 - 0.1]} />
                       </Edges>
                     )}
@@ -364,7 +385,7 @@ function Scene({
       {/* Everything above the revealed floor (and its own facade): lifts, slides off and fades. */}
       <group ref={upper}>
         <ShellBox outline={fp.outline} y0={floorY} y1={building.floors * FLOOR_H} mats={mats.fadingShell} />
-        <Balconies w={fp.w} d={fp.d} levels={building.floors - floor} from={floor} material={mats.fadingSlab} />
+        <Balconies len={fp.straight - 1.2} d={fp.d} levels={building.floors - floor} from={floor} material={mats.fadingSlab} />
         <RoofTop w={fp.w} d={fp.d} outline={fp.outline} y={building.floors * FLOOR_H} material={mats.fadingRoof} />
       </group>
     </>

@@ -9,6 +9,7 @@ import { MochiBot } from "@/components/homelander/mochi-bot";
 import { Sprite } from "@/components/homelander/sprite";
 import { availabilityOf, passReasons, rm, townshipById, unitById, type Unit } from "@/lib/homelander/data";
 import { BATTLE_MAX, DECK_LIKE_LIMIT, LIKES_TO_BATTLE, anchorFor, recommend } from "@/lib/homelander/recommend";
+import { useT } from "@/lib/homelander/i18n/client";
 import { homelander, useHomeLander, type HomeLanderState } from "@/lib/homelander/store";
 import { moneyBasis } from "./_swipe/buyer";
 import { CardStack, DECK_HEIGHT, type Dir, type StackHandle } from "./_swipe/card-stack";
@@ -44,6 +45,7 @@ const knowsBuyer = (s: HomeLanderState) => !!s.onboardedAt && Object.values(s.pr
  * a horizontal scrollbar while panel outlines and chips (drawn as box-shadows) keep their room.
  */
 function Frame({ aside, sub, children }: { aside?: React.ReactNode; sub?: React.ReactNode; children?: React.ReactNode }) {
+  const t = useT();
   return (
     <div
       className="grid grid-cols-[minmax(0,1fr)] gap-6 overflow-x-clip [--bleed:1rem] lg:[--bleed:max(2rem,calc((100vw-72rem)/2+1rem))]"
@@ -51,7 +53,7 @@ function Frame({ aside, sub, children }: { aside?: React.ReactNode; sub?: React.
     >
       <header className="grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <h1 className="font-pixel text-[1.625rem] leading-none sm:text-4xl">Find your home</h1>
+          <h1 className="font-pixel text-[1.625rem] leading-none sm:text-4xl">{t("Find your home")}</h1>
           {aside}
         </div>
         {sub}
@@ -63,21 +65,21 @@ function Frame({ aside, sub, children }: { aside?: React.ReactNode; sub?: React.
 
 /** No profile yet: say so plainly and send them to Mochi. */
 function MochiGate() {
+  const t = useT();
   return (
     <Frame>
       <PixPanel className="mx-auto grid w-full max-w-xl justify-items-center gap-4 p-6 text-center sm:p-10">
         <MochiBot size={132} />
-        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Mochi needs to get to know you first</h2>
+        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">{t("Mochi needs to get to know you first")}</h2>
         <p className="max-w-md text-[15px] text-ink">
-          Every home in the deck is picked and ranked from your own answers: your budget, where you work, who lives
-          with you and what you need. No answers, no guesses, so there&apos;s no deck yet.
+          {t("Every home in the deck is picked and ranked from your own answers: your budget, where you work, who lives with you and what you need. No answers, no guesses, so there's no deck yet.")}
         </p>
-        <p className="max-w-md text-sm text-ink-soft">About ten easy questions with Mochi. Talk or type, whichever suits you.</p>
+        <p className="max-w-md text-sm text-ink-soft">{t("About ten easy questions with Mochi. Talk or type, whichever suits you.")}</p>
         <div className="p-1 pb-2">
           <PixButton asChild tone="pandan" size="lg">
             <Link href="/onboarding">
               <Sprite art="mochi" scale={2} />
-              Chat with Mochi
+              {t("Chat with Mochi")}
             </Link>
           </PixButton>
         </div>
@@ -87,6 +89,7 @@ function MochiGate() {
 }
 
 function Deck({ s }: { s: HomeLanderState }) {
+  const t = useT();
   const router = useRouter();
   const stack = useRef<StackHandle>(null);
   const [filter, setFilter] = useState<StockFilter>("all");
@@ -145,30 +148,30 @@ function Deck({ s }: { s: HomeLanderState }) {
     if (dir === "right" && sold) {
       setNotified((n) => [...n, { id: unit.id, atHistory: homelander.snapshot().history.length }]);
       setAskReasonFor(null);
-      toast.success(`Okay, we'll ping you if a ${unit.name} frees up.`, {
-        description: "Demo only: no alert is actually set.",
+      toast.success(t("Okay, we'll ping you if a {name} frees up.", { name: unit.name }), {
+        description: t("Demo only: no alert is actually set."),
       });
-      setAnnounce(`Notify me set for ${unit.name}.`);
+      setAnnounce(t("Notify me set for {name}.", { name: unit.name }));
     } else if (dir === "right") {
       homelander.like(unit.id);
       setAskReasonFor(null);
       const likes = homelander.snapshot().liked.length;
-      setAnnounce(`Liked ${name}. ${likes} on your shortlist.`);
+      setAnnounce(t("Liked {name}. {likes} on your shortlist.", { name, likes }));
       if (likes === LIKES_TO_BATTLE) {
-        toast.success("Battle unlocked!", {
-          description: `${LIKES_TO_BATTLE} homes liked. Make them fight it out, or keep swiping.`,
-          action: { label: "Battle", onClick: goBattle },
+        toast.success(t("Battle unlocked!"), {
+          description: t("{n} homes liked. Make them fight it out, or keep swiping.", { n: LIKES_TO_BATTLE }),
+          action: { label: t("Battle"), onClick: goBattle },
         });
       } else if (likes === DECK_LIKE_LIMIT) {
-        toast.success(`${DECK_LIKE_LIMIT} suka! Your shortlist is full.`, {
-          description: `${DECK_LIKE_LIMIT} is the sweet spot. Battle them, or remove one to keep swiping.`,
-          action: { label: "Battle", onClick: goBattle },
+        toast.success(t("{n} liked! Your shortlist is full.", { n: DECK_LIKE_LIMIT }), {
+          description: t("{n} is the sweet spot. Battle them, or remove one to keep swiping.", { n: DECK_LIKE_LIMIT }),
+          action: { label: t("Battle"), onClick: goBattle },
         });
       }
     } else {
       homelander.pass(unit.id);
       setAskReasonFor(unit.id);
-      setAnnounce(`Passed on ${name}.`);
+      setAnnounce(t("Passed on {name}.", { name }));
     }
   }
 
@@ -189,7 +192,7 @@ function Deck({ s }: { s: HomeLanderState }) {
       homelander.undo();
     }
     if (!back) return;
-    setAnnounce(`Brought back ${unitById[back.id]?.name}.`);
+    setAnnounce(t("Brought back {name}.", { name: unitById[back.id]?.name ?? "" }));
     setAskReasonFor(null);
     setDetailsFor(null);
     // Only fly it back in if it will be the top card (the filter might hide it).
@@ -234,7 +237,7 @@ function Deck({ s }: { s: HomeLanderState }) {
     <Frame
       sub={
         <p className="max-w-xl text-[15px] text-ink">
-          Mochi&apos;s picks for you, best match first. Like up to {DECK_LIKE_LIMIT}, then make them battle.
+          {t("Mochi's picks for you, best match first. Like up to {n}, then make them battle.", { n: DECK_LIKE_LIMIT })}
         </p>
       }
       aside={
@@ -244,17 +247,17 @@ function Deck({ s }: { s: HomeLanderState }) {
             <span className="tabular-nums">
               {s.liked.length}/{DECK_LIKE_LIMIT}
             </span>
-            <span className="sr-only"> liked</span>
+            <span className="sr-only"> {t("liked")}</span>
           </PixTag>
           <PixPanel flat className="px-3 py-1.5 font-pixel text-base leading-none tabular-nums">
             {Math.min(position, units.length)} / {units.length}
-            <span className="sr-only"> homes</span>
+            <span className="sr-only"> {t("homes")}</span>
           </PixPanel>
         </div>
       }
     >
       <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,370px)] lg:gap-10">
-        <section aria-label="Swipe deck" className="grid content-start gap-4 lg:row-span-3 lg:row-start-1">
+        <section aria-label={t("Swipe deck")} className="grid content-start gap-4 lg:row-span-3 lg:row-start-1">
           <div className="mx-auto grid w-full max-w-[460px] select-none">
             <p className="sr-only" aria-live="polite">
               {announce}
@@ -265,9 +268,9 @@ function Deck({ s }: { s: HomeLanderState }) {
                 ref={stack}
                 cards={queue.slice(0, 3)}
                 dragDisabled={open}
-                yesLabel={(u) => (availabilityOf(u.id).status === "Sold out" ? "PING ME" : "SUKA!")}
+                yesLabel={(u) => (availabilityOf(u.id).status === "Sold out" ? t("PING ME") : t("LIKE!"))}
                 label={(u) =>
-                  `${townshipById[u.townshipId]?.name}, ${u.product ?? u.name}, ${rm(u.priceRM)}, ${pickById.get(u.id)?.score ?? "?"}% match, ${availabilityOf(u.id).status}`
+                  `${townshipById[u.townshipId]?.name}, ${u.product ?? u.name}, ${rm(u.priceRM)}, ${pickById.get(u.id)?.score ?? "?"}% ${t("match")}, ${t(availabilityOf(u.id).status)}`
                 }
                 onRelease={onRelease}
                 onDone={onDone}
@@ -299,25 +302,25 @@ function Deck({ s }: { s: HomeLanderState }) {
             )}
 
             <div className="relative z-20 mt-8 flex items-center justify-center gap-5 p-1 pb-2">
-              <RoundButton tone="raya" label="Pass on this home (left arrow)" disabled={!top} onClick={() => decide("left")}>
+              <RoundButton tone="raya" label={t("Pass on this home (left arrow)")} disabled={!top} onClick={() => decide("left")}>
                 <Sprite art="cross" scale={4} />
               </RoundButton>
-              <RoundButton tone="white" small label="Undo last swipe (Backspace)" disabled={!canUndo} onClick={undo}>
+              <RoundButton tone="white" small label={t("Undo last swipe (Backspace)")} disabled={!canUndo} onClick={undo}>
                 <Sprite art="undo" scale={3} />
               </RoundButton>
               {topSold ? (
-                <RoundButton tone="kaya" label="Notify me if a unit frees up (right arrow)" onClick={() => decide("right")}>
+                <RoundButton tone="kaya" label={t("Notify me if a unit frees up (right arrow)")} onClick={() => decide("right")}>
                   <Sprite art={swipeSprites.bell} scale={4} />
                 </RoundButton>
               ) : (
-                <RoundButton tone="pandan" label="Like this home (right arrow)" disabled={!top} onClick={() => decide("right")}>
+                <RoundButton tone="pandan" label={t("Like this home (right arrow)")} disabled={!top} onClick={() => decide("right")}>
                   <Sprite art="heart" scale={4} className="text-white" />
                 </RoundButton>
               )}
             </div>
             <p className="mt-3 hidden text-center text-xs text-ink-soft lg:block">
-              Drag or flick the card. <Kbd>&larr;</Kbd> tak nak, <Kbd>&rarr;</Kbd> suka, <Kbd>&uarr;</Kbd> details,{" "}
-              <Kbd>Backspace</Kbd> undo.
+              {t("Drag or flick the card.")} <Kbd>&larr;</Kbd> {t("pass")}, <Kbd>&rarr;</Kbd> {t("like")}, <Kbd>&uarr;</Kbd>{" "}
+              {t("details")}, <Kbd>Backspace</Kbd> {t("undo")}.
             </p>
 
             <div className="mt-4 min-h-[4.5rem]">{asked ? <ReasonPicker id={asked.id} picked={asked.reason} /> : null}</div>
@@ -380,14 +383,15 @@ function Kbd({ children }: { children: React.ReactNode }) {
 }
 
 function ReasonPicker({ id, picked }: { id: string; picked?: string }) {
+  const t = useT();
   const unit = unitById[id];
   if (!unit) return null;
   const name = townshipById[unit.townshipId]?.name ?? unit.name;
   return (
     <PixPanel flat className="grid animate-in gap-3 p-3 duration-200 fade-in-0 slide-in-from-top-1 motion-reduce:animate-none">
       <p className="text-sm">
-        <span className="font-semibold">Why tak nak {name}?</span>{" "}
-        <span className="text-ink-soft">Optional. It teaches HomeLander your taste.</span>
+        <span className="font-semibold">{t("Why pass on {name}?", { name })}</span>{" "}
+        <span className="text-ink-soft">{t("Optional. It teaches HomeLander your taste.")}</span>
       </p>
       <div className="flex flex-wrap gap-2">
         {passReasons.map((r) => (
@@ -402,12 +406,12 @@ function ReasonPicker({ id, picked }: { id: string; picked?: string }) {
                 : "rounded-full border-2 border-ink bg-white px-3 py-1.5 text-sm font-semibold text-ink hover:bg-cloud"
             }
           >
-            {r}
+            {t(r)}
           </button>
         ))}
         {picked ? (
           <PixTag tone="pandan" className="self-center">
-            Noted
+            {t("Noted")}
           </PixTag>
         ) : null}
       </div>

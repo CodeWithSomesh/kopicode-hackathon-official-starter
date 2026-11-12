@@ -14,6 +14,7 @@ import type { FightRound, FightScript } from "@/lib/homelander/battle-fight";
 import { cn } from "@/lib/utils";
 import { crown, swords } from "./bits";
 import { celebrateWinner, preloadConfetti } from "./celebrate";
+import { useT } from "@/lib/homelander/i18n/client";
 
 export type FightPhase = "idle" | "fighting" | "done";
 
@@ -47,6 +48,7 @@ export function FightArena({
   onStart: () => void;
   onDone: () => void;
 }) {
+  const t = useT();
   const fighters = battle.fighters;
   const n = fighters.length;
 
@@ -58,11 +60,10 @@ export function FightArena({
           className="flex items-center gap-3 font-pixel text-2xl leading-none lg:text-3xl"
         >
           <Sprite art={swords} scale={3} className="shrink-0 text-raya" />
-          The fight
+          {t("The fight")}
         </h2>
         <p className="text-sm text-ink-soft">
-          {script.rounds.length} rounds, scored on your priorities. Damage comes
-          from the real gaps in the table above.
+          {t("{n} rounds, scored on your priorities. Damage comes from the real gaps in the table above.", { n: script.rounds.length })}
         </p>
       </div>
 
@@ -81,10 +82,10 @@ export function FightArena({
               ) : (
                 <div className="grid justify-items-center gap-1 text-center">
                   <p className="font-pixel text-3xl leading-none text-kaya sm:text-4xl">
-                    {n} homes enter the ring
+                    {t("{n} homes enter the ring", { n })}
                   </p>
                   <p className="text-sm text-cloud">
-                    {script.rounds.map((r) => r.title).join(" · ")}
+                    {script.rounds.map((r) => t(r.title)).join(" · ")}
                   </p>
                 </div>
               )
@@ -103,20 +104,20 @@ export function FightArena({
                 onFocus={preloadConfetti}
               >
                 <Sprite art={swords} scale={2} />
-                Start the battle
+                {t("Start the battle")}
               </PixButton>
               <PixButton tone="white" onClick={onDone}>
-                Skip to the result
+                {t("Skip to the result")}
               </PixButton>
             </>
           ) : phase === "fighting" ? (
             <PixButton tone="white" onClick={onDone}>
-              Skip to the result
+              {t("Skip to the result")}
             </PixButton>
           ) : (
             <PixButton tone="kaya" onClick={onStart}>
               <Sprite art="undo" scale={2} />
-              Replay the fight
+              {t("Replay the fight")}
             </PixButton>
           )}
         </div>
@@ -133,11 +134,11 @@ export function FightArena({
           {script.benched.map((b) => (
             <li key={b.key} className="flex items-start gap-2">
               <PixTag tone="white" className="shrink-0">
-                Benched
+                {t("Benched")}
               </PixTag>
               <span>
-                <span className="font-semibold text-ink">{b.label}</span> sits
-                out: {b.why}.
+                <span className="font-semibold text-ink">{t(b.label)}</span>{" "}
+                {t("sits out: {why}.", { why: t(b.why) })}
               </span>
             </li>
           ))}
@@ -163,6 +164,7 @@ function Bout({
   script: FightScript;
   onDone: () => void;
 }) {
+  const t = useT();
   // Freeze the script for this run, so a slider nudge mid-fight can't change the bout.
   const [script] = useState(live);
   const fighters = battle.fighters;
@@ -274,7 +276,7 @@ function Bout({
         ) : (
           <div className="grid justify-items-center gap-1 text-center">
             <p className="font-pixel text-4xl leading-none text-kaya sm:text-5xl">
-              Ready? Fight!
+              {t("Ready? Fight!")}
             </p>
           </div>
         )
@@ -304,6 +306,7 @@ function Stage({
   refs?: React.RefObject<Refs>;
   banner: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="grid gap-4">
       <div
@@ -364,7 +367,7 @@ function Stage({
                         className="absolute top-1.5 right-1.5"
                       >
                         <Sprite art={crown} scale={1.5} className="text-ink" />
-                        Winner
+                        {t("Winner")}
                       </PixTag>
                     ) : won && round ? (
                       <PixTag
@@ -372,7 +375,7 @@ function Stage({
                         className="absolute top-1.5 right-1.5"
                       >
                         <Sprite art="star" scale={1.5} className="text-ink" />
-                        Strike
+                        {t("Strike")}
                       </PixTag>
                     ) : null}
                   </div>
@@ -389,7 +392,7 @@ function Stage({
                     <PixMeter
                       value={h}
                       tone={hpTone(h)}
-                      label={`${f.unit.name} HP ${Math.round(h)} of 100`}
+                      label={t("{name} HP {n} of 100", { name: f.unit.name, n: Math.round(h) })}
                     />
                   </div>
                   <p
@@ -443,23 +446,24 @@ function RoundBanner({
   fighters: Fighter[];
   struck: boolean;
 }) {
+  const t = useT();
   const names = round.winners
     .map((id) => fighters.find((f) => f.unit.id === id)?.unit.name)
     .filter(Boolean);
   return (
     <div className="grid justify-items-center gap-1.5 text-center">
       <p className="font-pixel text-2xl leading-none text-kaya sm:text-4xl">
-        Round {index + 1}: {round.title}
+        {t("Round {n}: {title}", { n: index + 1, title: t(round.title) })}
       </p>
-      <p className="text-xs text-cloud sm:text-sm">{round.hint}</p>
+      <p className="text-xs text-cloud sm:text-sm">{t(round.hint)}</p>
       <p className="hidden font-pixel text-base leading-tight text-white tabular-nums sm:block">
         {fighters.map((f) => round.figures[f.unit.id]).join(" vs ")}
       </p>
       <p className="min-h-[1.25em] text-sm font-semibold text-pandan">
         {struck
           ? names.length
-            ? `${names.join(" & ")} ${names.length === 1 ? "takes" : "share"} the round`
-            : "Draw: nobody lands a hit"
+            ? t(names.length === 1 ? "{names} takes the round" : "{names} share the round", { names: names.join(" & ") })
+            : t("Draw: nobody lands a hit")
           : ""}
       </p>
     </div>
@@ -475,6 +479,7 @@ function KoBanner({
   script: FightScript;
   still?: boolean;
 }) {
+  const t = useT();
   const w = battle.winner;
   const ru = battle.runnerUp;
   return (
@@ -488,14 +493,13 @@ function KoBanner({
         K.O.!
       </p>
       <p className="font-pixel text-xl leading-tight text-kaya sm:text-2xl">
-        {w.unit.name} {w.soldOut ? "scores best, but it's sold out" : "wins"}
+        {w.unit.name} {w.soldOut ? t("scores best, but it's sold out") : t("wins")}
       </p>
       {ru ? (
         <p className="text-sm text-cloud tabular-nums">
-          {Math.round(script.finalHp[w.unit.id] ?? 0)} HP left vs{" "}
-          {Math.round(script.finalHp[ru.unit.id] ?? 0)} for {ru.unit.name}
+          {t("{a} HP left vs {b} for {name}", { a: Math.round(script.finalHp[w.unit.id] ?? 0), b: Math.round(script.finalHp[ru.unit.id] ?? 0), name: ru.unit.name })}
           {script.tieBreak
-            ? ". Level on points; the swipe match breaks the tie"
+            ? `. ${t("Level on points; the swipe match breaks the tie")}`
             : ""}
         </p>
       ) : null}
@@ -511,11 +515,12 @@ function RoundList({
   battle: Battle;
   script: FightScript;
 }) {
+  const t = useT();
   const name = (id: string) =>
     battle.fighters.find((f) => f.unit.id === id)?.unit.name ?? id;
   return (
     <PixPanel flat className="grid gap-2 p-4">
-      <h3 className="font-pixel text-lg leading-none">Round by round</h3>
+      <h3 className="font-pixel text-lg leading-none">{t("Round by round")}</h3>
       <ol className="grid gap-2 text-sm">
         {script.rounds.map((r, i) => (
           <li
@@ -523,13 +528,13 @@ function RoundList({
             className="grid gap-0.5 border-b border-dotted border-ink/25 pb-2 last:border-0 last:pb-0 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-3"
           >
             <span className="font-pixel text-base leading-tight">
-              {i + 1}. {r.title}
+              {i + 1}. {t(r.title)}
             </span>
             <span className="grid gap-0.5">
               <span className="font-semibold">
                 {r.winners.length
-                  ? `${r.winners.map(name).join(" & ")} ${r.winners.length === 1 ? "wins" : "share it"}`
-                  : "Draw"}
+                  ? t(r.winners.length === 1 ? "{names} wins" : "{names} share it", { names: r.winners.map(name).join(" & ") })
+                  : t("Draw")}
               </span>
               <span className="text-ink-soft tabular-nums">
                 {battle.fighters
@@ -541,9 +546,7 @@ function RoundList({
         ))}
       </ol>
       <p className="text-xs text-ink-soft">
-        Each home loses HP by how far it trails the round&apos;s best score,
-        times your priority weight. The HP left is the same order as the overall
-        score.
+        {t("Each home loses HP by how far it trails the round's best score, times your priority weight. The HP left is the same order as the overall score.")}
       </p>
     </PixPanel>
   );

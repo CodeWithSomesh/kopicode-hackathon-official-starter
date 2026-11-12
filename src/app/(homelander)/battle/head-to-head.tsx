@@ -12,6 +12,7 @@ import {
 } from "@/lib/homelander/analysis";
 import type { BattleContext } from "@/lib/homelander/battle-context";
 import type { Fighter } from "@/lib/homelander/battle-verdict";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { caret, gauge, kRM, money, useStepIn } from "./bits";
 import { FighterHead } from "./fighter-head";
@@ -54,7 +55,8 @@ export function HeadToHead({
   onSwap: (slot: number, id: string) => void;
   onRemove: (slot: number) => void;
 }) {
-  const sections = buildSections(fighters, ctx);
+  const t = useT();
+  const sections = buildSections(fighters, ctx, t);
   const [closed, setClosed] = useState<Record<string, boolean>>({});
   const toggle = (id: string) => setClosed((c) => ({ ...c, [id]: !c[id] }));
   const n = fighters.length;
@@ -70,23 +72,22 @@ export function HeadToHead({
           id="h2h-title"
           className="font-pixel text-2xl leading-none lg:text-3xl"
         >
-          Head to head
+          {t("Head to head")}
         </h2>
         <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
           <li className="flex items-center gap-1.5">
-            <Sprite art="star" scale={2} className="text-kaya-deep" /> Best in
-            the row
+            <Sprite art="star" scale={2} className="text-kaya-deep" /> {t("Best in the row")}
           </li>
           <li className="flex items-center gap-1.5">
-            <PixTag tone="lilac">You</PixTag> Your way to work
+            <PixTag tone="lilac">{t("You")}</PixTag> {t("Your way to work")}
           </li>
           <li className="flex items-center gap-1.5">
-            <EstChip /> Estimate, not a quote
+            <EstChip /> {t("Estimate, not a quote")}
           </li>
         </ul>
       </div>
       <p className="text-sm text-ink-soft lg:hidden">
-        Swipe the table sideways to see every home. The left column stays put.
+        {t("Swipe the table sideways to see every home. The left column stays put.")}
       </p>
 
       <PixPanel className="overflow-hidden p-0">
@@ -94,7 +95,7 @@ export function HeadToHead({
           className="snap-x snap-mandatory scroll-pl-[8.5rem] overflow-x-auto overscroll-x-contain lg:snap-none lg:scroll-pl-0"
           tabIndex={0}
           role="region"
-          aria-label="Head-to-head table. Scrolls sideways on small screens."
+          aria-label={t("Head-to-head table. Scrolls sideways on small screens.")}
         >
           <table
             className="w-full min-w-[var(--tw)] table-fixed border-separate border-spacing-0 text-left text-sm tabular-nums lg:min-w-[var(--tw-lg)]"
@@ -106,8 +107,7 @@ export function HeadToHead({
             }
           >
             <caption className="sr-only">
-              Every factor for each home. A star marks the best cell in a row.
-              Figures are estimates.
+              {t("Every factor for each home. A star marks the best cell in a row. Figures are estimates.")}
             </caption>
             <colgroup>
               <col className="w-[8.5rem] lg:w-[12rem]" />
@@ -123,7 +123,7 @@ export function HeadToHead({
                   className={cn(stickyCol, "z-20 px-3 pt-3 pb-3 align-bottom")}
                 >
                   <span className="font-pixel-label text-[11px] uppercase">
-                    {n} of 5 homes
+                    {t("{n} of 5 homes", { n })}
                   </span>
                 </th>
                 {fighters.map((f, i) => (
@@ -182,8 +182,8 @@ export function HeadToHead({
                 rows: STATS.map((st): Row => ({
                   id: `stat-${st.key}`,
                   label: skipped[st.key]
-                    ? `${st.label} (not judged)`
-                    : `${st.label} (×${weights[st.key]})`,
+                    ? t("{label} (not judged)", { label: t(st.label) })
+                    : t("{label} (×{w})", { label: t(st.label), w: weights[st.key] }),
                   hint: skipped[st.key] ?? st.hint,
                   cell: (f) => ({
                     main: (
@@ -194,7 +194,7 @@ export function HeadToHead({
                         <PixMeter
                           value={f.stats[st.key]}
                           tone="pandan"
-                          label={`${st.label} ${f.stats[st.key]} of 100`}
+                          label={t("{label} {n} of 100", { label: t(st.label), n: f.stats[st.key] })}
                           className="max-w-[8rem]"
                         />
                       </span>
@@ -217,9 +217,10 @@ export function HeadToHead({
 }
 
 function EstChip() {
+  const t = useT();
   return (
     <span className="inline-flex items-center rounded-full border border-ink/50 px-1.5 font-pixel-label text-[9px] leading-[1.5] text-ink-soft uppercase">
-      est.
+      {t("est.")}
     </span>
   );
 }
@@ -235,6 +236,7 @@ function HeadlineRow({
   winnerCol: (f: Fighter) => boolean;
   ctx: BattleContext;
 }) {
+  const t = useT();
   const items: {
     label: string;
     value: (f: Fighter) => number | null;
@@ -247,13 +249,13 @@ function HeadlineRow({
       show: (f) => money(f.totalMonthlyRM),
       sub: (f) =>
         f.leftRM === null ? (
-          "Salary not known"
+          t("Salary not known")
         ) : f.leftRM < 0 ? (
           <span className="text-raya-deep">
-            {money(-f.leftRM)} short a month
+            {t("{amt} short a month", { amt: money(-f.leftRM) })}
           </span>
         ) : (
-          `${money(f.leftRM)} left`
+          t("{amt} left", { amt: money(f.leftRM) })
         ),
     },
     {
@@ -264,11 +266,11 @@ function HeadlineRow({
           ? `${f.you.hoursPerYear} h`
           : f.you.missing
             ? "?"
-            : "n/a",
+            : t("n/a"),
       sub: (f) =>
         f.you.compared
-          ? `${f.you.oneWayMin} min each way`
-          : (f.you.missing ?? "Not a daily commute"),
+          ? t("{n} min each way", { n: f.you.oneWayMin })
+          : t(f.you.missing ?? "Not a daily commute"),
     },
     {
       label: "Cash upfront",
@@ -276,11 +278,11 @@ function HeadlineRow({
       show: (f) => kRM(f.upfrontRM),
       sub: (f) =>
         f.savingsGapRM === null ? (
-          "Savings unknown"
+          t("Savings unknown")
         ) : f.savingsGapRM < 0 ? (
-          <span className="text-raya-deep">{kRM(-f.savingsGapRM)} short</span>
+          <span className="text-raya-deep">{t("{amt} short", { amt: kRM(-f.savingsGapRM) })}</span>
         ) : (
-          `${kRM(f.savingsGapRM)} to spare`
+          t("{amt} to spare", { amt: kRM(f.savingsGapRM) })
         ),
     },
   ];
@@ -295,13 +297,13 @@ function HeadlineRow({
         )}
       >
         <span className="block font-pixel text-base leading-tight">
-          At a glance
+          {t("At a glance")}
         </span>
         <span className="mt-1 block text-xs font-normal text-ink-soft">
           {ctx.work && ctx.officeDays !== null
-            ? `${ctx.officeDays} days to ${ctx.work.name}`
-            : "Commute needs where you work"}
-          {ctx.money.source === "missing" ? ", salary not known" : ""}
+            ? t("{n} days to {name}", { n: ctx.officeDays, name: ctx.work.name })
+            : t("Commute needs where you work")}
+          {ctx.money.source === "missing" ? `, ${t("salary not known")}` : ""}
         </span>
       </th>
       {fighters.map((f, i) => (
@@ -316,7 +318,7 @@ function HeadlineRow({
             {items.map((it, j) => (
               <div key={it.label} className="grid gap-0.5">
                 <dt className="font-pixel-label text-[10px] text-ink-soft uppercase">
-                  {it.label}
+                  {t(it.label)}
                 </dt>
                 <dd className="flex items-center gap-1.5 font-pixel text-lg leading-none">
                   {it.show(f)}
@@ -325,7 +327,7 @@ function HeadlineRow({
                       art="star"
                       scale={2}
                       className="shrink-0 text-kaya-deep"
-                      label="Best"
+                      label={t("Best")}
                     />
                   ) : null}
                 </dd>
@@ -345,6 +347,7 @@ function HeadlineRow({
 
 /** Before the fight: the overall score stays sealed so the table doesn't spoil the result. */
 function SealedRow({ n }: { n: number }) {
+  const t = useT();
   return (
     <tr>
       <th
@@ -355,10 +358,10 @@ function SealedRow({ n }: { n: number }) {
         )}
       >
         <span className="block font-pixel text-base leading-tight">
-          Overall
+          {t("Overall")}
         </span>
         <span className="block text-xs font-normal text-ink-soft">
-          Revealed after the fight
+          {t("Revealed after the fight")}
         </span>
       </th>
       <td
@@ -366,7 +369,7 @@ function SealedRow({ n }: { n: number }) {
         className="border-b-[1.5px] border-ink px-2.5 py-3 align-middle lg:px-3"
       >
         <span className="font-pixel text-base text-ink-soft">
-          ?? · The scores stay sealed until the fight below is played.
+          {t("?? · The scores stay sealed until the fight below is played.")}
         </span>
       </td>
     </tr>
@@ -381,6 +384,7 @@ function OverallRow({
   fighters: Fighter[];
   winnerCol: (f: Fighter) => boolean;
 }) {
+  const t = useT();
   const p = useStepIn();
   const best = bestIndices(
     fighters.map((f) => f.overall),
@@ -396,10 +400,10 @@ function OverallRow({
         )}
       >
         <span className="block font-pixel text-base leading-tight">
-          Overall
+          {t("Overall")}
         </span>
         <span className="block text-xs font-normal text-ink-soft">
-          Weighted by your priorities
+          {t("Weighted by your priorities")}
         </span>
       </th>
       {fighters.map((f, i) => (
@@ -418,19 +422,19 @@ function OverallRow({
                   art="star"
                   scale={2}
                   className="text-kaya-deep"
-                  label="Best"
+                  label={t("Best")}
                 />
               ) : null}
             </span>
             <PixMeter
               value={f.overall * p}
               tone={winnerCol(f) ? "kaya" : "sky"}
-              label={`Overall ${f.overall} of 100`}
+              label={t("Overall {n} of 100", { n: f.overall })}
               className="max-w-[9rem]"
             />
             {f.penalty ? (
               <span className="text-[11px] leading-tight font-semibold text-raya-deep">
-                −{f.penalty} for your deal-breakers / must-haves
+                {t("−{n} for your deal-breakers / must-haves", { n: f.penalty })}
               </span>
             ) : null}
           </div>
@@ -455,6 +459,7 @@ function SectionBody({
   onToggle: () => void;
   winnerCol: (f: Fighter) => boolean;
 }) {
+  const t = useT();
   const bodyId = `sec-${section.id}`;
   return (
     <tbody id={bodyId}>
@@ -485,16 +490,16 @@ function SectionBody({
               className="shrink-0 text-pandan-deep"
             />
             <span className="font-pixel text-lg leading-none">
-              {section.title}
+              {t(section.title)}
             </span>
             {section.blurb ? (
               <span className="hidden text-xs font-normal text-ink-soft sm:inline">
-                {section.blurb}
+                {t(section.blurb)}
               </span>
             ) : null}
             {!open ? (
               <span className="text-xs font-normal text-ink-soft">
-                ({section.rows.length} rows hidden)
+                ({t("{n} rows hidden", { n: section.rows.length })})
               </span>
             ) : null}
           </button>
@@ -523,6 +528,8 @@ function RowView({
   fighters: Fighter[];
   winnerCol: (f: Fighter) => boolean;
 }) {
+  const t = useT();
+  const tx = (v: ReactNode) => (typeof v === "string" ? t(v) : v);
   const values = row.value ? fighters.map(row.value) : null;
   const best =
     values && row.better ? bestIndices(values, row.better) : new Set<number>();
@@ -541,13 +548,13 @@ function RowView({
         )}
       >
         <span className="flex flex-wrap items-center gap-1.5 leading-tight">
-          {row.label}
+          {t(row.label)}
           {row.estimated ? <EstChip /> : null}
-          {row.mine ? <PixTag tone="lilac">You</PixTag> : null}
+          {row.mine ? <PixTag tone="lilac">{t("You")}</PixTag> : null}
         </span>
         {row.hint ? (
           <span className="mt-0.5 block text-[11px] leading-snug font-normal text-ink-soft">
-            {row.hint}
+            {t(row.hint)}
           </span>
         ) : null}
       </th>
@@ -570,24 +577,24 @@ function RowView({
                 c.tone && toneText[c.tone],
               )}
             >
-              <span className="min-w-0">{c.main}</span>
+              <span className="min-w-0">{tx(c.main)}</span>
               {isBest ? (
                 <Sprite
                   art="star"
                   scale={2}
                   className="mt-0.5 shrink-0 text-kaya-deep"
-                  label="Best"
+                  label={t("Best")}
                 />
               ) : null}
             </span>
             {c.sub ? (
               <span className="mt-0.5 block text-[11px] leading-snug text-ink-soft">
-                {c.sub}
+                {tx(c.sub)}
               </span>
             ) : null}
             {isBest && gap !== null && row.lead ? (
               <span className="mt-0.5 block text-[11px] leading-snug font-semibold text-pandan-deep">
-                {row.lead(gap)}
+                {t(row.lead(gap))}
               </span>
             ) : null}
           </td>

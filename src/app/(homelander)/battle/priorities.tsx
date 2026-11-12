@@ -8,6 +8,7 @@ import {
   type StatKey,
   type Weights,
 } from "@/lib/homelander/analysis";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 
 export type WeightMode = PresetId | "custom";
@@ -31,6 +32,7 @@ export function Priorities({
   onPreset: (p: PresetId) => void;
   onWeight: (k: StatKey, v: number) => void;
 }) {
+  const t = useT();
   const options: { id: PresetId; label: string }[] = [
     { id: "mochi", label: hasProfile ? "Mochi's mix for you" : "Balanced" },
     ...(Object.keys(PRESETS) as Exclude<PresetId, "mochi">[]).map((id) => ({
@@ -40,12 +42,12 @@ export function Priorities({
   ];
   const blurb =
     mode === "custom"
-      ? "Your own mix. Pick a preset to reset."
+      ? t("Your own mix. Pick a preset to reset.")
       : mode === "mochi"
         ? hasProfile && mochiWhy.length
-          ? `Weighted from what you told Mochi: ${mochiWhy.join(", ")}.`
-          : "An even mix. Chat with Mochi and it bends to your life."
-        : PRESETS[mode].blurb;
+          ? t("Weighted from what you told Mochi: {list}.", { list: mochiWhy.map((w) => t(w)).join(", ") })
+          : t("An even mix. Chat with Mochi and it bends to your life.")
+        : t(PRESETS[mode].blurb);
 
   return (
     <PixPanel
@@ -55,14 +57,14 @@ export function Priorities({
     >
       <div className="grid gap-1">
         <h2 id="prio-title" className="font-pixel text-xl leading-none">
-          What matters most?
+          {t("What matters most?")}
         </h2>
         <p className="text-sm text-ink-soft">{blurb}</p>
       </div>
       <div
         className="flex flex-wrap gap-2.5"
         role="group"
-        aria-label="Priority presets"
+        aria-label={t("Priority presets")}
       >
         {options.map((o) => (
           <PixButton
@@ -73,7 +75,7 @@ export function Priorities({
             onClick={() => onPreset(o.id)}
             className="text-[13px]"
           >
-            {o.label}
+            {t(o.label)}
           </PixButton>
         ))}
       </div>
@@ -90,7 +92,7 @@ export function Priorities({
                 skipped[s.key] && "text-ink-soft",
               )}
             >
-              {s.label}
+              {t(s.label)}
             </label>
             <input
               id={`w-${s.key}`}
@@ -112,11 +114,11 @@ export function Priorities({
                 id={`w-${s.key}-hint`}
                 className="col-span-3 text-xs text-ink-soft"
               >
-                Sits out the fight: {skipped[s.key]}.
+                {t("Sits out the fight: {why}.", { why: t(skipped[s.key] ?? "") })}
               </span>
             ) : (
               <span id={`w-${s.key}-hint`} className="sr-only">
-                {s.hint}
+                {t(s.hint)}
               </span>
             )}
           </li>

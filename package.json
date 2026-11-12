@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "i18n:sweep": "node scripts/i18n-sweep.mjs",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "check:geo": "node src/lib/first-key/geo.ts",

@@ -22,6 +22,7 @@ import {
 } from "@/lib/homelander/bank";
 import { PROPERTYGURU_HOME_LOANS, RINGGITPLUS_HOME_LOANS, lenders } from "@/lib/homelander/banks-data";
 import { rm, townshipById, type Unit } from "@/lib/homelander/data";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { coin } from "./fields";
 import { setPrefs, type Target } from "./prefs";
@@ -39,10 +40,11 @@ export const verdictLook: Record<Verdict, { tone: "pandan" | "kaya" | "raya"; la
 
 /** External link: new tab, no referrer. */
 function Out({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
+  const t = useT();
   return (
     <a href={href} target="_blank" rel="noreferrer" className={className}>
       {children}
-      <span className="sr-only"> (opens in a new tab)</span>
+      <span className="sr-only"> ({t("opens in a new tab")})</span>
     </a>
   );
 }
@@ -60,6 +62,7 @@ export function TargetPicker({
   targetUnit: Unit | null;
   targetPriceRM: number | null;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<string | null>(null);
   const typing = target?.kind === "price" || (homes.length === 0 && !target);
   const priceShown = draft ?? (target?.kind === "price" ? target.priceRM.toLocaleString("en-MY") : "");
@@ -67,12 +70,12 @@ export function TargetPicker({
     <PixPanel className="grid gap-3 p-4 sm:p-5" aria-labelledby="bank-target-title">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="bank-target-title" className="font-pixel text-xl leading-tight">
-          The home to check
+          {t("The home to check")}
         </h2>
         {targetPriceRM ? <p className="font-pixel text-lg tabular-nums">{rm(targetPriceRM)}</p> : null}
       </div>
       {homes.length ? (
-        <ul className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pt-1 pb-2" aria-label="Your liked and compared homes">
+        <ul className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pt-1 pb-2" aria-label={t("Your liked and compared homes")}>
           {homes.map((u) => {
             const on = targetUnit?.id === u.id;
             return (
@@ -122,23 +125,23 @@ export function TargetPicker({
               )}
               style={typing ? ({ "--pix-fill": "var(--color-ink)", color: "white" } as React.CSSProperties) : undefined}
             >
-              Type a price
+              {t("Type a price")}
             </button>
           </li>
         </ul>
       ) : (
         <p className="text-sm text-ink-soft">
-          No liked homes yet. Type a price, or{" "}
+          {t("No liked homes yet. Type a price, or")}{" "}
           <Link href="/swipe" className="font-medium text-ink underline underline-offset-2">
-            swipe some homes
+            {t("swipe some homes")}
           </Link>{" "}
-          and pick one here.
+          {t("and pick one here.")}
         </p>
       )}
       {typing || draft !== null ? (
         <div className="grid gap-1.5">
           <label htmlFor="bank-price" className="text-sm font-medium">
-            Home price
+            {t("Home price")}
           </label>
           <div className="pix-frame pix-flat flex h-12 items-center gap-2 px-3 focus-within:outline-[3px] focus-within:outline-offset-[6px] focus-within:outline-kaya focus-within:outline-solid">
             <span className="font-pixel text-lg text-ink-soft">RM</span>
@@ -157,12 +160,12 @@ export function TargetPicker({
               className="h-full w-0 min-w-0 flex-1 bg-transparent text-lg font-medium tabular-nums focus-visible:outline-none"
             />
           </div>
-          <p className="text-xs text-ink-soft">From RM50,000. We update the banks as you type.</p>
+          <p className="text-xs text-ink-soft">{t("From RM50,000. We update the banks as you type.")}</p>
         </div>
       ) : targetUnit ? (
         <p className="text-xs text-ink-soft">
-          {targetUnit.type}, {targetUnit.beds} bed, {targetUnit.builtUpSqft.toLocaleString("en-MY")} sq ft in{" "}
-          {townshipById[targetUnit.townshipId]?.name}.{targetUnit.source === "sample" ? " Sample price." : ""}
+          {t("{type}, {beds} bed, {sqft} sq ft in {town}.", { type: targetUnit.type, beds: targetUnit.beds, sqft: targetUnit.builtUpSqft.toLocaleString("en-MY"), town: townshipById[targetUnit.townshipId]?.name ?? "" })}
+          {targetUnit.source === "sample" ? ` ${t("Sample price.")}` : ""}
         </p>
       ) : null}
     </PixPanel>
@@ -184,6 +187,7 @@ export function ResultCard({
   savingsRM: number | null;
   firstHome: boolean;
 }) {
+  const tr = useT();
   const r = top.best;
   const look = verdictLook[r.verdict];
   const t = r.target;
@@ -193,13 +197,13 @@ export function ResultCard({
   const [copied, setCopied] = useState(false);
 
   const summary = [
-    `HomeLander bank check, ${today}`,
-    `Best match: ${top.lender.name}, ${r.product.name} (${look.label})`,
-    t ? `Home: ${targetUnit?.name ?? "Typed price"} at ${rm(t.priceRM)}` : null,
-    t ? `Loan ${rm(t.loanRM)} (${pct(t.margin)}), ${rm(t.instalmentRM)} a month over ${r.tenureYears} years at ${ratePct(r.rate)}` : null,
-    t ? `DSR with this home ${pct(t.dsrWithHome)} (bank cap ${pct(r.dsrCap)})` : null,
-    `Max loan ${rm(r.maxLoanRM)}, homes up to ${rm(r.maxPriceRM)}`,
-    HONEST,
+    tr("HomeLander bank check, {date}", { date: today }),
+    tr("Best match: {bank}, {product} ({verdict})", { bank: top.lender.name, product: r.product.name, verdict: tr(look.label) }),
+    t ? tr("Home: {name} at {amt}", { name: targetUnit?.name ?? tr("Typed price"), amt: rm(t.priceRM) }) : null,
+    t ? tr("Loan {loan} ({margin}), {inst} a month over {years} years at {rate}", { loan: rm(t.loanRM), margin: pct(t.margin), inst: rm(t.instalmentRM), years: r.tenureYears, rate: ratePct(r.rate) }) : null,
+    t ? tr("DSR with this home {dsr} (bank cap {cap})", { dsr: pct(t.dsrWithHome), cap: pct(r.dsrCap) }) : null,
+    tr("Max loan {loan}, homes up to {price}", { loan: rm(r.maxLoanRM), price: rm(r.maxPriceRM) }),
+    tr(HONEST),
   ]
     .filter(Boolean)
     .join("\n");
@@ -210,17 +214,17 @@ export function ResultCard({
         {/* Jade band: the bank and the verdict. */}
         <div className="flex items-start justify-between gap-3 bg-pandan-deep px-5 pt-4 pb-3.5 text-white">
           <div className="grid min-w-0 gap-1">
-            <p className="text-xs text-white/80">Your best match of {lenders.length} banks</p>
+            <p className="text-xs text-white/80">{tr("Your best match of {n} banks", { n: lenders.length })}</p>
             <h2 id="bank-card-title" className="truncate font-pixel text-2xl leading-none sm:text-3xl">
               {top.lender.name}
             </h2>
             <p className="truncate text-sm text-white/90">
-              {r.product.name} · {r.product.category === "islamic" ? "Islamic" : "Conventional"} ·{" "}
-              {r.product.type === "flexi" ? "Flexi" : "Term"}
+              {r.product.name} · {r.product.category === "islamic" ? tr("Islamic") : tr("Conventional")} ·{" "}
+              {r.product.type === "flexi" ? tr("Flexi") : tr("Term")}
             </p>
           </div>
           <PixTag tone={look.tone} className="shrink-0">
-            {look.label}
+            {tr(look.label)}
           </PixTag>
         </div>
 
@@ -242,45 +246,45 @@ export function ResultCard({
                 </span>
               )}
               <div className="grid min-w-0 gap-0.5">
-                <p className="truncate font-medium">{targetUnit?.name ?? "The home you typed"}</p>
+                <p className="truncate font-medium">{targetUnit?.name ?? tr("The home you typed")}</p>
                 <p className="text-sm text-ink-soft tabular-nums">
-                  {rm(t.priceRM)} · loan {rm(t.loanRM)} ({pct(t.margin)})
+                  {rm(t.priceRM)} · {tr("loan")} {rm(t.loanRM)} ({pct(t.margin)})
                 </p>
               </div>
             </div>
           ) : null}
 
           <div className="grid gap-1">
-            <p className="text-sm text-ink-soft">{t ? "Monthly instalment" : "You could borrow up to"}</p>
+            <p className="text-sm text-ink-soft">{t ? tr("Monthly instalment") : tr("You could borrow up to")}</p>
             <p className="flex items-center gap-3 font-pixel text-5xl leading-none tabular-nums sm:text-6xl">
               <Sprite art={coin} scale={4} className="shrink-0" />
               {t ? rm(t.instalmentRM) : rm(r.maxLoanRM)}
             </p>
             <p className="text-sm text-ink tabular-nums">
               {t
-                ? `${r.tenureYears} years at ${ratePct(r.rate)}. If rates rise ${Math.round(STRESS_RATE * 100)}%, ${rm(t.stressInstalmentRM)}.`
-                : `Homes up to ${rm(r.maxPriceRM)}, ${r.tenureYears} years at ${ratePct(r.rate)}.`}
+                ? tr("{years} years at {rate}. If rates rise {pct}%, {amt}.", { years: r.tenureYears, rate: ratePct(r.rate), pct: Math.round(STRESS_RATE * 100), amt: rm(t.stressInstalmentRM) })
+                : tr("Homes up to {amt}, {years} years at {rate}.", { amt: rm(r.maxPriceRM), years: r.tenureYears, rate: ratePct(r.rate) })}
             </p>
           </div>
 
           {t ? <DsrBar dsr={t.dsrWithHome} cap={r.dsrCap} nowShare={k.netRM > 0 ? (t.dsrWithHome * k.netRM - t.instalmentRM) / k.netRM : 0} /> : null}
 
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-[10px] border-2 border-ink bg-ink sm:grid-cols-3">
-            <Stat label="Max loan" value={rm(r.maxLoanRM)} />
-            <Stat label="Max home price" value={rm(r.maxPriceRM)} />
-            <Stat label="Take-home counted" value={rm(k.netRM)} />
-            {t ? <Stat label="Left each month" value={rm(t.leftRM)} warn={t.leftRM < 1_500} /> : null}
+            <Stat label={tr("Max loan")} value={rm(r.maxLoanRM)} />
+            <Stat label={tr("Max home price")} value={rm(r.maxPriceRM)} />
+            <Stat label={tr("Take-home counted")} value={rm(k.netRM)} />
+            {t ? <Stat label={tr("Left each month")} value={rm(t.leftRM)} warn={t.leftRM < 1_500} /> : null}
             {cash ? (
               <Stat
-                label={cash.exempt ? "Cash upfront (no stamp duty)" : "Cash upfront"}
+                label={cash.exempt ? tr("Cash upfront (no stamp duty)") : tr("Cash upfront")}
                 value={rm(cash.totalRM)}
                 warn={gap !== null && gap > 0}
               />
             ) : null}
             {cash ? (
               <Stat
-                label="Your savings"
-                value={savingsRM === null ? "Not told" : gap !== null && gap > 0 ? `${rm(gap)} short` : rm(savingsRM)}
+                label={tr("Your savings")}
+                value={savingsRM === null ? tr("Not told") : gap !== null && gap > 0 ? tr("{amt} short", { amt: rm(gap) }) : rm(savingsRM)}
                 warn={gap !== null && gap > 0}
               />
             ) : null}
@@ -291,22 +295,22 @@ export function ResultCard({
               {r.reasons.map((x) => (
                 <li key={x} className="flex gap-2">
                   <span aria-hidden className={cn("mt-1.5 size-2 shrink-0", look.bar)} />
-                  {x}
+                  {tr(x)}
                 </li>
               ))}
             </ul>
           ) : (
             <p className="text-sm">
-              Passes this bank&apos;s age, income and citizenship rules, with room under its {pct(r.dsrCap)} DSR cap.
+              {tr("Passes this bank's age, income and citizenship rules, with room under its {cap} DSR cap.", { cap: pct(r.dsrCap) })}
             </p>
           )}
 
           <div className="flex flex-wrap gap-3 p-1">
             <PixButton asChild tone="pandan" size="md">
-              <Out href={top.lender.officialUrl}>Visit {top.lender.name}</Out>
+              <Out href={top.lender.officialUrl}>{tr("Visit {name}", { name: top.lender.name })}</Out>
             </PixButton>
             <PixButton asChild size="md">
-              <Out href={r.product.ringgitPlusUrl}>This loan on RinggitPlus</Out>
+              <Out href={r.product.ringgitPlusUrl}>{tr("This loan on RinggitPlus")}</Out>
             </PixButton>
             <PixButton
               type="button"
@@ -320,13 +324,13 @@ export function ResultCard({
                 window.setTimeout(() => setCopied(false), 2000);
               }}
             >
-              {copied ? "Copied" : "Copy summary"}
+              {copied ? tr("Copied") : tr("Copy summary")}
             </PixButton>
           </div>
 
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t-2 border-dashed border-ink/20 pt-3 text-xs text-ink-soft">
-            <span>HomeLander bank check · {today}</span>
-            <span className="font-medium">{HONEST}</span>
+            <span>{tr("HomeLander bank check")} · {today}</span>
+            <span className="font-medium">{tr(HONEST)}</span>
           </footer>
         </div>
       </PixPanel>
@@ -345,21 +349,22 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
 
 /** DSR with the new home, in 5% blocks, with the bank's cap marked. */
 function DsrBar({ dsr, cap, nowShare }: { dsr: number; cap: number; nowShare: number }) {
+  const t = useT();
   const shown = Math.min(dsr, 1);
   return (
     <div className="grid gap-1.5">
       <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span>Debt service ratio with this home</span>
+        <span>{t("Debt service ratio with this home")}</span>
         <span className={cn("font-pixel text-lg tabular-nums", dsr > cap && "text-raya-deep")}>{pct(dsr)}</span>
       </div>
       <div className="relative pb-5">
         <div
           role="meter"
-          aria-label="Debt service ratio with this home"
+          aria-label={t("Debt service ratio with this home")}
           aria-valuenow={Math.round(dsr * 100)}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuetext={`${pct(dsr)} of take-home goes to loans, against this bank's ${pct(cap)} cap`}
+          aria-valuetext={t("{dsr} of take-home goes to loans, against this bank's {cap} cap", { dsr: pct(dsr), cap: pct(cap) })}
           className="flex gap-[3px] rounded-[6px] bg-ink p-[3px]"
         >
           {Array.from({ length: 20 }, (_, i) => {
@@ -381,15 +386,15 @@ function DsrBar({ dsr, cap, nowShare }: { dsr: number; cap: number; nowShare: nu
           style={{ left: `calc(3px + ${cap} * (100% - 6px))` }}
         >
           <span className="h-[28px] w-[3px] bg-ink" />
-          <span className="text-[10px] leading-none font-medium">cap {pct(cap)}</span>
+          <span className="text-[10px] leading-none font-medium">{t("cap {cap}", { cap: pct(cap) })}</span>
         </span>
       </div>
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
         <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2.5 bg-teh" /> Loans you pay now
+          <span aria-hidden className="size-2.5 bg-teh" /> {t("Loans you pay now")}
         </li>
         <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2.5 bg-pandan" /> This home
+          <span aria-hidden className="size-2.5 bg-pandan" /> {t("This home")}
         </li>
       </ul>
     </div>
@@ -402,6 +407,7 @@ type Cat = "all" | "conventional" | "islamic";
 type Kind = "all" | "flexi" | "term";
 
 export function BankList({ banks, k, hasTarget }: { banks: BankResult[]; k: Counted; hasTarget: boolean }) {
+  const t = useT();
   const [cat, setCat] = useState<Cat>("all");
   const [kind, setKind] = useState<Kind>("all");
   const rows = banks
@@ -422,18 +428,18 @@ export function BankList({ banks, k, hasTarget }: { banks: BankResult[]; k: Coun
       <div className="grid gap-2">
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
           <h2 id="bank-list-title" className="font-pixel text-2xl leading-none">
-            Every bank, best first
+            {t("Every bank, best first")}
           </h2>
           <p className="text-sm tabular-nums">
-            <span className="font-medium text-pandan-deep">{counts.likely} likely</span> ·{" "}
-            <span className="font-medium text-kaya-deep">{counts.borderline} borderline</span> ·{" "}
-            <span className="font-medium text-raya-deep">{counts.unlikely} unlikely</span>
+            <span className="font-medium text-pandan-deep">{t("{n} likely", { n: counts.likely })}</span> ·{" "}
+            <span className="font-medium text-kaya-deep">{t("{n} borderline", { n: counts.borderline })}</span> ·{" "}
+            <span className="font-medium text-raya-deep">{t("{n} unlikely", { n: counts.unlikely })}</span>
           </p>
         </div>
         <VerdictStrip counts={counts} />
       </div>
 
-      <div className="flex flex-wrap gap-2" role="group" aria-label="Filter loans">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t("Filter loans")}>
         {(
           [
             ["all", "All"],
@@ -442,7 +448,7 @@ export function BankList({ banks, k, hasTarget }: { banks: BankResult[]; k: Coun
           ] as const
         ).map(([v, label]) => (
           <Chip key={v} on={cat === v} onClick={() => setCat(v)}>
-            {label}
+            {t(label)}
           </Chip>
         ))}
         <span aria-hidden className="mx-1 w-px self-stretch bg-ink/15" />
@@ -454,7 +460,7 @@ export function BankList({ banks, k, hasTarget }: { banks: BankResult[]; k: Coun
           ] as const
         ).map(([v, label]) => (
           <Chip key={v} on={kind === v} onClick={() => setKind(v)}>
-            {label}
+            {t(label)}
           </Chip>
         ))}
       </div>
@@ -468,9 +474,7 @@ export function BankList({ banks, k, hasTarget }: { banks: BankResult[]; k: Coun
         ))}
       </ol>
       <p className="text-xs text-ink-soft">
-        Rates and loan conditions as listed by RinggitPlus when the MYHomeMath template was built; check today&apos;s
-        rate with the bank. DSR caps are our sample assumptions by take-home band (under {rm(INCOME_BANDS[0])},{" "}
-        {rm(INCOME_BANDS[0])} to {rm(INCOME_BANDS[1])}, above). {HONEST}
+        {t("Rates and loan conditions as listed by RinggitPlus when the MYHomeMath template was built; check today's rate with the bank. DSR caps are our sample assumptions by take-home band (under {a}, {a} to {b}, above).", { a: rm(INCOME_BANDS[0]), b: rm(INCOME_BANDS[1]) })} {t(HONEST)}
       </p>
     </section>
   );
@@ -507,6 +511,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 }
 
 function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; band: number; hasTarget: boolean }) {
+  const tr = useT();
   const r = b.best;
   const look = verdictLook[r.verdict];
   const t = r.target;
@@ -522,11 +527,11 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
             <div className="grid min-w-0 flex-1 gap-0.5">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h3 className="font-pixel text-lg leading-tight">{b.lender.name}</h3>
-                <PixTag tone={look.tone}>{look.label}</PixTag>
+                <PixTag tone={look.tone}>{tr(look.label)}</PixTag>
               </div>
               <p className="truncate text-sm text-ink-soft">
-                {r.product.name} · {r.product.category === "islamic" ? "Islamic" : "Conventional"} ·{" "}
-                {r.product.type === "flexi" ? "Flexi" : "Term"}
+                {r.product.name} · {r.product.category === "islamic" ? tr("Islamic") : tr("Conventional")} ·{" "}
+                {r.product.type === "flexi" ? tr("Flexi") : tr("Term")}
               </p>
             </div>
           </div>
@@ -540,7 +545,7 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
             <Fig label="Rate" value={ratePct(r.rate)} />
             {hasTarget ? (
               <Fig
-                label={`DSR / cap`}
+                label="DSR / cap"
                 value={t ? `${pct(t.dsrWithHome)} / ${pct(r.dsrCap)}` : pct(r.dsrCap)}
                 warn={!!t && t.dsrWithHome > r.dsrCap}
               />
@@ -552,8 +557,8 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
 
           {r.reasons.length ? (
             <p className="text-sm">
-              <span className="sr-only">Why: </span>
-              {r.reasons.slice(0, 2).join(". ")}.
+              <span className="sr-only">{tr("Why")}: </span>
+              {r.reasons.slice(0, 2).map((x) => tr(x)).join(". ")}.
             </p>
           ) : null}
 
@@ -562,12 +567,14 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
               <span aria-hidden className="inline-flex transition-transform group-open:rotate-90">
                 <svg width="8" height="10" viewBox="0 0 8 10" fill="currentColor"><path d="M0 0l8 5-8 5z" /></svg>
               </span>
-              Assumptions{b.others.length ? ` and ${b.others.length} more ${b.others.length === 1 ? "loan" : "loans"}` : ""}
+              {b.others.length
+                ? tr(b.others.length === 1 ? "Assumptions and {n} more loan" : "Assumptions and {n} more loans", { n: b.others.length })
+                : tr("Assumptions")}
             </summary>
             <div className="mt-3 grid gap-4">
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-[10px] bg-cloud p-3 text-sm sm:grid-cols-4">
                 <div className="grid gap-0.5">
-                  <dt className="text-xs text-ink-soft">DSR cap by take-home</dt>
+                  <dt className="text-xs text-ink-soft">{tr("DSR cap by take-home")}</dt>
                   <dd className="tabular-nums">
                     {b.lender.dsrCaps.map((c, i) => (
                       <span key={i} className={cn(i === band ? "font-bold" : "text-ink-soft")}>
@@ -577,38 +584,38 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
                     ))}
                   </dd>
                 </div>
-                <Fig label="Margin" value={t ? pct(t.margin) : r.product.firstHomeScheme ? `90%, 100% to ${rm(SCHEME_PRICE_CAP)}` : "90%"} />
-                <Fig label="Tenure" value={`${r.tenureYears} yrs (max ${MAX_TENURE}, to age ${LOAN_END_AGE})`} />
+                <Fig label="Margin" value={t ? pct(t.margin) : r.product.firstHomeScheme ? tr("90%, 100% to {amt}", { amt: rm(SCHEME_PRICE_CAP) }) : "90%"} />
+                <Fig label="Tenure" value={tr("{n} yrs (max {max}, to age {age})", { n: r.tenureYears, max: MAX_TENURE, age: LOAN_END_AGE })} />
                 <Fig
                   label="Min income"
-                  value={r.product.minAnnualIncomeRM ? `${rm(r.product.minAnnualIncomeRM)}/yr` : "Not listed"}
+                  value={r.product.minAnnualIncomeRM ? tr("{amt}/yr", { amt: rm(r.product.minAnnualIncomeRM) }) : tr("Not listed")}
                 />
-                <Fig label="Age to apply" value={`${r.product.minAge} to ${r.product.maxAge}`} />
+                <Fig label="Age to apply" value={tr("{a} to {b}", { a: r.product.minAge, b: r.product.maxAge })} />
                 <Fig
                   label="Who"
                   value={
                     r.product.citizens.length === 3
-                      ? "Any nationality"
+                      ? tr("Any nationality")
                       : r.product.citizens.length === 2
-                        ? "Malaysians, PRs"
-                        : "Malaysians"
+                        ? tr("Malaysians, PRs")
+                        : tr("Malaysians")
                   }
                 />
                 <Fig label="Rate tiers" value={r.product.tiers.map((x) => ratePct(x.rate)).join(", ")} />
                 <Fig label="Loan range" value={loanRange(r)} />
               </dl>
-              {r.product.notes.length ? <p className="text-xs text-ink-soft">{r.product.notes.join(". ")}.</p> : null}
+              {r.product.notes.length ? <p className="text-xs text-ink-soft">{r.product.notes.map((x) => tr(x)).join(". ")}.</p> : null}
 
               {b.others.length ? (
                 <div className="-mx-1 overflow-x-auto px-1">
                   <table className="w-full min-w-[440px] text-sm">
-                    <caption className="sr-only">Other {b.lender.name} loans for you</caption>
+                    <caption className="sr-only">{tr("Other {name} loans for you", { name: b.lender.name })}</caption>
                     <thead>
                       <tr className="text-left text-xs text-ink-soft">
-                        <th scope="col" className="py-1 pr-2 font-normal">Loan</th>
-                        <th scope="col" className="py-1 pr-2 text-right font-normal">Rate</th>
-                        <th scope="col" className="py-1 pr-2 text-right font-normal">{hasTarget ? "Monthly" : "Max loan"}</th>
-                        <th scope="col" className="py-1 text-right font-normal">Verdict</th>
+                        <th scope="col" className="py-1 pr-2 font-normal">{tr("Loan")}</th>
+                        <th scope="col" className="py-1 pr-2 text-right font-normal">{tr("Rate")}</th>
+                        <th scope="col" className="py-1 pr-2 text-right font-normal">{hasTarget ? tr("Monthly") : tr("Max loan")}</th>
+                        <th scope="col" className="py-1 text-right font-normal">{tr("Verdict")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -619,15 +626,15 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
                               {o.product.name}
                             </Out>
                             {o.reasons[0] ? (
-                              <span className="block text-xs font-normal text-ink-soft">{o.reasons[0]}</span>
+                              <span className="block text-xs font-normal text-ink-soft">{tr(o.reasons[0])}</span>
                             ) : null}
                           </th>
                           <td className="py-2 pr-2 text-right tabular-nums">{ratePct(o.rate)}</td>
                           <td className="py-2 pr-2 text-right tabular-nums">
-                            {hasTarget ? (o.target ? rm(o.target.instalmentRM) : "n/a") : rm(o.maxLoanRM)}
+                            {hasTarget ? (o.target ? rm(o.target.instalmentRM) : tr("n/a")) : rm(o.maxLoanRM)}
                           </td>
                           <td className="py-2 text-right">
-                            <PixTag tone={verdictLook[o.verdict].tone}>{verdictLook[o.verdict].label}</PixTag>
+                            <PixTag tone={verdictLook[o.verdict].tone}>{tr(verdictLook[o.verdict].label)}</PixTag>
                           </td>
                         </tr>
                       ))}
@@ -640,10 +647,10 @@ function BankRow({ rank, b, band, hasTarget }: { rank: number; b: BankResult; ba
 
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <Out href={b.lender.officialUrl} className="font-medium text-pandan-deep underline underline-offset-2">
-              {b.lender.name} official site
+              {tr("{name} official site", { name: b.lender.name })}
             </Out>
             <Out href={r.product.ringgitPlusUrl} className="font-medium underline underline-offset-2">
-              {r.product.name} on RinggitPlus
+              {tr("{name} on RinggitPlus", { name: r.product.name })}
             </Out>
           </div>
         </div>
@@ -660,9 +667,10 @@ function loanRange(r: ProductResult) {
 }
 
 function Fig({ label, value, strong, warn }: { label: string; value: string; strong?: boolean; warn?: boolean }) {
+  const t = useT();
   return (
     <div className="grid min-w-0 gap-0.5">
-      <dt className="text-xs text-ink-soft">{label}</dt>
+      <dt className="text-xs text-ink-soft">{t(label)}</dt>
       <dd
         className={cn(
           "tabular-nums",
@@ -670,7 +678,7 @@ function Fig({ label, value, strong, warn }: { label: string; value: string; str
           warn && "text-raya-deep",
         )}
       >
-        {value}
+        {t(value)}
       </dd>
     </div>
   );
@@ -679,32 +687,33 @@ function Fig({ label, value, strong, warn }: { label: string; value: string; str
 /* ---------------------------------------------------------------- next steps */
 
 export function NextSteps({ inRange, top }: { inRange: Unit | null; top: BankResult }) {
+  const t = useT();
   return (
     <PixPanel className="grid grid-cols-1 gap-4 p-5" aria-labelledby="bank-next-title">
       <h2 id="bank-next-title" className="font-pixel text-xl leading-tight">
-        Where to go from here
+        {t("Where to go from here")}
       </h2>
       <ol className="grid gap-3 text-sm">
         <li className="flex gap-3">
           <Num n={1} />
           <span>
-            Read {top.lender.name}&apos;s home-loan terms on their{" "}
+            {t("Read {name}'s home-loan terms on their", { name: top.lender.name })}{" "}
             <Out href={top.lender.officialUrl} className="font-medium underline underline-offset-2">
-              official site
+              {t("official site")}
             </Out>{" "}
-            and ask for today&apos;s rate.
+            {t("and ask for today's rate.")}
           </span>
         </li>
         <li className="flex gap-3">
           <Num n={2} />
           <span>
-            Compare more loans on{" "}
+            {t("Compare more loans on")}{" "}
             <Out href={RINGGITPLUS_HOME_LOANS} className="font-medium underline underline-offset-2">
               RinggitPlus
             </Out>{" "}
-            and read{" "}
+            {t("and read")}{" "}
             <Out href={PROPERTYGURU_HOME_LOANS} className="font-medium underline underline-offset-2">
-              PropertyGuru&apos;s home-loan guides
+              {t("PropertyGuru's home-loan guides")}
             </Out>
             .
           </span>
@@ -712,8 +721,7 @@ export function NextSteps({ inRange, top }: { inRange: Unit | null; top: BankRes
         <li className="flex gap-3">
           <Num n={3} />
           <span>
-            Get your free CCRIS report from Bank Negara and check CTOS before you apply, so nothing surprises the
-            bank.
+            {t("Get your free CCRIS report from Bank Negara and check CTOS before you apply, so nothing surprises the bank.")}
           </span>
         </li>
       </ol>
@@ -722,7 +730,7 @@ export function NextSteps({ inRange, top }: { inRange: Unit | null; top: BankRes
           <PixButton asChild tone="kaya" size="lg" className="w-full max-w-full sm:w-auto">
             <Link href={`/homes/${inRange.id}/feng-shui`}>
               <Sprite art="sparkle" scale={2} className="shrink-0" />
-              <span className="min-w-0 truncate">Feng Shui check: {inRange.name}</span>
+              <span className="min-w-0 truncate">{t("Feng Shui check: {name}", { name: inRange.name })}</span>
             </Link>
           </PixButton>
         </div>
@@ -742,52 +750,50 @@ function Num({ n }: { n: number }) {
 /* ---------------------------------------------------------------- how it works */
 
 export function HowItWorks({ k }: { k: Counted }) {
+  const t = useT();
   return (
     <section aria-labelledby="bank-how-title" className="grid gap-3 md:grid-cols-2">
       <h2 id="bank-how-title" className="sr-only">
-        How the estimate works
+        {t("How the estimate works")}
       </h2>
       <PixPanel flat className="p-5">
         <details>
-          <summary className="cursor-pointer font-pixel text-lg leading-tight">How we work it out</summary>
+          <summary className="cursor-pointer font-pixel text-lg leading-tight">{t("How we work it out")}</summary>
           <ol className="mt-3 grid list-decimal gap-2 pl-5 text-sm">
             <li>
-              Income a bank counts: your take-home{k.recognised < 1 ? ` (at ${pct(k.recognised)}, as your pay varies)` : ""},
-              a joint applicant&apos;s take-home, and 80% of fixed allowances or rental. Now{" "}
-              <strong className="tabular-nums">{rm(k.netRM)}</strong> a month.
+              {k.recognised < 1
+                ? t("Income a bank counts: your take-home (at {pct}, as your pay varies), a joint applicant's take-home, and 80% of fixed allowances or rental. Now", { pct: pct(k.recognised) })
+                : t("Income a bank counts: your take-home, a joint applicant's take-home, and 80% of fixed allowances or rental. Now")}{" "}
+              <strong className="tabular-nums">{rm(k.netRM)}</strong> {t("a month.")}
             </li>
             <li>
-              Each bank lets all your loans, the new one included, use up to its DSR cap of that income. What&apos;s left
-              after your current loans is the most the new instalment can be.
+              {t("Each bank lets all your loans, the new one included, use up to its DSR cap of that income. What's left after your current loans is the most the new instalment can be.")}
             </li>
             <li>
-              That instalment, at the loan&apos;s own rate tier, over {k.tenureYears} years (up to {MAX_TENURE}, ending by
-              age {LOAN_END_AGE}), gives the biggest loan. It can&apos;t go outside the loan&apos;s listed range.
+              {t("That instalment, at the loan's own rate tier, over {years} years (up to {max}, ending by age {age}), gives the biggest loan. It can't go outside the loan's listed range.", { years: k.tenureYears, max: MAX_TENURE, age: LOAN_END_AGE })}
             </li>
             <li>
-              Max home price is that loan over the margin: 90% for a first or second home loan, up to 100% on first-home
-              schemes for homes to {rm(SCHEME_PRICE_CAP)}.
+              {t("Max home price is that loan over the margin: 90% for a first or second home loan, up to 100% on first-home schemes for homes to {amt}.", { amt: rm(SCHEME_PRICE_CAP) })}
             </li>
             <li>
-              Likely yes passes the loan&apos;s rules with {Math.round(DSR_BUFFER * 100)} points to spare under the cap.
-              Borderline is inside the last {Math.round(DSR_BUFFER * 100)} points, or a new job. Unlikely breaks a rule.
+              {t("Likely yes passes the loan's rules with {n} points to spare under the cap. Borderline is inside the last {n} points, or a new job. Unlikely breaks a rule.", { n: Math.round(DSR_BUFFER * 100) })}
             </li>
           </ol>
         </details>
       </PixPanel>
       <PixPanel flat className="p-5">
         <details>
-          <summary className="cursor-pointer font-pixel text-lg leading-tight">What to bring to the bank</summary>
+          <summary className="cursor-pointer font-pixel text-lg leading-tight">{t("What to bring to the bank")}</summary>
           <ul className="mt-3 grid list-disc gap-2 pl-5 text-sm">
-            <li>IC (or passport) copy</li>
-            <li>Last 3 months&apos; payslips, plus the latest EA form or EPF statement</li>
-            <li>Last 6 months&apos; bank statements showing your salary going in</li>
-            <li>New in the job: your offer or confirmation letter (most banks want 3 months in service)</li>
-            <li>Self-employed: business registration, 6 months&apos; statements, Form B and accounts for 2 years</li>
-            <li>The booking receipt or offer letter from the developer</li>
+            <li>{t("IC (or passport) copy")}</li>
+            <li>{t("Last 3 months' payslips, plus the latest EA form or EPF statement")}</li>
+            <li>{t("Last 6 months' bank statements showing your salary going in")}</li>
+            <li>{t("New in the job: your offer or confirmation letter (most banks want 3 months in service)")}</li>
+            <li>{t("Self-employed: business registration, 6 months' statements, Form B and accounts for 2 years")}</li>
+            <li>{t("The booking receipt or offer letter from the developer")}</li>
           </ul>
           <p className="mt-3 text-xs text-ink-soft">
-            Loan must end by age {LOAN_END_AGE}; most banks won&apos;t lend under {MIN_TENURE} years.
+            {t("Loan must end by age {age}; most banks won't lend under {min} years.", { age: LOAN_END_AGE, min: MIN_TENURE })}
           </p>
         </details>
       </PixPanel>
@@ -798,13 +804,13 @@ export function HowItWorks({ k }: { k: Counted }) {
 /* ---------------------------------------------------------------- empty states */
 
 export function NeedAnswers({ open }: { open: string[] }) {
+  const t = useT();
   return (
     <PixPanel className="grid justify-items-start gap-3 p-6">
       <Sprite art="bank" scale={5} className="text-ink-soft" />
       <p className="font-pixel text-4xl leading-none text-ink-soft/50 tabular-nums">RM ---,---</p>
       <p className="max-w-prose text-sm">
-        Answer {open.length === 1 ? "one more question" : `${open.length} more questions`} and we&apos;ll check all {lenders.length}{" "}
-        banks for you: {open.join(", ").toLowerCase()}.
+        {t(open.length === 1 ? "Answer one more question and we'll check all {n} banks for you: {list}." : "Answer {q} more questions and we'll check all {n} banks for you: {list}.", { q: open.length, n: lenders.length, list: open.map((o) => t(o)).join(", ").toLowerCase() })}
       </p>
     </PixPanel>
   );

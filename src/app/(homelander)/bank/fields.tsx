@@ -2,6 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { defineSprite } from "@/components/homelander/sprite";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 
 /** Gold coin for the bank's loot. */
@@ -44,12 +45,13 @@ export function MoneyField({
   className,
   ...rest
 }: MoneyFieldProps) {
+  const t = useT();
   const hintId = hint ? `${id}-hint` : undefined;
   const errId = error ? `${id}-error` : undefined;
   return (
     <div className={cn("grid min-w-0 gap-1.5", className)}>
       <label htmlFor={id} className="text-sm font-medium text-ink">
-        {label}
+        {t(label)}
       </label>
       <div
         className={cn(
@@ -71,16 +73,16 @@ export function MoneyField({
           className="h-full w-0 min-w-0 flex-1 bg-transparent text-xl font-medium text-ink tabular-nums placeholder:text-ink-soft/50 focus-visible:outline-none"
           {...rest}
         />
-        {suffix ? <span className="text-sm text-ink-soft">{suffix}</span> : null}
+        {suffix ? <span className="text-sm text-ink-soft">{t(suffix)}</span> : null}
       </div>
       {error ? (
         <p id={errId} className="text-sm font-medium text-raya-deep">
-          {error}
+          {t(error)}
         </p>
       ) : null}
       {hint ? (
         <p id={hintId} className="text-xs text-ink-soft">
-          {hint}
+          {t(hint)}
         </p>
       ) : null}
     </div>
@@ -106,15 +108,16 @@ export function Segmented<T extends string>({
   /** Show a "Needed" tag while unanswered. */
   needed?: boolean;
 }) {
+  const t = useT();
   return (
     <div className="grid min-w-0 gap-1.5">
       <div className="flex items-center justify-between gap-3">
         <span id={`${id}-label`} className="text-sm font-medium text-ink">
-          {label}
+          {t(label)}
         </span>
         {needed && value === undefined ? (
           <span className="border-2 border-ink bg-kaya px-1.5 py-0.5 font-pixel-label text-[10px] leading-none uppercase">
-            Needed
+            {t("Needed")}
           </span>
         ) : null}
       </div>
@@ -139,14 +142,14 @@ export function Segmented<T extends string>({
                 on ? "bg-ink text-white" : "text-ink hover:bg-cloud",
               )}
             >
-              {o.label}
+              {t(o.label)}
             </button>
           );
         })}
       </div>
       {hint ? (
         <p id={`${id}-hint`} className="text-xs text-ink-soft">
-          {hint}
+          {t(hint)}
         </p>
       ) : null}
     </div>
@@ -165,10 +168,11 @@ export function PixSwitch({
   label: string;
   id: string;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center justify-between gap-4">
       <label htmlFor={id} className="text-sm font-medium text-ink">
-        {label}
+        {t(label)}
       </label>
       <button
         id={id}
@@ -186,7 +190,7 @@ export function PixSwitch({
             checked && "translate-x-8",
           )}
         >
-          {checked ? "On" : "Off"}
+          {checked ? t("On") : t("Off")}
         </span>
       </button>
     </div>

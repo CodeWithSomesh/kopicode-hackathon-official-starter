@@ -4,6 +4,7 @@ import { UnitPhoto } from "@/components/homelander/unit-photo";
 import { PixButton, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import type { Fighter } from "@/lib/homelander/battle-verdict";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { crown, money, UnitSelect } from "./bits";
 import { fitTone } from "./rows";
@@ -36,6 +37,7 @@ export function FighterHead({
   onSwap: (id: string) => void;
   onRemove?: () => void;
 }) {
+  const t = useT();
   return (
     <div className="grid gap-2 text-left font-normal">
       <div className="relative">
@@ -53,12 +55,12 @@ export function FighterHead({
           {!revealed ? null : isWinner ? (
             <PixTag tone="kaya">
               <Sprite art={crown} scale={1.5} className="text-ink" />
-              Winner
+              {t("Winner")}
             </PixTag>
           ) : (
             <PixTag tone="white">#{f.rank}</PixTag>
           )}
-          {f.soldOut ? <PixTag tone="ink">Sold out</PixTag> : null}
+          {f.soldOut ? <PixTag tone="ink">{t("Sold out")}</PixTag> : null}
         </div>
         <span className="absolute right-1.5 bottom-1.5 rounded-full bg-ink px-1.5 py-0.5 font-pixel text-[11px] leading-none text-white">
           P{slot + 1}
@@ -82,11 +84,11 @@ export function FighterHead({
       </p>
 
       <div className="flex flex-wrap gap-1">
-        <PixTag tone="lilac" title="Match score from your swipe deck">
-          Match {f.match}
+        <PixTag tone="lilac" title={t("Match score from your swipe deck")}>
+          {t("Match")} {f.match}
         </PixTag>
         {fitShort[f.fit] ? (
-          <PixTag tone={fitTone[f.fit]}>{fitShort[f.fit]}</PixTag>
+          <PixTag tone={fitTone[f.fit]}>{t(fitShort[f.fit] ?? "")}</PixTag>
         ) : null}
       </div>
 
@@ -96,7 +98,7 @@ export function FighterHead({
           value={f.unit.id}
           taken={lineup}
           onChange={onSwap}
-          label={`Swap ${f.unit.name} for another home`}
+          label={t("Swap {name} for another home", { name: f.unit.name })}
           className="min-w-0 flex-1"
         />
         {onRemove ? (
@@ -104,7 +106,7 @@ export function FighterHead({
             size="sm"
             className="size-9 shrink-0 px-0"
             onClick={onRemove}
-            aria-label={`Remove ${f.unit.name}`}
+            aria-label={t("Remove {name}", { name: f.unit.name })}
           >
             <Sprite art="cross" scale={2} className="text-raya" />
           </PixButton>

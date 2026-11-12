@@ -30,6 +30,7 @@ import {
 import { anchorOptions, unitById, type Unit } from "@/lib/homelander/data";
 import { realUnits, recommend } from "@/lib/homelander/recommend";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { kRM, swords, UnitSelect } from "./bits";
 import { FightArena, type FightPhase } from "./fight-arena";
@@ -77,6 +78,7 @@ const useHydrated = () =>
  * buyer really told Mochi: no sample payslip, default office or default office days.
  */
 export function BattleView() {
+  const t = useT();
   const s = useHomeLander();
   const reducedMotion = usePrefersReducedMotion();
   const hydrated = useHydrated();
@@ -166,25 +168,22 @@ export function BattleView() {
     <header className="grid gap-2">
       <h1 className="flex items-center gap-3 font-pixel text-3xl leading-none lg:text-5xl">
         <Sprite art={swords} scale={4} className="shrink-0 text-pandan-deep" />
-        Battle of the homes
+        {t("Battle of the homes")}
       </h1>
       <p className="max-w-3xl text-ink-soft">
-        Up to {BATTLE_MAX} Gamuda Land homes you picked, side by side on what
-        you&apos;d pay every month, how long you&apos;d spend getting to work,
-        room for the family and the home itself. Compare them first, then let
-        them fight it out.
+        {t("Up to {n} Gamuda Land homes you picked, side by side on what you'd pay every month, how long you'd spend getting to work, room for the family and the home itself. Compare them first, then let them fight it out.", { n: BATTLE_MAX })}
       </p>
       {ctx.onboarded ? (
         <p className="flex flex-wrap items-center gap-2 text-sm">
-          <PixTag tone={src.tone}>{src.tag}</PixTag>
-          <span className="text-ink-soft">{src.text}</span>
+          <PixTag tone={src.tone}>{t(src.tag)}</PixTag>
+          <span className="text-ink-soft">{t(src.text)}</span>
           {canUseLikes ? (
             <button
               type="button"
               onClick={() => save(likedTop)}
               className="font-semibold underline decoration-2 underline-offset-4"
             >
-              Use my top {likedTop.length} likes
+              {t("Use my top {n} likes", { n: likedTop.length })}
             </button>
           ) : null}
         </p>
@@ -305,6 +304,7 @@ function Reveal({
 }
 
 function Gate() {
+  const t = useT();
   return (
     <PixPanel
       tone="kaya"
@@ -313,18 +313,16 @@ function Gate() {
       <MochiBot size={120} className="justify-self-center" />
       <div className="grid gap-3">
         <h2 className="font-pixel text-2xl leading-tight lg:text-3xl">
-          Mochi needs to get to know you first
+          {t("Mochi needs to get to know you first")}
         </h2>
         <p className="max-w-2xl">
-          A battle on guesses is no battle. Chat with Mochi for ten minutes:
-          where you work, who you live with, what you earn and what you&apos;ve
-          saved. Then every row and every round uses your life, not a sample.
+          {t("A battle on guesses is no battle. Chat with Mochi for ten minutes: where you work, who you live with, what you earn and what you've saved. Then every row and every round uses your life, not a sample.")}
         </p>
         <div className="flex flex-wrap gap-3">
           <PixButton asChild tone="white" size="lg">
             <Link href="/onboarding">
               <Sprite art="mochi" scale={2} />
-              Chat with Mochi
+              {t("Chat with Mochi")}
             </Link>
           </PixButton>
         </div>
@@ -334,6 +332,7 @@ function Gate() {
 }
 
 function Missing({ ctx }: { ctx: BattleContext }) {
+  const t = useT();
   return (
     <PixPanel
       tone="kaya"
@@ -343,17 +342,16 @@ function Missing({ ctx }: { ctx: BattleContext }) {
       <MochiBot size={72} label="" className="hidden sm:block" />
       <div className="grid gap-1">
         <p className="font-pixel text-lg leading-tight">
-          Mochi doesn&apos;t know everything yet
+          {t("Mochi doesn't know everything yet")}
         </p>
         <p className="text-sm">
-          Still missing: {ctx.missing.join(", ")}. We don&apos;t guess these:
-          the rows that need them say so, and the fight leaves those rounds out.
+          {t("Still missing: {list}. We don't guess these: the rows that need them say so, and the fight leaves those rounds out.", { list: ctx.missing.map((m) => t(m)).join(", ") })}
         </p>
       </div>
       <PixButton asChild tone="white">
         <Link href="/onboarding">
           <Sprite art="mochi" scale={2} />
-          Tell Mochi
+          {t("Tell Mochi")}
         </Link>
       </PixButton>
     </PixPanel>
@@ -381,15 +379,16 @@ function SetupBar({
   ids: string[];
   onAdd: (id: string) => void;
 }) {
+  const t = useT();
   const select =
     "pix-frame pix-flat block min-h-11 w-full cursor-pointer appearance-none px-3 py-2 text-sm font-semibold";
   const m = ctx.money;
   const moneyText =
     m.source === "bank"
-      ? `Your bank check: up to about ${kRM(m.maxPriceRM)}`
+      ? t("Your bank check: up to about {amt}", { amt: kRM(m.maxPriceRM) })
       : m.source === "profile"
-        ? `From what you told Mochi: up to about ${kRM(m.maxPriceRM)}`
-        : "Mochi doesn't know your salary yet, so budget isn't judged";
+        ? t("From what you told Mochi: up to about {amt}", { amt: kRM(m.maxPriceRM) })
+        : t("Mochi doesn't know your salary yet, so budget isn't judged");
   return (
     <PixPanel
       flat
@@ -397,7 +396,7 @@ function SetupBar({
       className="grid content-start gap-4 p-4 md:grid-cols-2"
     >
       <label className="grid content-start gap-1.5">
-        <span className="font-pixel-label text-[11px] uppercase">Work at</span>
+        <span className="font-pixel-label text-[11px] uppercase">{t("Work at")}</span>
         <select
           className={select}
           value={ctx.work?.id ?? ""}
@@ -405,7 +404,7 @@ function SetupBar({
         >
           {ctx.work ? null : (
             <option value="" disabled>
-              Pick where you work
+              {t("Pick where you work")}
             </option>
           )}
           {anchorOptions.map((a) => (
@@ -416,19 +415,19 @@ function SetupBar({
         </select>
         <span className="text-xs text-ink-soft">
           {ctx.workSource === "profile"
-            ? `You told Mochi "${ctx.workLabel}"`
+            ? t("You told Mochi \"{name}\"", { name: ctx.workLabel ?? "" })
             : ctx.workSource === "picked"
-              ? "Picked here"
+              ? t("Picked here")
               : ctx.workUnmapped
-                ? `"${ctx.workUnmapped}" isn't on our map: pick the closest`
-                : "Not told Mochi yet: no commute rows until you pick"}
-          {ctx.partner ? `. Partner: ${ctx.partner.name}` : ""}
+                ? t("\"{name}\" isn't on our map: pick the closest", { name: ctx.workUnmapped })
+                : t("Not told Mochi yet: no commute rows until you pick")}
+          {ctx.partner ? `. ${t("Partner: {name}", { name: ctx.partner.name })}` : ""}
         </span>
       </label>
 
       <label className="grid content-start gap-1.5">
         <span className="font-pixel-label text-[11px] uppercase">
-          Office days
+          {t("Office days")}
         </span>
         <select
           className={select}
@@ -437,12 +436,12 @@ function SetupBar({
         >
           {ctx.officeDays === null ? (
             <option value="" disabled>
-              Pick
+              {t("Pick")}
             </option>
           ) : null}
           {[0, 1, 2, 3, 4, 5, 6].map((n) => (
             <option key={n} value={n}>
-              {n} a week
+              {t("{n} a week", { n })}
             </option>
           ))}
         </select>
@@ -453,7 +452,7 @@ function SetupBar({
           id="mode-label"
           className="font-pixel-label text-[11px] uppercase"
         >
-          Getting there
+          {t("Getting there")}
         </span>
         <div className="flex gap-2" role="group" aria-labelledby="mode-label">
           {MODES.map((o) => (
@@ -465,33 +464,33 @@ function SetupBar({
               onClick={() => onMode(o.id)}
               className="min-h-11 flex-1 px-2"
             >
-              {o.label}
+              {t(o.label)}
             </PixButton>
           ))}
         </div>
         <span className="text-xs text-ink-soft">
           {ctx.modeSource === "profile"
-            ? "As you told Mochi"
+            ? t("As you told Mochi")
             : ctx.modeSource === "picked"
-              ? "Picked here"
-              : "Not told Mochi yet"}
+              ? t("Picked here")
+              : t("Not told Mochi yet")}
         </span>
       </div>
 
       <div className="grid content-start gap-1.5">
         <span className="font-pixel-label text-[11px] uppercase">
-          Add a home ({ids.length} of {BATTLE_MAX})
+          {t("Add a home ({n} of {max})", { n: ids.length, max: BATTLE_MAX })}
         </span>
         {ids.length < BATTLE_MAX ? (
           <UnitSelect
             taken={ids}
             onChange={onAdd}
-            label="Add a home to the battle"
-            placeholder="Pick a home to add"
+            label={t("Add a home to the battle")}
+            placeholder={t("Pick a home to add")}
           />
         ) : (
           <p className="pix-frame pix-flat flex min-h-11 items-center px-3 text-sm text-ink-soft">
-            Ring is full. Remove one to add.
+            {t("Ring is full. Remove one to add.")}
           </p>
         )}
         <span
@@ -508,7 +507,7 @@ function SetupBar({
                 href="/bank"
                 className="underline decoration-2 underline-offset-4"
               >
-                Run the bank check
+                {t("Run the bank check")}
               </Link>
             </>
           ) : null}
@@ -525,32 +524,32 @@ function NeedTwo({
   ids: string[];
   onAdd: (id: string) => void;
 }) {
+  const t = useT();
   const inRing = ids.map((id) => unitById[id]?.name).filter(Boolean);
   return (
     <PixPanel className="grid gap-4 p-5 sm:grid-cols-[minmax(0,1fr)_20rem] sm:items-center">
       <div className="grid gap-2">
         <h2 className="font-pixel text-2xl leading-tight">
-          Pick at least {BATTLE_MIN} homes to battle
+          {t("Pick at least {n} homes to battle", { n: BATTLE_MIN })}
         </h2>
         <p className="text-ink-soft">
           {inRing.length
-            ? `Only ${inRing.join(", ")} is in the ring. `
-            : "The ring is empty. "}
-          Like a few homes on the swipe deck and they line up here, or add one
-          you already know.
+            ? `${t("Only {list} is in the ring.", { list: inRing.join(", ") })} `
+            : `${t("The ring is empty.")} `}
+          {t("Like a few homes on the swipe deck and they line up here, or add one you already know.")}
         </p>
         <PixButton asChild tone="kaya" className="w-fit">
           <Link href="/swipe">
             <Sprite art="heart" scale={2} />
-            Go to the swipe deck
+            {t("Go to the swipe deck")}
           </Link>
         </PixButton>
       </div>
       <UnitSelect
         taken={ids}
         onChange={onAdd}
-        label="Add a home to the battle"
-        placeholder="Pick a home to add"
+        label={t("Add a home to the battle")}
+        placeholder={t("Pick a home to add")}
       />
     </PixPanel>
   );

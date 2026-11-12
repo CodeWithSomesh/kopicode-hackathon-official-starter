@@ -5,6 +5,7 @@ import { PixPanel, PixTag } from "@/components/homelander/pixel";
 import { LOAN_END_AGE, MAX_TENURE, MIN_TENURE, cardMinimum, type Citizenship, type Employment, type JobTenure } from "@/lib/homelander/bank";
 import { rm } from "@/lib/homelander/data";
 import type { Profile } from "@/lib/homelander/profile";
+import { useT } from "@/lib/homelander/i18n/client";
 import { homelander } from "@/lib/homelander/store";
 import { MoneyField, PixSwitch, Segmented } from "./fields";
 import { setPrefs, type BankPrefs } from "./prefs";
@@ -71,15 +72,16 @@ function ProfileMoney({
   required?: boolean;
   extraError?: string;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState<string | null>(null);
   const value = profile[k];
   const shown = draft ?? fmt(value);
   const parsed = draft === null ? (value ?? null) : parseAmount(draft);
   const error =
     parsed === "bad"
-      ? `${label} should be a plain amount in ringgit, like 1,250.`
+      ? t("{label} should be a plain amount in ringgit, like 1,250.", { label: t(label) })
       : required && (parsed === null || parsed === 0)
-        ? `Enter your ${label.toLowerCase()}. Every bank starts from it.`
+        ? t("Enter your {label}. Every bank starts from it.", { label: t(label).toLowerCase() })
         : extraError;
   return (
     <MoneyField
@@ -87,7 +89,7 @@ function ProfileMoney({
       label={label}
       hint={hint}
       error={error}
-      placeholder={required ? "Needed" : "0"}
+      placeholder={required ? t("Needed") : "0"}
       value={shown}
       onChange={(raw) => {
         setDraft(raw);
@@ -106,25 +108,26 @@ function ProfileMoney({
 }
 
 function ProfileAge({ profile }: { profile: Profile }) {
+  const t = useT();
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft ?? (profile.age === undefined ? "" : String(profile.age));
   const n = shown.trim() === "" ? null : Number(shown);
   const error =
     n === null
-      ? "Enter your age. It sets how long the loan can run."
+      ? t("Enter your age. It sets how long the loan can run.")
       : !Number.isInteger(n) || n < 18 || n > 80
-        ? "Enter your age as a whole number, 18 to 80."
+        ? t("Enter your age as a whole number, 18 to 80.")
         : n > LOAN_END_AGE - MIN_TENURE
-          ? `At ${n} the loan must end by ${LOAN_END_AGE}, under ${MIN_TENURE} years. A younger joint applicant could be the main borrower.`
+          ? t("At {n} the loan must end by {end}, under {min} years. A younger joint applicant could be the main borrower.", { n, end: LOAN_END_AGE, min: MIN_TENURE })
           : undefined;
   return (
     <MoneyField
       id="bank-age"
       label="Your age"
-      hint={`Loans run up to ${MAX_TENURE} years and must end by age ${LOAN_END_AGE}.`}
+      hint={t("Loans run up to {max} years and must end by age {end}.", { max: MAX_TENURE, end: LOAN_END_AGE })}
       prefix=""
       suffix="years"
-      placeholder="Needed"
+      placeholder={t("Needed")}
       maxLength={2}
       value={shown}
       error={error}
@@ -140,6 +143,7 @@ function ProfileAge({ profile }: { profile: Profile }) {
 
 /** The three things a bank asks that Mochi doesn't, plus anything Mochi missed that the check can't run without. */
 export function BankQuestions({ profile, prefs }: { profile: Profile; prefs: BankPrefs }) {
+  const t = useT();
   const missingCore = profile.grossRM === undefined || profile.age === undefined;
   const open =
     [prefs.employment, prefs.jobTenure, prefs.citizenship, profile.firstHome].filter((v) => v === undefined).length +
@@ -149,15 +153,17 @@ export function BankQuestions({ profile, prefs }: { profile: Profile; prefs: Ban
       <div className="flex items-start justify-between gap-3">
         <div className="grid gap-1">
           <h2 id="bank-q-title" className="font-pixel text-xl leading-tight">
-            What the bank will ask
+            {t("What the bank will ask")}
           </h2>
           <p className="text-sm text-ink-soft">
             {open > 0
-              ? `Mochi didn't cover ${open === 1 ? "this one" : `these ${open}`}. Every bank checks it.`
-              : "All answered. Change any of them and the banks update."}
+              ? open === 1
+                ? t("Mochi didn't cover this one. Every bank checks it.")
+                : t("Mochi didn't cover these {n}. Every bank checks it.", { n: open })
+              : t("All answered. Change any of them and the banks update.")}
           </p>
         </div>
-        {open > 0 ? <PixTag tone="kaya">{open} to go</PixTag> : <PixTag tone="pandan">Done</PixTag>}
+        {open > 0 ? <PixTag tone="kaya">{t("{n} to go", { n: open })}</PixTag> : <PixTag tone="pandan">{t("Done")}</PixTag>}
       </div>
 
       {missingCore ? (
@@ -219,22 +225,23 @@ export function BankQuestions({ profile, prefs }: { profile: Profile; prefs: Ban
 
 /** Everything Mochi heard about money, editable. Edits save to the buyer's profile. */
 export function YourNumbers({ profile }: { profile: Profile }) {
+  const t = useT();
   const card = profile.cardBalanceRM;
   const takeHomeOver =
     profile.takeHomeRM !== undefined && profile.grossRM !== undefined && profile.takeHomeRM > profile.grossRM
-      ? "Take-home can't be more than gross. Fix it, or clear it and we'll estimate."
+      ? t("Take-home can't be more than gross. Fix it, or clear it and we'll estimate.")
       : undefined;
   return (
     <PixPanel className="grid gap-5 p-5" aria-labelledby="bank-numbers-title">
       <div className="grid gap-1">
         <h2 id="bank-numbers-title" className="font-pixel text-xl leading-tight">
-          What Mochi knows
+          {t("What Mochi knows")}
         </h2>
-        <p className="text-sm text-ink-soft">From your chat with Mochi. Fix anything here; it saves to your profile.</p>
+        <p className="text-sm text-ink-soft">{t("From your chat with Mochi. Fix anything here; it saves to your profile.")}</p>
       </div>
 
       <fieldset className="grid gap-4">
-        <legend className="mb-3 font-pixel text-base leading-none">Your pay</legend>
+        <legend className="mb-3 font-pixel text-base leading-none">{t("Your pay")}</legend>
         <ProfileMoney k="grossRM" profile={profile} label="Monthly gross salary" required hint="Before EPF and tax." />
         <ProfileMoney
           k="takeHomeRM"
@@ -266,7 +273,7 @@ export function YourNumbers({ profile }: { profile: Profile }) {
       </fieldset>
 
       <fieldset className="grid gap-4 border-t-2 border-dashed border-ink/15 pt-4">
-        <legend className="mb-3 font-pixel text-base leading-none">Loans you pay each month</legend>
+        <legend className="mb-3 font-pixel text-base leading-none">{t("Loans you pay each month")}</legend>
         <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
           <ProfileMoney k="carRM" profile={profile} label="Car loan" />
           <ProfileMoney k="ptptnRM" profile={profile} label="PTPTN" />
@@ -279,14 +286,14 @@ export function YourNumbers({ profile }: { profile: Profile }) {
           label="Credit card balance owed"
           hint={
             card
-              ? `Banks count 5% of it a month: ${rm(cardMinimum(card))}.`
-              : "The total owed. Banks count 5% of it each month."
+              ? t("Banks count 5% of it a month: {amt}.", { amt: rm(cardMinimum(card)) })
+              : t("The total owed. Banks count 5% of it each month.")
           }
         />
       </fieldset>
 
       <fieldset className="grid gap-4 border-t-2 border-dashed border-ink/15 pt-4">
-        <legend className="mb-3 font-pixel text-base leading-none">You</legend>
+        <legend className="mb-3 font-pixel text-base leading-none">{t("You")}</legend>
         <ProfileAge profile={profile} />
         <ProfileMoney
           k="savingsRM"

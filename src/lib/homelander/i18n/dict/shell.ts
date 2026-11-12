@@ -8,6 +8,8 @@ import type { Dict } from "./types";
  */
 export const shell: Dict = {
   "Map": "Map",
+  "Mochi": "Mochi",
+  "HomeLander tabs": "Tab HomeLander",
   "Swipe": "Swipe",
   "Battle": "Lawan",
   "Bank": "Bank",

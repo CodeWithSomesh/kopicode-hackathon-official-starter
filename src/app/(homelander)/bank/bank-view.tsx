@@ -9,6 +9,7 @@ import { MIN_TENURE, checkAllBanks, type BankCheckInput } from "@/lib/homelander
 import { unitById, type Unit } from "@/lib/homelander/data";
 import { toIncomeInput, type Profile } from "@/lib/homelander/profile";
 import { homelander, useHomeLander, type HomeLanderState } from "@/lib/homelander/store";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { BankQuestions, YourNumbers } from "./inputs";
 import { setPrefs, useBankPrefs, type BankPrefs } from "./prefs";
@@ -29,15 +30,16 @@ export function BankView() {
 }
 
 function Header() {
+  const t = useT();
   return (
     <header className="flex items-center gap-4">
       <PixPanel tone="kaya" flat className="flex size-16 shrink-0 items-center justify-center">
         <Sprite art="bank" scale={5} />
       </PixPanel>
       <div className="grid gap-1">
-        <h1 className="font-pixel text-3xl leading-none lg:text-4xl">The Bank</h1>
+        <h1 className="font-pixel text-3xl leading-none lg:text-4xl">{t("The Bank")}</h1>
         <p className="text-sm text-ink lg:text-base">
-          What 23 Malaysian banks are likely to lend you, worked out from what you told Mochi.
+          {t("What 23 Malaysian banks are likely to lend you, worked out from what you told Mochi.")}
         </p>
       </div>
     </header>
@@ -45,21 +47,21 @@ function Header() {
 }
 
 function MochiGate() {
+  const t = useT();
   return (
     <div className="grid gap-8">
       <Header />
       <PixPanel className="mx-auto grid w-full max-w-xl justify-items-center gap-4 p-6 text-center sm:p-10">
         <MochiBot size={132} />
-        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">Mochi needs to get to know you first</h2>
+        <h2 className="font-pixel text-2xl leading-tight sm:text-3xl">{t("Mochi needs to get to know you first")}</h2>
         <p className="max-w-md text-[15px] text-ink">
-          The bank check runs on your real pay, loans and age, the ones you tell Mochi. No answers, no guesses, so
-          there&apos;s nothing to check yet.
+          {t("The bank check runs on your real pay, loans and age, the ones you tell Mochi. No answers, no guesses, so there's nothing to check yet.")}
         </p>
         <div className="p-1 pb-2">
           <PixButton asChild tone="pandan" size="lg">
             <Link href="/onboarding">
               <Sprite art="mochi" scale={2} />
-              Chat with Mochi
+              {t("Chat with Mochi")}
             </Link>
           </PixButton>
         </div>
@@ -183,11 +185,12 @@ function Bank({ s, prefs }: { s: HomeLanderState; prefs: BankPrefs }) {
 }
 
 function TenurePicker({ value, max, current }: { value: number | undefined; max: number; current: number }) {
+  const t = useT();
   const options = Array.from(new Set([max, 30, 25, 20, 15, 10].filter((y) => y <= max && y >= MIN_TENURE)));
   return (
     <PixPanel flat className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
       <label htmlFor="bank-tenure" className="text-sm font-medium">
-        Loan tenure
+        {t("Loan tenure")}
       </label>
       <div className="pix-frame pix-flat focus-within:outline-[3px] focus-within:outline-offset-[6px] focus-within:outline-kaya focus-within:outline-solid">
         <select
@@ -196,17 +199,17 @@ function TenurePicker({ value, max, current }: { value: number | undefined; max:
           onChange={(e) => setPrefs({ tenureYears: e.target.value === "max" ? undefined : Number(e.target.value) })}
           className="h-10 bg-transparent px-3 text-sm font-medium tabular-nums focus-visible:outline-none"
         >
-          <option value="max">Longest allowed ({max} years)</option>
+          <option value="max">{t("Longest allowed ({n} years)", { n: max })}</option>
           {options
             .filter((y) => y !== max)
             .map((y) => (
               <option key={y} value={y}>
-                {y} years
+                {t("{n} years", { n: y })}
               </option>
             ))}
         </select>
       </div>
-      <p className="text-xs text-ink-soft">Shorter means a bigger instalment but far less interest.</p>
+      <p className="text-xs text-ink-soft">{t("Shorter means a bigger instalment but far less interest.")}</p>
     </PixPanel>
   );
 }

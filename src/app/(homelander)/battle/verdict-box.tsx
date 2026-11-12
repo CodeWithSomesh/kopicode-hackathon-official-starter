@@ -10,6 +10,7 @@ import {
 import { UnitPhoto } from "@/components/homelander/unit-photo";
 import type { BattleContext } from "@/lib/homelander/battle-context";
 import type { Battle, CheckOk } from "@/lib/homelander/battle-verdict";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import { crown, dash, kRM, money, tick } from "./bits";
 
@@ -23,6 +24,7 @@ export function VerdictBox({
 }) {
   const { winner, runnerUp, reasons, caveats, closeCall, rivals, checks } =
     battle;
+  const t = useT();
   const allSoldOut = winner.soldOut;
   return (
     <section aria-labelledby="verdict-title" aria-live="polite">
@@ -39,22 +41,22 @@ export function VerdictBox({
             />
             <PixTag tone="kaya" className="absolute top-2 left-2">
               <Sprite art={crown} scale={1.5} className="text-ink" />
-              {allSoldOut ? "Top pick" : "Winner"}
+              {allSoldOut ? t("Top pick") : t("Winner")}
             </PixTag>
           </div>
           <dl className="grid grid-cols-3 gap-2 text-center">
-            <Mini label="Per month" value={kRM(winner.totalMonthlyRM)} />
+            <Mini label={t("Per month")} value={kRM(winner.totalMonthlyRM)} />
             <Mini
-              label="Commute"
+              label={t("Commute")}
               value={
                 winner.you.compared
-                  ? `${winner.you.hoursPerYear}h/yr`
+                  ? t("{n}h/yr", { n: winner.you.hoursPerYear })
                   : winner.you.missing
                     ? "?"
-                    : "n/a"
+                    : t("n/a")
               }
             />
-            <Mini label="Upfront" value={kRM(winner.upfrontRM)} />
+            <Mini label={t("Upfront")} value={kRM(winner.upfrontRM)} />
           </dl>
         </div>
 
@@ -65,15 +67,15 @@ export function VerdictBox({
               className="font-pixel text-2xl leading-tight lg:text-3xl"
             >
               {winner.unit.name}{" "}
-              {allSoldOut ? "scores best, but it's sold out" : "wins"}
+              {allSoldOut ? t("scores best, but it's sold out") : t("wins")}
             </h2>
             <p className="text-sm text-ink-soft">
               {winner.township.name}, {winner.township.area}.{" "}
               {runnerUp ? (
                 <span className="tabular-nums">
                   {closeCall
-                    ? `Close fight: ${winner.overall} vs ${runnerUp.overall} over ${runnerUp.unit.name}. Nudge the priorities and it could flip.`
-                    : `${winner.overall} vs ${runnerUp.overall} over ${runnerUp.unit.name}, on your priorities.`}
+                    ? t("Close fight: {a} vs {b} over {name}. Nudge the priorities and it could flip.", { a: winner.overall, b: runnerUp.overall, name: runnerUp.unit.name })
+                    : t("{a} vs {b} over {name}, on your priorities.", { a: winner.overall, b: runnerUp.overall, name: runnerUp.unit.name })}
                 </span>
               ) : null}
             </p>
@@ -87,7 +89,7 @@ export function VerdictBox({
                   scale={2}
                   className="mt-1 shrink-0 text-kaya-deep"
                 />
-                <span>{r}</span>
+                <span>{t(r)}</span>
               </li>
             ))}
           </ul>
@@ -95,7 +97,7 @@ export function VerdictBox({
           {rivals.length ? (
             <div className="grid gap-1.5">
               <h3 className="font-pixel text-base leading-none">
-                Against each rival
+                {t("Against each rival")}
               </h3>
               <ul className="grid gap-1 text-sm tabular-nums">
                 {rivals.map((r) => (
@@ -103,22 +105,22 @@ export function VerdictBox({
                     key={r.id}
                     className="flex flex-wrap gap-x-3 gap-y-0.5 border-b border-dotted border-ink/25 pb-1"
                   >
-                    <span className="min-w-0 font-semibold">vs {r.name}</span>
+                    <span className="min-w-0 font-semibold">{t("vs {name}", { name: r.name })}</span>
                     <Delta
                       n={r.monthlyRM}
-                      fmt={(v) => `${money(v)}/mo`}
+                      fmt={(v) => t("{amt}/mo", { amt: money(v) })}
                       what="monthly cost"
                     />
                     {r.hoursPerYear !== null ? (
                       <Delta
                         n={r.hoursPerYear}
-                        fmt={(v) => `${v} h/yr`}
+                        fmt={(v) => t("{n} h/yr", { n: v })}
                         what="commute"
                       />
                     ) : null}
                     <Delta
                       n={r.upfrontRM}
-                      fmt={(v) => `${kRM(v)} upfront`}
+                      fmt={(v) => t("{amt} upfront", { amt: kRM(v) })}
                       what="upfront"
                     />
                   </li>
@@ -132,7 +134,7 @@ export function VerdictBox({
           {caveats.length ? (
             <div className="grid gap-2 border-t-[1.5px] border-dotted border-ink/30 pt-3">
               <h3 className="font-pixel text-base leading-none">
-                Check this first
+                {t("Check this first")}
               </h3>
               <ul className="grid gap-1.5 text-sm">
                 {caveats.map((c) => (
@@ -141,7 +143,7 @@ export function VerdictBox({
                       aria-hidden
                       className="mt-1.5 size-2 shrink-0 rounded-full bg-raya"
                     />
-                    <span>{c}</span>
+                    <span>{t(c)}</span>
                   </li>
                 ))}
               </ul>
@@ -152,31 +154,31 @@ export function VerdictBox({
             <PixButton asChild tone="kaya">
               <Link href="/bank">
                 <Sprite art="bank" scale={2} />
-                Check the bank
+                {t("Check the bank")}
               </Link>
             </PixButton>
             <PixButton asChild>
               <Link href={`/homes/${winner.unit.id}/feng-shui`}>
                 <Sprite art="sparkle" scale={2} />
-                Try Feng Shui
+                {t("Try Feng Shui")}
               </Link>
             </PixButton>
             <PixButton asChild>
               <Link href="/onboarding">
                 <Sprite art="mochi" scale={2} />
-                Ask Mochi
+                {t("Ask Mochi")}
               </Link>
             </PixButton>
           </div>
           <p className="text-xs text-ink-soft">
-            Estimates from{" "}
-            {ctx.money.source === "missing"
-              ? "what you told Mochi (salary not known yet)"
-              : ctx.money.source === "bank"
-                ? "your bank check"
-                : "what you told Mochi"}
-            , modelled commute times and estimated tolls. Not a loan offer or a
-            price quote.
+            {t("Estimates from {src}, modelled commute times and estimated tolls. Not a loan offer or a price quote.", {
+              src:
+                ctx.money.source === "missing"
+                  ? t("what you told Mochi (salary not known yet)")
+                  : ctx.money.source === "bank"
+                    ? t("your bank check")
+                    : t("what you told Mochi"),
+            })}
           </p>
         </div>
       </PixPanel>
@@ -205,13 +207,14 @@ function Delta({
   fmt: (v: number) => string;
   what: string;
 }) {
+  const t = useT();
   if (Math.abs(n) < 1)
-    return <span className="text-ink-soft">same {what}</span>;
+    return <span className="text-ink-soft">{t("same")} {t(what)}</span>;
   return (
     <span className={cn(n > 0 ? "text-pandan-deep" : "text-raya-deep")}>
-      {n > 0 ? "saves " : "costs "}
+      {n > 0 ? `${t("saves")} ` : `${t("costs")} `}
       {fmt(Math.abs(n))}
-      {n > 0 ? "" : " more"}
+      {n > 0 ? "" : ` ${t("more")}`}
     </span>
   );
 }
@@ -226,6 +229,7 @@ const okIcon: Record<
 };
 
 function ChecksTable({ battle }: { battle: Battle }) {
+  const t = useT();
   const order = [
     battle.winner,
     ...battle.fighters.filter((f) => f.unit.id !== battle.winner.unit.id),
@@ -233,14 +237,14 @@ function ChecksTable({ battle }: { battle: Battle }) {
   return (
     <div className="grid gap-1.5">
       <h3 className="font-pixel text-base leading-none">
-        Your must-haves and deal-breakers
+        {t("Your must-haves and deal-breakers")}
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[28rem] border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-ink/30">
               <th scope="col" className="py-1.5 pr-2 font-semibold">
-                You said
+                {t("You said")}
               </th>
               {order.map((f) => (
                 <th
@@ -262,9 +266,9 @@ function ChecksTable({ battle }: { battle: Battle }) {
               >
                 <th scope="row" className="py-1.5 pr-2 align-top font-normal">
                   <span className="font-pixel-label text-[9px] text-ink-soft uppercase">
-                    {c.kind === "must" ? "Must" : "Never"}
+                    {c.kind === "must" ? t("Must") : t("Never")}
                   </span>{" "}
-                  {c.text}
+                  {t(c.text)}
                 </th>
                 {order.map((f) => {
                   const r = c.results[f.unit.id]!;
@@ -280,7 +284,7 @@ function ChecksTable({ battle }: { battle: Battle }) {
                           art={ic.art}
                           scale={1.5}
                           className={cn("mt-0.5 shrink-0", ic.cls)}
-                          label={ic.label}
+                          label={t(ic.label)}
                         />
                         <span className="text-ink-soft">{r.why}</span>
                       </span>

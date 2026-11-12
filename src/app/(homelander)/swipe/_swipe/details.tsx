@@ -6,6 +6,7 @@ import { PixTag } from "@/components/homelander/pixel";
 import { Sprite, type SpriteArt, type SpriteName } from "@/components/homelander/sprite";
 import { availabilityOf, rm, townshipById, type Unit } from "@/lib/homelander/data";
 import type { Pick as Match } from "@/lib/homelander/recommend";
+import { useT } from "@/lib/homelander/i18n/client";
 import { cn } from "@/lib/utils";
 import type { HomeDetails, MoneyBasis } from "./buyer";
 import { StockBar } from "./stock";
@@ -31,6 +32,7 @@ export function CardDetails({
   basis: MoneyBasis | null;
   onClose: () => void;
 }) {
+  const tr = useT();
   const t = townshipById[unit.townshipId]!;
   const { money, commute, family, completion, worries } = d;
   const a = availabilityOf(unit.id);
@@ -49,10 +51,10 @@ export function CardDetails({
           type="button"
           onClick={onClose}
           className="flex shrink-0 items-center gap-1.5 rounded-full border-2 border-ink bg-white px-3 py-1.5 text-sm font-semibold hover:bg-cloud"
-          aria-label="Back to the photo (Escape)"
+          aria-label={tr("Back to the photo (Escape)")}
         >
           <Sprite art={swipeSprites.down} scale={2} />
-          Photo
+          {tr("Photo")}
         </button>
       </div>
 
@@ -71,7 +73,7 @@ export function CardDetails({
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs text-ink-soft">
                       {w.label}
-                      {i === 0 ? " · your biggest worry" : ""}
+                      {i === 0 ? ` · ${tr("your biggest worry")}` : ""}
                     </span>
                     <span className="block">{w.text}</span>
                   </span>
@@ -85,7 +87,7 @@ export function CardDetails({
         <Section art={swipeSprites.coin} title="Money" tone="text-kaya-deep">
           <div className="grid grid-cols-2 gap-2.5">
             {money.instalmentRM !== null && basis ? (
-              <Big label="Monthly instalment" value={rm(money.instalmentRM)} hint={`${basis.tenureYears} yrs at ${(basis.rate * 100).toFixed(1)}%`} />
+              <Big label="Monthly instalment" value={rm(money.instalmentRM)} hint={tr("{years} yrs at {rate}%", { years: basis.tenureYears, rate: (basis.rate * 100).toFixed(1) })} />
             ) : (
               <Big label="Monthly instalment" value="Ask Mochi" hint="Needs your salary" muted />
             )}
@@ -99,7 +101,7 @@ export function CardDetails({
             {money.savingsGapRM !== null ? (
               <Row
                 label="Against your savings"
-                value={money.savingsGapRM > 0 ? `${rm(money.savingsGapRM)} short` : `${rm(-money.savingsGapRM)} spare`}
+                value={money.savingsGapRM > 0 ? tr("{amt} short", { amt: rm(money.savingsGapRM) }) : tr("{amt} spare", { amt: rm(-money.savingsGapRM) })}
                 tone={money.savingsGapRM > 0 ? "bad" : "good"}
               />
             ) : null}
@@ -107,13 +109,13 @@ export function CardDetails({
           <Rows>
             {money.instalmentRM !== null ? <Row label="Instalment" value={rm(money.instalmentRM)} /> : null}
             <Row
-              label={money.upkeepHow ?? "Maintenance"}
+              label={money.upkeepHow ?? tr("Maintenance")}
               value={money.upkeepRM !== null ? rm(money.upkeepRM) : "Not published"}
               muted={money.upkeepRM === null}
             />
             {commute ? (
               <Row
-                label={commute.far ? "Commute" : `Commute by ${commute.mode}${commute.modeAssumed ? " (cheaper)" : ""}`}
+                label={commute.far ? tr("Commute") : tr(`Commute by ${commute.mode}${commute.modeAssumed ? " (cheaper)" : ""}`)}
                 value={commute.far || money.commuteRM === null ? "Not counted" : rm(money.commuteRM)}
                 muted={commute.far}
               />
@@ -132,11 +134,11 @@ export function CardDetails({
           </Rows>
           <Note>
             {basis ? `${basis.note} ` : ""}
-            {rm(money.psfRM)} per sq ft. {unit.source === "official" ? "Price from gamudaland.com.my." : "Sample price."}
+            {tr("{amt} per sq ft.", { amt: rm(money.psfRM) })} {unit.source === "official" ? tr("Price from gamudaland.com.my.") : tr("Sample price.")}
           </Note>
           {basis ? null : (
             <Link href="/onboarding" className="justify-self-start text-sm font-semibold text-pandan-deep underline underline-offset-4">
-              Tell Mochi your salary for your monthly numbers
+              {tr("Tell Mochi your salary for your monthly numbers")}
             </Link>
           )}
         </Section>
@@ -149,12 +151,12 @@ export function CardDetails({
             <div className="flex gap-2.5 rounded-xl bg-cloud p-3 text-sm">
               <Sprite art={swipeSprites.clock} scale={2} className="mt-0.5 shrink-0 text-ink" />
               <p>
-                <span className="font-semibold">Tell Mochi where you work.</span> Drive and train times, tolls and the monthly
-                cost of getting to work are worked out from your workplace, so we don&apos;t guess one.
+                <span className="font-semibold">{tr("Tell Mochi where you work.")}</span>{" "}
+                {tr("Drive and train times, tolls and the monthly cost of getting to work are worked out from your workplace, so we don't guess one.")}
               </p>
             </div>
             <Link href="/onboarding" className="justify-self-start text-sm font-semibold text-pandan-deep underline underline-offset-4">
-              Tell Mochi where you work
+              {tr("Tell Mochi where you work")}
             </Link>
           </Section>
         )}
@@ -164,7 +166,7 @@ export function CardDetails({
           <Rows>
             <Row
               label="Bedrooms"
-              value={family.need !== null ? `${family.beds} for your ${family.need}` : `${family.beds}`}
+              value={family.need !== null ? tr("{beds} for your {need}", { beds: family.beds, need: family.need }) : `${family.beds}`}
               tone={family.need === null ? undefined : family.beds >= family.need ? "good" : "bad"}
             />
             <Row label="Bathrooms" value={`${unit.baths}`} />
@@ -185,7 +187,7 @@ export function CardDetails({
               ))}
             </ul>
           ) : (
-            <Note>No schools in our data around {t.name} yet.</Note>
+            <Note>{tr("No schools in our data around {name} yet.", { name: t.name })}</Note>
           )}
         </Section>
 
@@ -193,16 +195,16 @@ export function CardDetails({
         <Section art="house" title="The home" tone="text-teh">
           <Rows>
             <Row label="Type" value={unit.type} />
-            <Row label="Built-up" value={`${n(unit.builtUpSqft)} sq ft`} />
+            <Row label="Built-up" value={`${n(unit.builtUpSqft)} ${tr("sq ft")}`} />
             {unit.landSize ? <Row label="Land" value={unit.landSize} /> : null}
             <Row label="Tenure" value={unit.tenure} />
             <Row
               label="Completion"
-              value={completion.year <= 2026 ? `${completion.year}, ready` : `${completion.year}`}
+              value={completion.year <= 2026 ? tr("{year}, ready", { year: completion.year }) : `${completion.year}`}
               tone={completion.cantWait ? "bad" : undefined}
             />
           </Rows>
-          {completion.cantWait ? <Note tone="bad">You said you can&apos;t wait for a home under construction.</Note> : null}
+          {completion.cantWait ? <Note tone="bad">{tr("You said you can't wait for a home under construction.")}</Note> : null}
           {[...(t.facilities ?? []), ...unit.highlights].length ? (
             <ul className="flex flex-wrap gap-1.5">
               {[...new Set([...(t.facilities ?? []), ...unit.highlights])].map((f) => (
@@ -216,9 +218,9 @@ export function CardDetails({
           <div className="grid gap-1.5 rounded-xl border-2 border-ink/15 p-3">
             <div className="flex items-baseline justify-between gap-2 text-sm">
               <span>
-                <span className="font-pixel text-lg tabular-nums">{a.left}</span> of {a.total} left in {a.phase}
+                <span className="font-pixel text-lg tabular-nums">{a.left}</span> {tr("of {total} left in {phase}", { total: a.total, phase: a.phase })}
               </span>
-              <span className="font-pixel-label text-[10px] text-ink-soft uppercase">Sample stock</span>
+              <span className="font-pixel-label text-[10px] text-ink-soft uppercase">{tr("Sample stock")}</span>
             </div>
             <StockBar a={a} />
           </div>
@@ -229,7 +231,7 @@ export function CardDetails({
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 text-sm font-semibold text-pandan-deep underline underline-offset-4"
             >
-              Official {t.name} page
+              {tr("Official {name} page", { name: t.name })}
               <Sprite art={swipeSprites.ext} scale={1.5} />
             </a>
           ) : null}
@@ -238,7 +240,7 @@ export function CardDetails({
         {/* Mochi */}
         {pick ? (
           <Section art="mochi" title="Mochi's take" tone="text-ink">
-            <p className="font-pixel text-base">{pick.score}% match</p>
+            <p className="font-pixel text-base">{pick.score}% {tr("match")}</p>
             {pick.reasons.length ? (
               <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
                 {pick.reasons.map((r) => (
@@ -260,7 +262,7 @@ export function CardDetails({
               </ul>
             ) : (
               <PixTag tone="pandan" className="justify-self-start">
-                No catches
+                {tr("No catches")}
               </PixTag>
             )}
           </Section>
@@ -279,32 +281,32 @@ function CommuteSection({
   townName: string;
   townState: string;
 }) {
+  const tr = useT();
   const c = commute.cost;
   const modeCost = commute.mode === "train" ? c.train.totalRM : c.car.totalRM;
   return (
-    <Section art={swipeSprites.car} title={`To ${commute.anchor.name}`} tone="text-sky-deep">
+    <Section art={swipeSprites.car} title={tr("To {name}", { name: commute.anchor.name })} tone="text-sky-deep">
       {commute.far ? (
         <div className="flex gap-2.5 rounded-xl bg-raya/10 p-3 text-sm">
           <Sprite art={swipeSprites.warn} scale={2} className="mt-0.5 shrink-0 text-raya-deep" />
           <p>
-            <span className="font-semibold">Far from your workplace.</span> {townName} is in {townState}, about{" "}
-            {Math.round(commute.straightKm)} km from {commute.anchor.name} as the crow flies. Think relocation or remote work,
-            not a daily drive.
+            <span className="font-semibold">{tr("Far from your workplace.")}</span>{" "}
+            {tr("{town} is in {state}, about {km} km from {anchor} as the crow flies. Think relocation or remote work, not a daily drive.", { town: townName, state: townState, km: Math.round(commute.straightKm), anchor: commute.anchor.name })}
           </p>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-3 gap-2.5">
-            <Big label="Peak drive" value={`${c.driveMinPeak} min`} hint={`${c.driveKmOneWay} km`} />
-            <Big label="Off-peak" value={`${c.driveMinOffPeak} min`} hint="One way" />
-            <Big label="By train" value={`${c.trainMinOneWay} min`} hint={c.station} />
+            <Big label="Peak drive" value={tr("{n} min", { n: c.driveMinPeak })} hint={`${c.driveKmOneWay} km`} />
+            <Big label="Off-peak" value={tr("{n} min", { n: c.driveMinOffPeak })} hint="One way" />
+            <Big label="By train" value={tr("{n} min", { n: c.trainMinOneWay })} hint={c.station} />
           </div>
           <Rows>
             <Row label="Nearest station" value={`${c.station}, ${c.stationKm.toFixed(1)} km`} />
             <Row label="Line" value={c.line} />
             <Row
               label="Tolls, one way (est.)"
-              value={c.tolls.oneWayRM > 0 ? rm(c.tolls.oneWayRM) : "None on the likely route"}
+              value={c.tolls.oneWayRM > 0 ? rm(c.tolls.oneWayRM) : tr("None on the likely route")}
               muted={c.tolls.oneWayRM === 0}
             />
             {c.tolls.plazas.length ? (
@@ -326,23 +328,24 @@ function CommuteSection({
           <p className="flex items-center gap-2 rounded-xl bg-cloud px-3 py-2 text-sm">
             <Sprite art={swipeSprites.clock} scale={2} className="shrink-0 text-ink" />
             <span>
-              <span className="font-pixel text-base tabular-nums">{commute.mode === "train" ? c.hoursPerYear.train : c.hoursPerYear.car} h</span> a
-              year on the road at {commute.officeDays} office days a week ({rm(modeCost)} a month).
+              <span className="font-pixel text-base tabular-nums">{commute.mode === "train" ? c.hoursPerYear.train : c.hoursPerYear.car} h</span>{" "}
+              {tr("a year on the road at {days} office days a week ({amt} a month).", { days: commute.officeDays, amt: rm(modeCost) })}
             </span>
           </p>
         </>
       )}
-      <Note>Estimates from distance and rush-hour speeds. Tolls are estimated from a hand-built plaza table.</Note>
+      <Note>{tr("Estimates from distance and rush-hour speeds. Tolls are estimated from a hand-built plaza table.")}</Note>
     </Section>
   );
 }
 
 function Section({ art, title, tone, children }: { art: SpriteArt | SpriteName; title: string; tone: string; children: ReactNode }) {
+  const t = useT();
   return (
     <section className="grid grid-cols-[minmax(0,1fr)] gap-2.5">
       <h3 className="flex items-center gap-2 font-pixel text-lg leading-none">
         <Sprite art={art} scale={2} className={cn("shrink-0", tone)} />
-        {title}
+        {t(title)}
       </h3>
       {children}
     </section>
@@ -350,11 +353,12 @@ function Section({ art, title, tone, children }: { art: SpriteArt | SpriteName; 
 }
 
 function Big({ label, value, hint, muted }: { label: string; value: string; hint?: string; muted?: boolean }) {
+  const t = useT();
   return (
     <div className="grid min-w-0 gap-0.5 rounded-xl bg-cloud px-3 py-2.5">
-      <span className="truncate text-xs text-ink-soft">{label}</span>
-      <span className={cn("truncate font-pixel text-lg leading-tight tabular-nums sm:text-xl", muted && "text-ink-soft")}>{value}</span>
-      {hint ? <span className="truncate text-[11px] text-ink-soft">{hint}</span> : null}
+      <span className="truncate text-xs text-ink-soft">{t(label)}</span>
+      <span className={cn("truncate font-pixel text-lg leading-tight tabular-nums sm:text-xl", muted && "text-ink-soft")}>{t(value)}</span>
+      {hint ? <span className="truncate text-[11px] text-ink-soft">{t(hint)}</span> : null}
     </div>
   );
 }
@@ -380,9 +384,10 @@ function Row({
   strong?: boolean;
   muted?: boolean;
 }) {
+  const t = useT();
   return (
     <li className="flex items-baseline justify-between gap-3 py-1.5 text-sm">
-      <span className={cn("min-w-0", strong ? "font-semibold" : "text-ink-soft")}>{label}</span>
+      <span className={cn("min-w-0", strong ? "font-semibold" : "text-ink-soft")}>{t(label)}</span>
       <span
         className={cn(
           "max-w-[60%] shrink-0 text-right tabular-nums",
@@ -391,7 +396,7 @@ function Row({
           tone && toneClass[tone],
         )}
       >
-        {value}
+        {t(value)}
       </span>
     </li>
   );

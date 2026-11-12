@@ -39,10 +39,10 @@ export function anchorFor(workArea: string | undefined): Anchor | null {
   const w = workArea.toLowerCase();
   const aliases: Record<string, string[]> = {
     "bangsar-south": ["bangsar", "kerinchi", "mid valley"],
-    "kl-sentral": ["sentral", "brickfields"],
+    "kl-sentral": ["sentral", "kl central", "brickfields"],
     klcc: ["klcc", "bukit bintang", "kl city", "kuala lumpur", "trx", "ampang"],
     pj: ["petaling jaya", "pj", "damansara", "uptown", "subang", "kelana jaya"],
-    cyberjaya: ["cyberjaya", "putrajaya"],
+    cyberjaya: ["cyberjaya", "ciberjaya", "putrajaya"],
     "shah-alam": ["shah alam", "klang", "kota kemuning"],
     kajang: ["kajang", "cheras", "bangi", "serdang"],
   };

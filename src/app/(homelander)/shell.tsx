@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LanguageToggle } from "@/components/homelander/language-toggle";
 import { PixPanel } from "@/components/homelander/pixel";
+import { ThemeSwitcher } from "@/components/homelander/theme-switcher";
 import { Sprite, defineSprite, sprites, type SpriteArt, type SpriteName } from "@/components/homelander/sprite";
+import { useT } from "@/lib/homelander/i18n/client";
 import { useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +40,7 @@ const isFullBleed = (pathname: string) => pathname === "/";
 export function HomeLanderShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { liked } = useHomeLander();
+  const t = useT();
   const full = isFullBleed(pathname);
   const isActive = (href: string) =>
     href === "/"
@@ -56,15 +60,15 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
             full ? "pointer-events-none fixed inset-x-0 top-0" : "relative",
           )}
         >
-          <div className="mx-auto flex max-w-6xl items-center gap-3 lg:gap-6">
+          <div className="mx-auto flex max-w-6xl items-center gap-1.5 sm:gap-3 lg:gap-6">
             <Link
               href="/"
               className="pointer-events-auto"
-              aria-label="HomeLander, back to the map"
+              aria-label={t("HomeLander, back to the map")}
             >
               <PixPanel flat className="flex items-center gap-2 px-2.5 py-1.5">
-                <Sprite art="heart" scale={3} className="text-raya" />
-                <span className="font-pixel text-xl leading-none font-bold tracking-wide">
+                <Sprite art="heart" scale={3} className="text-raya max-[420px]:hidden" />
+                <span className="font-pixel text-base leading-none font-bold tracking-wide sm:text-xl">
                   HOMELANDER
                 </span>
               </PixPanel>
@@ -76,32 +80,34 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
               className="pointer-events-auto hidden lg:block"
             >
               <PixPanel flat className="flex items-center gap-1 p-1">
-                {tabs.map((t) => (
+                {tabs.map((tab) => (
                   <Link
-                    key={t.href}
-                    href={t.href}
-                    aria-current={isActive(t.href) ? "page" : undefined}
+                    key={tab.href}
+                    href={tab.href}
+                    aria-current={isActive(tab.href) ? "page" : undefined}
                     className={cn(
                       "flex items-center gap-1.5 px-2 py-1.5 font-pixel text-sm leading-none whitespace-nowrap transition-colors 2xl:gap-2 2xl:px-3 2xl:text-base",
-                      isActive(t.href) ? "bg-kaya" : "hover:bg-sky/40",
+                      isActive(tab.href) ? "bg-kaya" : "hover:bg-sky/40",
                     )}
                   >
                     <Sprite
-                      art={t.icon}
+                      art={tab.icon}
                       scale={2}
                       // Six tabs fit the header without icons; they return on wide (2xl) screens.
                       className={cn(
                         "hidden 2xl:block",
-                        isActive(t.href) ? "text-ink" : "text-ink-soft",
+                        isActive(tab.href) ? "text-ink" : "text-ink-soft",
                       )}
                     />
-                    {t.label}
+                    {t(tab.label)}
                   </Link>
                 ))}
               </PixPanel>
             </nav>
 
-            <div className="pointer-events-auto ml-auto flex items-center gap-3">
+            <div className="pointer-events-auto ml-auto flex items-center gap-1.5 sm:gap-3">
+              <LanguageToggle />
+              <ThemeSwitcher />
               <PixPanel
                 flat
                 className="flex items-center gap-1.5 px-2.5 py-1.5 max-sm:hidden"
@@ -110,27 +116,27 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
                 <Sprite art="heart" scale={2} className="text-raya" />
                 <span className="font-pixel text-base leading-none tabular-nums">
                   {liked.length}
-                  <span className="sr-only"> homes liked</span>
+                  <span className="sr-only"> {t("homes liked")}</span>
                 </span>
               </PixPanel>
               {/* A surface behind each bare link: the Night toggle darkens the map but not these tokens, so ink-on-map was 1.19:1 */}
               <PixPanel asChild flat>
                 <Link href="/admin" className="hidden px-2 py-2 font-pixel-label text-xs whitespace-nowrap lg:inline">
-                  Gamuda view
+                  {t("Gamuda view")}
                 </Link>
               </PixPanel>
               <PixPanel asChild flat>
-                <Link href="/profile" className="px-2 py-1.5 font-pixel text-sm">
-                  Profile
+                <Link href="/profile" className="px-2 py-1.5 font-pixel text-sm max-sm:px-1.5">
+                  {t("Profile")}
                 </Link>
               </PixPanel>
-              <Link href="/login" className="pix-btn inline-flex min-h-9 items-center px-3 text-sm text-white" style={{ "--pix-fill": "var(--color-pandan-deep)" } as React.CSSProperties}>
-                Login
+              <Link href="/login" className="pix-btn inline-flex min-h-9 items-center px-3 text-sm text-white max-sm:px-2.5" style={{ "--pix-fill": "var(--color-pandan-deep)" } as React.CSSProperties}>
+                {t("Login")}
               </Link>
               <Link
                 href="/about"
                 className="max-sm:hidden"
-                aria-label="About this prototype and photo credits"
+                aria-label={t("About this prototype and photo credits")}
               >
                 <PixPanel
                   flat
@@ -162,29 +168,30 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
 
 /** Phone and tablet only; desktop uses the top nav. */
 function TabBar({ isActive }: { isActive: (href: string) => boolean }) {
+  const t = useT();
   return (
     <nav
       aria-label="HomeLander tabs"
       className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-[480px] px-3 pb-[max(env(safe-area-inset-bottom),12px)] lg:hidden"
     >
       <PixPanel className="grid grid-cols-6 gap-1 p-1.5">
-        {tabs.map((t) => (
+        {tabs.map((tab) => (
           <Link
-            key={t.href}
-            href={t.href}
-            aria-current={isActive(t.href) ? "page" : undefined}
+            key={tab.href}
+            href={tab.href}
+            aria-current={isActive(tab.href) ? "page" : undefined}
             className={cn(
               "flex flex-col items-center gap-1 py-1.5 font-pixel-label text-[10px] uppercase transition-colors",
-              isActive(t.href) ? "bg-kaya" : "hover:bg-sky/40",
+              isActive(tab.href) ? "bg-kaya" : "hover:bg-sky/40",
             )}
           >
             <Sprite
-              art={t.icon}
+              art={tab.icon}
               scale={3}
-              className={isActive(t.href) ? "text-ink" : "text-ink-soft"}
+              className={isActive(tab.href) ? "text-ink" : "text-ink-soft"}
             />
             {/* Six tabs leave ~56px each, so two-word labels stack. */}
-            <span className="text-center leading-[1.15] whitespace-pre-line">{t.label.replace(" ", "\n")}</span>
+            <span className="text-center leading-[1.15] whitespace-pre-line">{t(tab.label).replace(" ", "\n")}</span>
           </Link>
         ))}
       </PixPanel>

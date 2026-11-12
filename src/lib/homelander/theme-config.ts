@@ -17,10 +17,17 @@ export const themes = [
   },
   {
     id: "kopitiam",
-    group: "Professional, with game touches",
-    name: "Kopitiam",
-    blurb: "The Malaysian kopitiam: white wall tiles, a jade tile band, enamel-pill buttons.",
+    group: "Kopitiam",
+    name: "Teh Susu",
+    blurb: "Light and milky: white wall tiles, a jade tile band, enamel-pill buttons. The default.",
     swatches: ["#f4f8f5", "#17332a", "#1f9d6b", "#d8452f"],
+  },
+  {
+    id: "kopio",
+    group: "Kopitiam",
+    name: "Kopi O",
+    blurb: "The same kopitiam after dark: strong black coffee, cream text, jade and kaya lights, a night map.",
+    swatches: ["#17100c", "#f6ede1", "#3fbf8a", "#f2b632"],
   },
   {
     id: "brutal",
@@ -57,13 +64,17 @@ export const PIXEL_THEMES: readonly string[] = ["arcade"];
 
 export type ThemeId = (typeof themes)[number]["id"];
 
+/** Teh Susu (id "kopitiam", light) is the default; Kopi O (id "kopio") is its dark twin. */
 export const DEFAULT_THEME: ThemeId = "kopitiam";
 
+/** Themes that render dark: the map follows them as night. */
+export const DARK_THEMES: readonly string[] = ["kopio", "night"];
+
 /**
- * The team builds every feature in Kopitiam first (see docs/homelander-spec.md). While this is set,
- * the cookie is ignored and the theme switcher is hidden. Set it to null to bring the switcher back.
+ * 5pm challenge: the switcher is unlocked (every theme). Set an id here to pin the app to one theme again (cookie ignored,
+ * switcher hidden).
  */
-export const LOCKED_THEME: ThemeId | null = "kopitiam";
+export const LOCKED_THEME: ThemeId | null = null;
 
 export const THEME_COOKIE = "homelander-theme";
 

@@ -180,7 +180,9 @@ export function OnboardingView() {
   }, [ask, live.status]);
 
   useEffect(() => {
-    logRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" });
+    // Keep the newest line in view, inside the transcript only (never scrolls the page).
+    const log = logRef.current;
+    if (log) log.scrollTop = log.scrollHeight;
   }, [messages, live.lines]);
 
   useEffect(
@@ -300,32 +302,33 @@ export function OnboardingView() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:items-start">
-      <div className="grid min-w-0 content-start gap-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="grid gap-1">
-            <h1 className="font-pixel text-3xl leading-tight font-bold sm:text-4xl">
-              Chat with Mochi
-            </h1>
-            <p className="text-ink-soft">
-              {liveReady
-                ? "A few minutes about your life, so we only show homes that fit. Call Mochi and just talk, in any language."
-                : "A few minutes about your life, so we only show homes that fit. Speak or type, in any language."}
-            </p>
-          </div>
-          <PixTag tone="lilac">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] lg:items-start">
+      <div className="flex flex-wrap items-end justify-between gap-3 lg:col-start-1 lg:row-start-1">
+        <div className="grid gap-1">
+          <h1 className="font-pixel text-3xl leading-tight font-bold sm:text-4xl">
+            Chat with Mochi
+          </h1>
+          <p className="text-ink-soft">
             {liveReady
-              ? "Live voice call"
-              : whisper
-                ? "Tap to talk (fallback)"
-                : "Browser voice (fallback)"}
-          </PixTag>
+              ? "A few minutes about your life, so we only show homes that fit. Call Mochi and just talk, in any language."
+              : "A few minutes about your life, so we only show homes that fit. Speak or type, in any language."}
+          </p>
         </div>
+        <PixTag tone="lilac">
+          {liveReady
+            ? "Live voice call"
+            : whisper
+              ? "Tap to talk (fallback)"
+              : "Browser voice (fallback)"}
+        </PixTag>
+      </div>
 
-        <PixPanel className="grid gap-7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-8 sm:p-5">
+      {/* Mochi, the talk controls and the transcript: right on desktop, first on phones. */}
+      <div className="grid min-w-0 content-start gap-4 lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:flex lg:h-[calc(100svh-7.5rem)] lg:flex-col">
+        <PixPanel className="grid shrink-0 gap-7 p-4 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-6">
           <div className="grid justify-items-center gap-2">
             <div className="rounded-xl bg-cloud p-3">
-              <MochiBot state={mochiState} size={168} />
+              <MochiBot state={mochiState} size={120} />
             </div>
             <div className="flex items-center gap-1.5">
               <PixTag tone="ink">Mochi</PixTag>
@@ -344,7 +347,7 @@ export function OnboardingView() {
               className="absolute -top-[21px] left-1/2 -ml-[10px] rotate-90 text-cloud sm:top-1/2 sm:-left-[21px] sm:ml-0 sm:-mt-[10px] sm:rotate-0"
             />
             <p
-              className="min-h-[5.5rem] font-pixel text-lg leading-snug"
+              className="min-h-[4.5rem] font-pixel text-base leading-snug"
               aria-live="polite"
             >
               {inCall ? (
@@ -385,7 +388,7 @@ export function OnboardingView() {
           </div>
         </PixPanel>
 
-        <PixPanel className="grid gap-4 p-4 sm:p-5">
+        <PixPanel className="grid shrink-0 gap-4 p-4 sm:p-5 lg:order-last">
           {liveReady ? (
             <div className="grid gap-3">
               {inCall ? (
@@ -556,7 +559,7 @@ export function OnboardingView() {
                 id="say"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Or type here, e.g. My wife and I, planning a kid next year"
+                placeholder="Or type here, e.g. My wife and I, worried about the down payment"
                 className="pix-frame pix-flat h-11 min-w-0 flex-1 bg-transparent px-3 text-[15px] placeholder:text-ink-soft/60 focus-visible:outline-none"
               />
               <PixButton
@@ -571,14 +574,14 @@ export function OnboardingView() {
         </PixPanel>
 
         {showCallLog ? (
-          <PixPanel className="grid gap-2 p-4 sm:p-5">
+          <PixPanel className="flex min-h-0 flex-col gap-2 p-4 sm:p-5 lg:flex-1">
             <h2 className="font-pixel text-lg font-bold">
               {inCall ? "Live transcript" : "Call transcript"}
             </h2>
             {live.lines.length ? (
               <ol
                 ref={logRef}
-                className="grid max-h-72 gap-2 overflow-y-auto text-sm"
+                className="grid max-h-72 min-h-0 content-start gap-2 overflow-y-auto scroll-smooth pr-1 text-sm lg:max-h-none lg:flex-1"
               >
                 {live.lines.map((l) => (
                   <li
@@ -607,35 +610,42 @@ export function OnboardingView() {
               </p>
             )}
           </PixPanel>
-        ) : messages.length ? (
-          <PixPanel className="grid gap-2 p-4 sm:p-5">
+        ) : (
+          <PixPanel className="flex min-h-0 flex-col gap-2 p-4 sm:p-5 lg:flex-1">
             <h2 className="font-pixel text-lg font-bold">Conversation</h2>
-            <ol
-              ref={logRef}
-              className="grid max-h-72 gap-2 overflow-y-auto text-sm"
-            >
-              {messages.map((m, i) => (
-                <li
-                  key={i}
-                  className={cn(
-                    "max-w-[85%] rounded-xl px-3 py-2",
-                    m.role === "assistant"
-                      ? "bg-cloud"
-                      : "justify-self-end bg-pandan/15",
-                  )}
-                >
-                  <span className="sr-only">
-                    {m.role === "assistant" ? "Mochi: " : "You: "}
-                  </span>
-                  {m.content}
-                </li>
-              ))}
-            </ol>
+            {messages.length ? (
+              <ol
+                ref={logRef}
+                className="grid max-h-72 min-h-0 content-start gap-2 overflow-y-auto scroll-smooth pr-1 text-sm lg:max-h-none lg:flex-1"
+              >
+                {messages.map((m, i) => (
+                  <li
+                    key={i}
+                    className={cn(
+                      "max-w-[85%] rounded-xl px-3 py-2",
+                      m.role === "assistant"
+                        ? "bg-cloud"
+                        : "justify-self-end bg-pandan/15",
+                    )}
+                  >
+                    <span className="sr-only">
+                      {m.role === "assistant" ? "Mochi: " : "You: "}
+                    </span>
+                    {m.content}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-sm text-ink-soft">
+                What you and Mochi say shows up here.
+              </p>
+            )}
           </PixPanel>
-        ) : null}
+        )}
       </div>
 
-      <div className="lg:sticky lg:top-24">
+      {/* What Mochi knows: fills in live as the buyer talks. Left on desktop, below the chat on phones. */}
+      <div className="min-w-0 lg:sticky lg:top-24 lg:col-start-1 lg:row-start-2">
         <ProfilePanel profile={profile} fresh={fresh} onDone={finish} />
       </div>
     </div>

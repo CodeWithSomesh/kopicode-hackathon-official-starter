@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
-import { anchorOptions, availabilityOf, passReasons, rm, unitById, units } from "@/lib/homelander/data";
+import { anchorOptions, availabilityOf, passReasons, rm, unitById } from "@/lib/homelander/data";
+import { DECK_LIKE_LIMIT, anchorFor, recommend } from "@/lib/homelander/recommend";
 import { homelander, useHomeLander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 import { EncounterCard, THRESHOLD } from "./_swipe/encounter-card";
@@ -30,13 +32,20 @@ export function SwipeDeck() {
   const [announce, setAnnounce] = useState("");
   const start = useRef(0);
 
+  const anchor = anchorFor(s.profile.workArea) ?? anchorOptions.find((a) => a.id === s.anchorId) ?? anchorOptions[0]!;
+  // Uncle's order: best match for this buyer first.
+  const picks = useMemo(() => recommend(s.profile, s.budget, anchor), [s.profile, s.budget, anchor]);
+  const pickById = useMemo(() => new Map(picks.map((p) => [p.unit.id, p])), [picks]);
+  const units = picks.map((p) => p.unit);
+  const likedByMatch = [...s.liked].sort((a, b) => (pickById.get(b)?.score ?? 0) - (pickById.get(a)?.score ?? 0));
+  const full = s.liked.length >= DECK_LIKE_LIMIT;
+
   const seen = new Set([...s.history, ...notified.map((n) => n.id)]);
   const unseen = units.filter((u) => !seen.has(u.id));
-  const queue = unseen.filter((u) => matchesFilter(u.id, filter));
+  const queue = full ? [] : unseen.filter((u) => matchesFilter(u.id, filter));
   const top = queue[0];
   const next = queue[1];
   const topSold = top ? availabilityOf(top.id).status === "Sold out" : false;
-  const anchor = anchorOptions.find((a) => a.id === s.anchorId) ?? anchorOptions[0]!;
   const counts = {
     all: unseen.length,
     available: unseen.filter((u) => matchesFilter(u.id, "available")).length,
@@ -121,8 +130,18 @@ export function SwipeDeck() {
         <div className="grid gap-1">
           <h1 className="font-pixel text-3xl leading-none font-bold sm:text-4xl">Find your home</h1>
           <p className="text-[15px] text-ink">
-            Every card is a real Gamuda Land home type with sample prices and stock. Suka or tak nak?
+            {s.onboardedAt
+              ? "Uncle's picks for you, best match first. Like up to 10, then make them battle."
+              : "Every card is a Gamuda Land home type with sample prices and stock. Suka or tak nak?"}
           </p>
+          {s.onboardedAt ? null : (
+            <p className="text-sm text-ink-soft">
+              <Link href="/onboarding" className="font-medium text-pandan-deep underline underline-offset-4">
+                Sit with Uncle first
+              </Link>{" "}
+              and the deck sorts itself to your life and budget.
+            </p>
+          )}
         </div>
         <PixPanel flat className="px-2.5 py-1.5 font-pixel text-base leading-none tabular-nums">
           {Math.min(position, units.length)} / {units.length}
@@ -179,7 +198,7 @@ export function SwipeDeck() {
                       setDx(0);
                     }}
                   >
-                    <EncounterCard unit={top} anchor={anchor} drag={offset} />
+                    <EncounterCard unit={top} anchor={anchor} drag={offset} pick={pickById.get(top.id)} />
                   </article>
                 </PixPanel>
               </div>
@@ -187,7 +206,8 @@ export function SwipeDeck() {
               <div className="p-1 pb-3">
                 <EndOfDeck
                   s={s}
-                  filtered={unseen.length > 0}
+                  rankedLikes={likedByMatch}
+                  filtered={!full && unseen.length > 0}
                   onShowAll={() => setFilter("all")}
                 />
               </div>
@@ -266,7 +286,7 @@ export function SwipeDeck() {
           <Insights s={s} />
         </div>
         <div className="lg:col-start-2 lg:row-start-3">
-          <Shortlist liked={s.liked} />
+          <Shortlist liked={likedByMatch} />
         </div>
       </div>
     </div>

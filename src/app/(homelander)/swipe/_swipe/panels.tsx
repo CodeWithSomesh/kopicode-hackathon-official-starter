@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import { anchorOptions, availabilityOf, rm, townshipById, unitById } from "@/lib/homelander/data";
+import { BATTLE_MAX, LIKES_TO_BATTLE } from "@/lib/homelander/recommend";
 import { homelander, type HomeLanderState } from "@/lib/homelander/store";
 import { tasteInsights } from "@/lib/homelander/taste";
 import { cn } from "@/lib/utils";
@@ -158,16 +159,17 @@ function mostCommon(xs: string[]) {
 }
 
 /** Sets the Battle line-up (up to 3 most recent likes) and goes to /homelander/compare. */
+/** `liked` must be ordered best match first: Battle takes the top few. */
 export function BattleButton({ liked, className, size = "md" }: { liked: string[]; className?: string; size?: "md" | "lg" }) {
   const router = useRouter();
-  const pick = liked.slice(-3);
+  const pick = liked.slice(0, BATTLE_MAX);
   return (
     <PixButton
       type="button"
       tone="kaya"
       size={size}
       className={className}
-      disabled={liked.length < 2}
+      disabled={liked.length < LIKES_TO_BATTLE}
       onClick={() => {
         homelander.setCompare(pick);
         router.push("/battle");
@@ -219,7 +221,7 @@ export function Shortlist({ liked }: { liked: string[] }) {
           })}
         </ul>
       ) : (
-        <p className="text-sm text-ink-soft">Homes you say suka to land here. Like two and you can make them battle.</p>
+        <p className="text-sm text-ink-soft">Homes you say suka to land here. Like three and you can make them battle.</p>
       )}
       <div className="p-1 pb-2">
         <BattleButton liked={liked} className="w-full" />
@@ -238,10 +240,13 @@ export function EndOfDeck({
   s,
   filtered,
   onShowAll,
+  rankedLikes,
 }: {
   s: HomeLanderState;
   filtered: boolean;
   onShowAll: () => void;
+  /** Liked homes, best match first, for the Battle hand-off. */
+  rankedLikes: string[];
 }) {
   if (filtered) {
     return (
@@ -270,10 +275,10 @@ export function EndOfDeck({
       <p className="max-w-sm text-[15px]">
         You met every Gamuda Land home in the deck and said suka to{" "}
         <strong className="font-pixel text-lg">{s.liked.length}</strong>.{" "}
-        {s.liked.length >= 2 ? "Time to make them fight it out." : "See where they sit on the map next."}
+        {s.liked.length >= LIKES_TO_BATTLE ? "Time to make them fight it out." : "See where they sit on the map next."}
       </p>
       <div className="flex flex-wrap justify-center gap-4 p-1 pb-2">
-        <BattleButton liked={s.liked} size="lg" />
+        <BattleButton liked={rankedLikes} size="lg" />
         <PixButton asChild size="lg">
           <Link href="/">
             <Sprite art="pin" scale={2} className="text-raya" />

@@ -1,5 +1,6 @@
 import { UnitPhoto } from "@/components/homelander/unit-photo";
 import { PixTag } from "@/components/homelander/pixel";
+import type { Pick } from "@/lib/homelander/recommend";
 import { Sprite, type SpriteArt } from "@/components/homelander/sprite";
 import {
   availabilityOf,
@@ -27,7 +28,7 @@ export const statusTone = {
 const stepped = (v: number) => Math.round(Math.min(Math.max(v, 0), 1) * 4) / 4;
 
 /** One encounter: a unit, its availability, and the commute from the buyer's work anchor. */
-export function EncounterCard({ unit, anchor, drag }: { unit: Unit; anchor: Anchor; drag: number }) {
+export function EncounterCard({ unit, anchor, drag, pick }: { unit: Unit; anchor: Anchor; drag: number; pick?: Pick }) {
   const t = townshipById[unit.townshipId]!;
   const a = availabilityOf(unit.id);
   const sold = a.status === "Sold out";
@@ -79,6 +80,8 @@ export function EncounterCard({ unit, anchor, drag }: { unit: Unit; anchor: Anch
           <p className="font-pixel text-2xl leading-tight font-bold tabular-nums sm:text-[1.7rem]">{rm(unit.priceRM)}</p>
         </div>
 
+        {pick ? <WhyUncle pick={pick} /> : null}
+
         <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm tabular-nums">
           <Stat art={swipeSprites.bed}>{unit.beds} bed</Stat>
           <Stat art={swipeSprites.bath}>{unit.baths} bath</Stat>
@@ -110,6 +113,28 @@ export function EncounterCard({ unit, anchor, drag }: { unit: Unit; anchor: Anch
         </div>
       </div>
     </>
+  );
+}
+
+const fitTag: Record<Pick["fit"], { tone: "pandan" | "kaya" | "raya" | "white"; label: string } | null> = {
+  in: { tone: "pandan", label: "In budget" },
+  stretch: { tone: "kaya", label: "Stretch" },
+  over: { tone: "raya", label: "Over budget" },
+  unknown: null,
+};
+
+/** Why Uncle put this home here: its match score, top reasons and the main catch. */
+function WhyUncle({ pick }: { pick: Pick }) {
+  const tag = fitTag[pick.fit];
+  return (
+    <div className="grid gap-1.5 rounded-xl bg-cloud px-3 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-pixel text-base leading-none font-bold tabular-nums">{pick.score}% match</span>
+        {tag ? <PixTag tone={tag.tone}>{tag.label}</PixTag> : null}
+      </div>
+      {pick.reasons.length ? <p>Uncle says: {pick.reasons.slice(0, 2).join(" · ")}</p> : null}
+      {pick.catches[0] ? <p className="text-raya-deep">Catch: {pick.catches[0]}</p> : null}
+    </div>
   );
 }
 

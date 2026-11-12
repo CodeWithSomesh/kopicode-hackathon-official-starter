@@ -36,13 +36,13 @@ export type Unit = {
 };
 
 export const townships: Township[] = [
-  { id: "cove", name: "Gamuda Cove", area: "Kuala Langat, Selangor", pos: { lat: 2.845, lng: 101.64 } },
-  { id: "gardens", name: "Gamuda Gardens", area: "Kuang, Selangor", pos: { lat: 3.2565, lng: 101.5565 } },
+  { id: "cove", name: "Gamuda Cove", area: "Kuala Langat, Selangor", pos: { lat: 2.8827801, lng: 101.6091032 } },
+  { id: "gardens", name: "Gamuda Gardens", area: "Kuang, Selangor", pos: { lat: 3.2907584, lng: 101.5359344 } },
   { id: "tf7", name: "twentyfive.7", area: "Kota Kemuning, Selangor", pos: { lat: 2.9785, lng: 101.5385 } },
-  { id: "jade", name: "Jade Hills", area: "Kajang, Selangor", pos: { lat: 2.964, lng: 101.793 } },
+  { id: "jade", name: "Jade Hills", area: "Kajang, Selangor", pos: { lat: 2.9972172, lng: 101.7541106 } },
   { id: "highpark", name: "Highpark Suites", area: "Kelana Jaya, Selangor", pos: { lat: 3.105, lng: 101.602 } },
   { id: "robertson", name: "The Robertson", area: "Bukit Bintang, Kuala Lumpur", pos: { lat: 3.142, lng: 101.705 } },
-  { id: "kundang", name: "Kundang Estates", area: "Kuang, Selangor", pos: { lat: 3.278, lng: 101.53 } },
+  { id: "kundang", name: "Kundang Estates", area: "Kuang, Selangor", pos: { lat: 3.288243, lng: 101.5082516 } },
 ];
 
 const P = "/homelander/";

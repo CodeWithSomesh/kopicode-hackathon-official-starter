@@ -13,7 +13,7 @@ import { bearingDeg, centroid, compassOf, distanceM, walkingMinutes } from "@/li
 import type { PlaceKind } from "@/lib/first-key/types";
 import { anchorOptions, townshipById } from "@/lib/homelander/data";
 import { useHomeLander } from "@/lib/homelander/store";
-import { pillLean, pillLeanPhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
+import { pillLean, pillLeanPhone, pillNudgePhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import { useMapColors } from "../use-map-colors";
 import { drawGlassTexture, mix } from "./glass-texture";
@@ -75,7 +75,7 @@ const klangView = () => {
   // Tilted like PayGap (pitch 52, a slight turn). Zoom and centre were tuned with a probe so all seven pills stay on screen,
   // the far northern ones included: wide screens sit a little closer and further south than phones.
   const wide = window.matchMedia("(min-width: 1024px)").matches;
-  return { center: (wide ? [101.65, 3.06] : [101.6, 3.1]) as [number, number], zoom: Math.log2(M_PER_PX_Z0 / mpp) + (wide ? 0.4 : 0.2), pitch: 52, bearing: -12, padding };
+  return { center: (wide ? [101.65, 3.06] : [101.58, 3.1]) as [number, number], zoom: Math.log2(M_PER_PX_Z0 / mpp) + (wide ? 0.4 : -0.08), pitch: 52, bearing: -12, padding };
 };
 const devView = (id: string) => {
   const t = townshipById[id];
@@ -462,7 +462,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
                 longitude={x.t.pos.lng}
                 latitude={x.t.pos.lat}
                 anchor={lean === "left" ? "bottom-right" : lean === "right" ? "bottom-left" : lean === "below" ? "top-left" : "bottom"}
-                offset={lean === "left" ? [8, 0] : lean === "right" || lean === "below" ? [-8, 0] : [0, 0]}
+                offset={[(lean === "left" ? 8 : lean === "right" || lean === "below" ? -8 : 0) + (phone ? (pillNudgePhone[x.t.id] ?? 0) : 0), 0]}
                 style={{ zIndex: devId === x.t.id ? 3 : 1 }}
               >
                 <TownPill info={x} lean={lean} selected={devId === x.t.id} onPick={() => onSelectDev(x.t.id)} />

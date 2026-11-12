@@ -25,20 +25,31 @@ export const townInfoById = Object.fromEntries(towns.map((x) => [x.t.id, x])) as
  * Which way each pill leans off its pin, so close neighbours (Kundang/Gardens up north,
  * Highpark/Robertson in the middle) sit side by side instead of on top of each other.
  */
-export const pillLean: Record<string, "left" | "right" | "center"> = {
+export const pillLean: Record<string, "left" | "right" | "center" | "below"> = {
   kundang: "left",
   gardens: "right",
-  highpark: "left",
-  robertson: "right",
+  "gardens-park": "below",
+  valencia: "below",
+  haus15: "below",
+  robertson: "left",
+  madge: "below",
 };
 
 /** Phone: the pills are narrower, and Kundang/Gardens sit almost on one spot, so Kundang drops below its pin. */
 export const pillLeanPhone: Record<string, "left" | "right" | "center" | "below"> = {
   kundang: "below",
   gardens: "right",
-  highpark: "left",
+  "gardens-park": "left",
+  valencia: "below",
+  haus15: "below",
   robertson: "right",
+  tf7: "below",
+  cove: "below",
+  madge: "below",
 };
+
+/** Phone only: extra px to slide a pill sideways, for the pairs whose pins sit too close for any lean. */
+export const pillNudgePhone: Record<string, number> = { gardens: 36 };
 
 export const railColors: Record<string, string> = {
   "mrt-kajang": "#23863e",

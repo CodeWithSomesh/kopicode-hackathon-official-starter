@@ -1,6 +1,6 @@
 import { eligibility, tenureYears, MAX_TENURE } from "./bank";
 import { anchorOptions, type Anchor } from "./data";
-import { toIncomeInput, type Profile } from "./profile";
+import { toIncomeInput, worriesOf, type PainPoint, type Profile } from "./profile";
 import { anchorFor, bedroomsNeeded } from "./recommend";
 import type { Budget } from "./store";
 
@@ -55,13 +55,12 @@ export type BattleContext = {
   commuteMissing: string | null;
   bedsNeeded: number;
   homeType: "landed" | "high_rise" | "either";
-  hasKids: boolean;
   parentsMovingIn: boolean;
   pets: boolean | null;
-  schoolMatters: boolean;
-  /** The distance the buyer said is OK; null when they haven't said. */
-  schoolMaxKm: number | null;
-  schoolTransport: Profile["schoolTransport"] | null;
+  /** What worries the buyer about buying, biggest first; empty when Mochi hasn't asked yet. */
+  worries: PainPoint[];
+  /** Areas they like and places they must be near (near_family is judged against these). */
+  places: string[];
   underConstructionOk: boolean | null;
   mustHaves: string[];
   dealBreakers: string[];
@@ -187,10 +186,8 @@ export function battleContext(
   if (!tenureFromAge && money.source !== "missing")
     missing.push("Your age (loan uses the 35-year maximum until then)");
 
-  const hasKids =
-    (p.kidsNow ?? 0) > 0 ||
-    p.kidsPlanned === "yes" ||
-    p.livingWith === "partner_kids";
+  const worries = worriesOf(p);
+  if (!worries.length) missing.push("What worries you most about buying");
 
   return {
     hasProfile,
@@ -212,12 +209,10 @@ export function battleContext(
     commuteMissing,
     bedsNeeded: bedroomsNeeded(p),
     homeType: p.homeType ?? "either",
-    hasKids,
     parentsMovingIn: p.parentsMovingIn ?? false,
     pets: p.pets ?? null,
-    schoolMatters: p.schoolMatters ?? false,
-    schoolMaxKm: p.schoolMaxKm ?? null,
-    schoolTransport: p.schoolTransport ?? null,
+    worries,
+    places: [...(p.preferredAreas ?? []), ...(p.mustBeNear ?? [])],
     underConstructionOk: p.underConstructionOk ?? null,
     mustHaves: p.mustHaves ?? [],
     dealBreakers: p.dealBreakers ?? [],

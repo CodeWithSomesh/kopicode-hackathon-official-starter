@@ -1,7 +1,7 @@
 import { eligibility } from "./bank";
 import { anchorOptions, unitById, type Region } from "./data";
 import { areas, bankSummaryFor, householdOf, leadScore, type BankSummary, type BuyerSession, type SwipeEvent } from "./demand";
-import { toIncomeInput } from "./profile";
+import { toIncomeInput, worriesOf, type Profile } from "./profile";
 import { anchorFor, realUnits, scoreUnit } from "./recommend";
 import type { HomeLanderState } from "./store";
 
@@ -11,8 +11,10 @@ import type { HomeLanderState } from "./store";
  * per live lead (so each viewing request appears in the inbox); the first carries the swipes.
  */
 export function liveSessions(st: HomeLanderState, nowMs: number): BuyerSession[] {
-  const p = st.profile;
-  const touched = Object.keys(p).length > 0 || st.liked.length > 0 || st.passed.length > 0 || st.leads.length > 0 || st.budget !== null;
+  // Carry the buyer's worries as the sample has them: the biggest one first, then the rest.
+  const worries = worriesOf(st.profile);
+  const p: Profile = worries.length ? { ...st.profile, topWorry: worries[0], painPoints: worries } : st.profile;
+  const touched = Object.keys(st.profile).length > 0 || st.liked.length > 0 || st.passed.length > 0 || st.leads.length > 0 || st.budget !== null;
   if (!touched) return [];
 
   const realId = (id: string) => {
@@ -65,8 +67,8 @@ export function liveSessions(st: HomeLanderState, nowMs: number): BuyerSession[]
     workLabel: work?.name ?? p.workArea ?? "Not given",
     maxCommuteMin: 45,
     steps: {
-      chat: Object.keys(p).length > 0 || st.onboardedAt !== null,
-      onboarded: st.onboardedAt !== null || Object.keys(p).length >= 8,
+      chat: Object.keys(st.profile).length > 0 || st.onboardedAt !== null,
+      onboarded: st.onboardedAt !== null || Object.keys(st.profile).length >= 8,
       swiped: swipes.length > 0,
       battled: battle !== null,
       bank: bank !== null,

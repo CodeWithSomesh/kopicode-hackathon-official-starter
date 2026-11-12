@@ -15,6 +15,7 @@ import {
   slice,
   townshipDemand,
   trend,
+  worries,
   type Filters,
   type RangeDays,
 } from "@/lib/homelander/admin-metrics";
@@ -35,6 +36,7 @@ import { Passes } from "./passes";
 import { PriceGap } from "./pricing";
 import { Products } from "./products";
 import { Segments } from "./segments";
+import { Worries } from "./worries";
 
 const ranges: RangeDays[] = [7, 30, 90];
 const dateFmt = new Intl.DateTimeFormat("en-MY", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kuala_Lumpur" });
@@ -62,6 +64,7 @@ export function Dashboard() {
       location: locations(sl.cur, filters.region),
       price: priceGap(sl.cur, filters.region),
       segments: segments(sl.cur),
+      worries: worries(sl.cur),
       products: products(sl, filters.region),
       bank: bankInsights(sl.cur),
     };
@@ -166,6 +169,7 @@ export function Dashboard() {
       <Location data={d.location} />
       <PriceGap data={d.price} />
       <Segments data={d.segments} />
+      <Worries data={d.worries} />
       <Passes data={d.towns} />
       <Products rows={d.products} bucketLabel={filters.days === 90 ? "week" : "day"} />
       <Leads rows={leadRows} now={now} onStatus={setStatus} />

@@ -18,6 +18,8 @@ import {
 } from "./data";
 import { nearestByType, schoolTypeLabel, type SchoolType } from "./schools";
 import type { BattleContext } from "./battle-context";
+import { painPointShort, type PainPoint } from "./profile";
+import type { WorryCheck } from "./worries";
 
 /**
  * Head-to-head analysis for Battle. Pure functions: one home + the buyer context in, every
@@ -64,12 +66,12 @@ export type CommuteLeg = {
   monthlyRM: number;
 };
 
+/** Nearest school of a type: neutral info only, never scored. */
 export type SchoolCell = {
   type: SchoolType;
   label: string;
   name: string;
   km: number;
-  within: boolean | null;
 };
 
 export type Fit = "in" | "stretch" | "over" | "unknown";
@@ -114,8 +116,6 @@ export type HomeAnalysis = {
   bedsShort: number;
   bedsSpare: number;
   schools: SchoolCell[];
-  primaryWithin: boolean | null;
-  secondaryWithin: boolean | null;
   stationKm: number;
   stationName: string;
 
@@ -279,12 +279,6 @@ function commuteLeg(
   };
 }
 
-const PRIMARY: SchoolType[] = [
-  "national_primary",
-  "chinese_primary",
-  "tamil_primary",
-];
-
 /* ---------------------------------------------------------------- one home */
 
 export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
@@ -355,19 +349,9 @@ export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
         label: schoolTypeLabel[type],
         name: s.name,
         km: s.km,
-        within:
-          ctx.schoolMatters && ctx.schoolMaxKm !== null
-            ? s.km <= ctx.schoolMaxKm
-            : null,
       },
     ];
   });
-  const hasSchoolData = schools.length > 0;
-  const maxKm = ctx.schoolMaxKm;
-  const within = (types: SchoolType[]) =>
-    hasSchoolData && maxKm !== null
-      ? schools.some((s) => types.includes(s.type) && s.km <= maxKm)
-      : null;
 
   const st = nearestStation(township.pos);
 
@@ -405,8 +389,6 @@ export function analyseHome(unit: Unit, ctx: BattleContext): HomeAnalysis {
     bedsShort,
     bedsSpare,
     schools,
-    primaryWithin: within(PRIMARY),
-    secondaryWithin: within(["secondary"]),
     stationKm: st.km,
     stationName: st.station.name,
     waitYears,
@@ -448,8 +430,8 @@ export const STATS: { key: StatKey; label: string; hint: string }[] = [
   },
   {
     key: "family",
-    label: "Family",
-    hint: "Schools within your distance, parents, pets, room to grow",
+    label: "Life fit",
+    hint: "Your worries about safety and being near family, plus parents, pets and room to grow",
   },
   {
     key: "value",
@@ -465,11 +447,32 @@ export const STATS: { key: StatKey; label: string; hint: string }[] = [
 
 export type Stats = Record<StatKey, number>;
 
+/** Which Battle stat each worry leans on, for Mochi's mix. Null: judged in "Life fit". */
+export const worryStat = {
+  upfront_cash: "cash",
+  loan_approval: "monthly",
+  monthly_burden: "monthly",
+  hidden_costs: "monthly",
+  commute_traffic: "commute",
+  build_delay: "ready",
+  resale_value: "value",
+  leasehold_worry: "value",
+  safety_security: "family",
+  near_family: "family",
+  space_too_small: "space",
+  flood_risk: null,
+} as const satisfies Record<PainPoint, StatKey | null>;
+
+
 /** How the commute score treats hours a year: 100 at 100 h or less, 0 at 600 h. */
 export const commuteScore = (hoursPerYear: number) =>
   clamp(100 - Math.max(hoursPerYear - 100, 0) / 5);
 
-export function statsOf(a: HomeAnalysis, ctx: BattleContext): Stats {
+export function statsOf(
+  a: HomeAnalysis,
+  ctx: BattleContext,
+  worryChecks?: WorryCheck[],
+): Stats {
   const m = ctx.money;
 
   // Monthly: share of take-home left after debts and the full monthly cost; capped when over budget.
@@ -506,23 +509,24 @@ export function statsOf(a: HomeAnalysis, ctx: BattleContext): Stats {
     55 - 30 * a.bedsShort + Math.min(a.unit.builtUpSqft / 100, 30) + typeFit,
   );
 
-  // Family: schools when they matter, parents (stairs vs lifts), pets (strata rules), a spare room.
+  // Life fit: parents (stairs vs lifts), pets (strata rules), a spare room, and the buyer's
+  // worries that no other stat covers (safety, near family), each pulling toward its own score.
   let family = 50;
-  if (ctx.schoolMatters || ctx.hasKids) {
-    if (a.primaryWithin !== null) {
-      const hits = Number(a.primaryWithin) + Number(a.secondaryWithin);
-      family += hits === 0 ? -15 : hits * 20;
-    }
-  } else if (a.schools.some((s) => s.type.endsWith("primary") && s.km <= 3))
-    family += 10;
   if (ctx.parentsMovingIn) family += a.unit.landed ? -5 : 15;
   if (ctx.pets === true) family += a.unit.landed ? 15 : -10;
   if (a.bedsSpare > 0) family += 10;
   if (a.bedsShort > 0) family -= 15;
+  const lifeWorries = (worryChecks ?? []).filter(
+    (c) => c.score !== null && worryStat[c.worry] === "family",
+  );
+  for (const c of lifeWorries) family += (c.score! - 50) * 0.6;
   family = clamp(family);
 
-  // Value: 50 at the type average; every 1% cheaper adds 1.5 points.
-  const value = Math.max(clamp(50 - 150 * a.psfVsType), 5);
+  // Value: 50 at the type average; every 1% cheaper adds 1.5 points. A resale or lease worry
+  // makes tenure count: freehold +15, leasehold -15.
+  let value = Math.max(clamp(50 - 150 * a.psfVsType), 5);
+  if (ctx.worries.includes("leasehold_worry") || ctx.worries.includes("resale_value"))
+    value = clamp(value + (a.unit.tenure === "Freehold" ? 15 : -15));
 
   // Ready: keys now is 100, each year of waiting -25; capped at 15 if the buyer said no to waiting.
   let ready = clamp(100 - a.waitYears * 25);
@@ -569,7 +573,7 @@ export const PRESETS: Record<
   },
   family: {
     label: "Most space / family",
-    blurb: "Bedrooms, floor area and schools count most.",
+    blurb: "Bedrooms, floor area and life fit count most.",
     weights: {
       monthly: 4,
       cash: 2,
@@ -619,11 +623,6 @@ export function mochiWeights(
       `only ${ctx.officeDays} office day${ctx.officeDays === 1 ? "" : "s"}`,
     );
   }
-  if (ctx.hasKids || ctx.schoolMatters) {
-    w.family = ctx.schoolMatters ? 8 : 6;
-    w.space = 7;
-    why.push(ctx.schoolMatters ? "school distance matters" : "kids");
-  }
   if (ctx.parentsMovingIn) {
     w.space = Math.max(w.space, 7);
     w.family = Math.max(w.family, 6);
@@ -645,6 +644,19 @@ export function mochiWeights(
   if (ctx.underConstructionOk === false) {
     w.ready = 7;
     why.push("you want a ready home");
+  }
+  // Worries last, so they win: every worry lifts its stat to 7, the biggest one to 10.
+  ctx.worries.forEach((worry, i) => {
+    const stat = worryStat[worry];
+    if (!stat) return;
+    w[stat] = Math.max(w[stat], i === 0 ? 10 : 7);
+  });
+  if (ctx.worries.length) {
+    const also = ctx.worries.slice(1, 3).map((x) => painPointShort[x].toLowerCase());
+    why.unshift(
+      `your biggest worry is ${painPointShort[ctx.worries[0]!].toLowerCase()}`,
+      ...(also.length ? [`you also worry about ${also.join(" and ")}`] : []),
+    );
   }
   return { weights: w, why };
 }

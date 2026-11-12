@@ -5,6 +5,7 @@ import { DownloadIcon } from "lucide-react";
 import { townshipById } from "@/lib/homelander/data";
 import { leadStatuses, SAMPLE_NOW_MS, type LeadStatus } from "@/lib/homelander/demand";
 import { householdGross, incomeBandOf, leadsCsv, num, pct, pipelineCounts, rmCompact, type LeadRow } from "@/lib/homelander/admin-metrics";
+import { painPointShort, worriesOf } from "@/lib/homelander/profile";
 import { realUnits } from "@/lib/homelander/recommend";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -175,6 +176,7 @@ export function Leads({ rows, now, onStatus }: { rows: LeadRow[]; now: number; o
                       <div className="text-xs text-muted-foreground">
                         {s.buyerType} · {incomeBandOf(householdGross(s))}
                       </div>
+                      {worriesOf(s.profile)[0] ? <div className="text-xs text-muted-foreground">Worried about {painPointShort[worriesOf(s.profile)[0]!].toLowerCase()}</div> : null}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col items-start gap-0.5">

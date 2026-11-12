@@ -12,6 +12,8 @@ import {
 } from "./analysis";
 import type { BattleContext } from "./battle-context";
 import { rm, type Unit } from "./data";
+import { painPointShort } from "./profile";
+import { checkWorries, factsFromAnalysis, type WorryCheck } from "./worries";
 
 /**
  * The fight itself: score every home, pick a winner, and explain it in numbers a buyer can
@@ -29,6 +31,8 @@ export type Fighter = HomeAnalysis & {
   rank: number;
   /** Swipe-deck match score (recommend.ts), 0-100. */
   match: number;
+  /** How this home does on each of the buyer's worries, biggest first. */
+  worries: WorryCheck[];
 };
 
 export type RivalLine = {
@@ -86,7 +90,8 @@ export function runBattle(
   const analysed = list.map((u) => analyseHome(u, ctx));
   const checks = profileChecks(analysed, ctx);
   const fighters: Fighter[] = analysed.map((a) => {
-    const stats = statsOf(a, ctx);
+    const worries = checkWorries(ctx.worries, factsFromAnalysis(a, ctx));
+    const stats = statsOf(a, ctx, worries);
     const penalty = checks.reduce(
       (sum, c) =>
         sum +
@@ -106,6 +111,7 @@ export function runBattle(
       penalty,
       rank: 0,
       match: matchOf(a.unit),
+      worries,
     };
   });
   const order = [...fighters].sort(
@@ -259,20 +265,17 @@ export function reasonsFor(
       text: `Better value: RM${Math.round(best.psf)} psf is ${pct(best.psfVsType)} ${best.psfVsType <= 0 ? "under" : "over"} the average ${typeWord(best.unit)}; ${vs} is ${pct(next.psfVsType)} ${next.psfVsType <= 0 ? "under" : "over"} its type.`,
     });
 
-  if (
-    (ctx.schoolMatters || ctx.hasKids) &&
-    best.primaryWithin &&
-    next.primaryWithin === false
-  ) {
-    const s = best.schools
-      .filter((x) => x.type.endsWith("primary"))
-      .sort((a, b) => a.km - b.km)[0];
+  // The buyer's worries: where the winner eases one that the runner-up doesn't.
+  best.worries.forEach((c, i) => {
+    const theirs = next.worries[i];
+    if (!theirs || c.score === null || theirs.score === null) return;
+    if (c.score - theirs.score < 15 || c.tone !== "good") return;
     out.push({
-      keys: ["family"],
-      score: gap("family") + 60,
-      text: `A primary school within your ${ctx.schoolMaxKm} km${s ? ` (${s.name}, ${s.km.toFixed(1)} km)` : ""}; ${vs} has none that close.`,
+      keys: [],
+      score: (i === 0 ? 220 : 90) + (c.score - theirs.score),
+      text: `${i === 0 ? "Eases your biggest worry," : "Eases your worry about"} ${painPointShort[c.worry].toLowerCase()}: ${c.text}. ${vs}: ${theirs.text.charAt(0).toLowerCase()}${theirs.text.slice(1)}.`,
     });
-  }
+  });
 
   if (next.waitYears > best.waitYears)
     out.push({
@@ -432,8 +435,11 @@ export function caveatsFor(
     out.push(
       `${best.you.hoursPerYear} hours a year commuting is a lot: about ${Math.round(best.you.hoursPerYear / 8)} working days.`,
     );
-  if (best.unit.tenure === "Leasehold")
+  if (best.unit.tenure === "Leasehold" && !ctx.worries.includes("leasehold_worry"))
     out.push("Leasehold: ask how many years are left on the lease.");
+  // Worries the winner doesn't ease, biggest first.
+  for (const c of best.worries.filter((x) => x.tone === "bad").slice(0, 2))
+    out.push(`Your worry about ${painPointShort[c.worry].toLowerCase()}: ${c.text.charAt(0).toLowerCase()}${c.text.slice(1)}.`);
   if (!best.soldOut && best.availability.left <= 7)
     out.push(
       `Only ${best.availability.left} left in ${best.availability.phase} (sample count).`,
@@ -559,14 +565,12 @@ export function hasFeature(
     };
   }
   if (/school/.test(p)) {
-    if (a.primaryWithin === null)
-      return { met: null, why: "no school data here yet" };
+    // The buyer typed this themselves: a school within 3 km counts as near.
     const near = [...a.schools].sort((x, y) => x.km - y.km)[0];
+    if (!near) return { met: null, why: "no school data here yet" };
     return {
-      met: Boolean(a.primaryWithin || a.secondaryWithin),
-      why: near
-        ? `nearest ${near.name}, ${near.km.toFixed(1)} km`
-        : "none nearby",
+      met: near.km <= 3,
+      why: `nearest ${near.name}, ${near.km.toFixed(1)} km`,
     };
   }
   if (/under construction|not ready|wait/.test(p))

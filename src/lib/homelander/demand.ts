@@ -1,6 +1,6 @@
 import { checkAllBanks, eligibility, tenureYears, type BankCheckInput, type BankId, type Employment, type JobTenure, type Verdict } from "./bank";
 import { anchorOptions, distanceKm, passReasons, townshipById, type LatLng, type PassReason, type Region } from "./data";
-import { toIncomeInput, type Profile } from "./profile";
+import { painPoints, toIncomeInput, worriesOf, type PainPoint, type Profile } from "./profile";
 import { bedroomsNeeded, realUnits, scoreUnit, DECK_LIKE_LIMIT, BATTLE_MAX, LIKES_TO_BATTLE } from "./recommend";
 import type { Budget } from "./store";
 
@@ -294,14 +294,20 @@ function makeProfile(rand: Rand, region: Region, buyerType: BuyerType) {
     ["alone", "partner", "partner_kids", "parents", "friends"],
     buyerType === "First home" ? [30, 40, 18, 8, 4] : buyerType === "Upgrader" ? [5, 15, 60, 20, 0] : [35, 30, 35, 0, 0],
   );
-  const kidsNow = livingWith === "partner_kids" ? intBetween(rand, 1, 3) : 0;
-  const kidsPlanned = weighted<"yes" | "maybe" | "no">(
-    rand,
-    ["yes", "maybe", "no"],
-    livingWith === "partner" ? [55, 30, 15] : livingWith === "partner_kids" ? [30, 30, 40] : [20, 30, 50],
-  );
   const parentsMovingIn = livingWith === "parents" || (buyerType === "Upgrader" && rand() < 0.15);
-  const schoolMatters = kidsNow > 0 ? rand() < 0.85 : kidsPlanned === "yes" ? rand() < 0.6 : kidsPlanned === "maybe" ? rand() < 0.3 : false;
+  // Everyone who will live in the home, the buyer included.
+  const householdSize = Math.min(
+    8,
+    (livingWith === "alone"
+      ? 1
+      : livingWith === "partner"
+        ? 2
+        : livingWith === "partner_kids"
+          ? 2 + weighted(rand, [1, 2, 3], [40, 42, 18])
+          : livingWith === "parents"
+            ? weighted(rand, [2, 3, 4, 5], [20, 45, 25, 10])
+            : weighted(rand, [2, 3], [70, 30])) + (parentsMovingIn && livingWith !== "parents" ? weighted(rand, [1, 2], [40, 60]) : 0),
+  );
 
   // Income: rises with age, upgraders and investors earn more. Gross monthly RM.
   const base = (3_000 + (age - 22) * 220) * Math.exp(normal(rand) * 0.33) * (buyerType === "Upgrader" ? 1.35 : buyerType === "Investor" ? 1.6 : 1);
@@ -346,7 +352,7 @@ function makeProfile(rand: Rand, region: Region, buyerType: BuyerType) {
   const maxCommuteMin = commuteMode === "train" ? intBetween(rand, 40, 70) : intBetween(rand, 30, 60);
 
   // Preferred areas: popular places near work, families lean suburban.
-  const family = livingWith === "partner_kids" || livingWith === "parents" || kidsPlanned === "yes";
+  const family = livingWith === "partner_kids" || livingWith === "parents" || householdSize >= 3;
   const pool = areas.filter((a) => a.region === region);
   const w = pool.map((a) => a.popularity * Math.exp(-distanceKm(a.pos, workPos) / 16) * (family && a.city ? 0.45 : 1) + 0.02);
   const want = intBetween(rand, 1, Math.min(3, pool.length));
@@ -365,12 +371,9 @@ function makeProfile(rand: Rand, region: Region, buyerType: BuyerType) {
 
   const profile: Profile = {
     livingWith,
-    kidsNow,
-    kidsPlanned,
+    householdSize,
     parentsMovingIn,
     pets: rand() < 0.3,
-    schoolMatters,
-    schoolMaxKm: schoolMatters ? intBetween(rand, 3, 10) : undefined,
     workArea: workLabel,
     officeDays,
     commuteMode,
@@ -393,18 +396,68 @@ function makeProfile(rand: Rand, region: Region, buyerType: BuyerType) {
     underConstructionOk: rand() < 0.7,
   };
   profile.minBedrooms = bedroomsNeeded(profile);
+  const worries = pickWorries(rand, profile, region, buyerType, workPos);
+  profile.topWorry = worries[0];
+  profile.painPoints = worries;
   return { profile, workId, workLabel, workPos, maxCommuteMin };
 }
 
-function passReason(rand: Rand, unitId: string, fit: string, beds: number, need: number, workPos: LatLng, preferred: string[]): PassReason {
+/** Areas where flooding makes the news most years (sample assumption). */
+const floodProne = new Set(["Shah Alam", "Kajang", "Kuala Langat", "Semenyih", "Kota Kemuning", "Johor Bahru", "Inanam"]);
+
+/**
+ * 1–3 worries for a sample buyer, biggest first, weighted by who they are (sample assumption):
+ * thin savings worry about cash upfront, heavy loans about approval and the monthly, far
+ * workplaces about traffic, upgraders about space and resale, high-rise buyers about fees and safety.
+ */
+function pickWorries(rand: Rand, p: Profile, region: Region, buyerType: BuyerType, workPos: LatLng): PainPoint[] {
+  const e = eligibility(toIncomeInput(p)!);
+  const upfrontNeed = Math.max(e.maxPriceRM, 250_000) * 0.14; // 10% deposit + stamp duty and fees, roughly
+  const cover = (p.savingsRM ?? 0) / upfrontNeed;
+  const dsr = e.dsrNow;
+  const young = (p.age ?? 30) < 32;
+  const first = buyerType === "First home";
+  const highRise = p.homeType === "high_rise";
+  const landed = p.homeType === "landed";
+  const prefs = areas.filter((a) => p.preferredAreas?.includes(a.name));
+  const km = prefs.length ? prefs.reduce((a, x) => a + distanceKm(x.pos, workPos), 0) / prefs.length : 15;
+  const size = p.householdSize ?? 1;
+  const debt = (p.personalRM ?? 0) > 0 || (p.cardBalanceRM ?? 0) > 5_000;
+  const w: Record<PainPoint, number> = {
+    upfront_cash: 0.4 + (cover < 1 ? 3.2 * (1 - cover) + 0.8 : cover < 1.6 ? 0.6 : 0) + (first && young ? 1.4 : first ? 0.6 : 0) + (buyerType === "Investor" ? -0.3 : 0),
+    loan_approval: 0.3 + (dsr > 0.4 ? 2.6 : dsr > 0.28 ? 1.2 : 0) + (first && young ? 0.9 : 0) + (debt ? 0.6 : 0) + (region !== "klang-valley" ? 0.3 : 0),
+    monthly_burden: 0.5 + (dsr > 0.4 ? 1.8 : dsr > 0.28 ? 1 : 0) + (size >= 4 ? 0.6 : 0) + (p.joint ? 0 : 0.3),
+    hidden_costs: 0.3 + (highRise ? 1.5 : 0) + (buyerType === "Investor" ? 1.1 : 0) + (first ? 0.3 : 0),
+    commute_traffic: 0.2 + (km > 25 ? 3 : km > 15 ? 1.6 : km > 9 ? 0.6 : 0) + (p.commuteMode === "car" ? 0.5 : 0) + ((p.officeDays ?? 5) >= 5 ? 0.4 : 0) + (region === "klang-valley" ? 0.3 : -0.2),
+    build_delay: 0.25 + (p.underConstructionOk === false ? 2 : 0) + (p.buyWithin === "3m" ? 0.8 : 0),
+    resale_value: 0.2 + (buyerType === "Upgrader" ? 1.6 : buyerType === "Investor" ? 2.6 : 0),
+    leasehold_worry: 0.15 + (buyerType === "Investor" ? 0.9 : buyerType === "Upgrader" ? 0.5 : 0),
+    safety_security: 0.3 + (highRise ? 0.6 : landed ? 0.9 : 0.3) + (size >= 3 ? 0.5 : 0) + (p.livingWith === "alone" ? 0.4 : 0),
+    near_family: 0.15 + (p.livingWith === "parents" ? 1.4 : p.livingWith === "partner_kids" ? 0.6 : 0) + (p.parentsMovingIn ? 0.6 : 0) + (region !== "klang-valley" ? 0.5 : 0),
+    space_too_small: 0.2 + (buyerType === "Upgrader" ? 2.2 : 0) + (size >= 5 ? 1.6 : size >= 4 ? 1 : 0) + (highRise && size >= 3 ? 0.6 : 0),
+    flood_risk: 0.1 + (prefs.some((a) => floodProne.has(a.name)) ? 1.3 : 0) + (landed ? 0.4 : 0),
+  };
+  const how = weighted(rand, [1, 2, 3], [25, 45, 30]);
+  const out: PainPoint[] = [];
+  for (let i = 0; i < how; i++) {
+    const left = painPoints.filter((x) => !out.includes(x));
+    out.push(weighted(rand, left, left.map((x) => Math.max(0.05, w[x]))));
+  }
+  return out;
+}
+
+function passReason(rand: Rand, unitId: string, fit: string, beds: number, need: number, workPos: LatLng, p: Profile): PassReason {
+  const preferred = p.preferredAreas ?? [];
+  const worries = worriesOf(p);
+  const has = (...ws: PainPoint[]) => (ws.some((x) => worries[0] === x) ? 1 : ws.some((x) => worries.includes(x)) ? 0.5 : 0);
   const u = realUnits.find((x) => x.id === unitId)!;
   const t = townshipById[u.townshipId]!;
   const km = distanceKm(t.pos, workPos);
   const inArea = preferred.some((a) => `${t.name} ${t.area}`.toLowerCase().includes(a.toLowerCase()));
   const w = [
-    0.4 + (km > 30 ? 2.6 : km > 18 ? 1.3 : 0) + (inArea ? -0.3 : 0.4),
-    0.3 + (fit === "over" ? 1.8 : fit === "stretch" ? 0.9 : 0),
-    0.2 + (beds < need ? 2.4 : !u.landed ? 0.6 : 0),
+    0.4 + (km > 30 ? 2.6 : km > 18 ? 1.3 : 0) + (inArea ? -0.3 : 0.4) + has("commute_traffic", "near_family") * (km > 15 ? 1.4 : 0.3),
+    0.3 + (fit === "over" ? 1.8 : fit === "stretch" ? 0.9 : 0) + has("upfront_cash", "monthly_burden", "loan_approval") * (fit === "in" ? 0.3 : 1.2),
+    0.2 + (beds < need ? 2.4 : !u.landed ? 0.6 : 0) + has("space_too_small") * 1.2,
     0.9 * (styleBias[t.id] ?? 1),
   ];
   return weighted(rand, passReasons, w);
@@ -477,7 +530,7 @@ function generate(): BuyerSession[] {
         pl = Math.min(0.92, pl * lift);
         const liked = rand() < pl;
         if (liked) likes++;
-        const reason = liked || rand() > 0.76 ? null : passReason(rand, p.unit.id, p.fit, p.unit.beds, need, workPos, profile.preferredAreas ?? []);
+        const reason = liked || rand() > 0.76 ? null : passReason(rand, p.unit.id, p.fit, p.unit.beds, need, workPos, profile);
         s.swipes.push({ unitId: p.unit.id, liked, reason, score: p.score });
       }
       s.steps.swiped = s.swipes.length > 0;

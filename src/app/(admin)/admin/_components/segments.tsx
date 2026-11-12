@@ -2,7 +2,7 @@
 
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { pct, rmCompact, type segments } from "@/lib/homelander/admin-metrics";
-import { axis, ChartFigure, Empty, Meter, Panel, Section, tooltip } from "./kit";
+import { axis, ChartFigure, Empty, Panel, Section, tooltip } from "./kit";
 
 type Row = { name: string; buyers: number; share: number; leadRate?: number };
 
@@ -34,14 +34,15 @@ const groupName: Record<string, string> = {
 const typeColor = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
 
 export function Segments({ data }: { data: ReturnType<typeof segments> }) {
-  const { n, household, age, income, type, firstHome, kids, avgSchoolKm, homeType, best, avgLead } = data;
+  const { n, household, age, income, type, firstHome, size, avgSize, parentsIn, homeType, best, avgLead } = data;
+  const sizeRows = size.map((r) => ({ ...r, name: r.name === "1" ? "1 person" : `${r.name}` }));
   const pie = type.filter((t) => t.buyers).map((t, i) => ({ name: t.name, value: t.buyers, fill: typeColor[i] }));
   const hh = household.map((h) => ({ ...h, name: h.name.replace("Multi-generational", "Multi-gen").replace("Family with kids", "Family") }));
   return (
     <Section
       id="segments"
       title="Buyer segments"
-      purpose="Who the buyers are: household, age, income, kids and home type. Use it to pick audiences and creative."
+      purpose="Who the buyers are: household, age, income, household size and home type. Use it to pick audiences and creative."
       audience="marketing"
       takeaway={
         best ? (
@@ -86,18 +87,8 @@ export function Segments({ data }: { data: ReturnType<typeof segments> }) {
               </ul>
             </div>
           </Panel>
-          <Panel title="Kids and schools" note={avgSchoolKm ? `School within ${avgSchoolKm.toFixed(1)} km on average` : undefined}>
-            <ul className="grid gap-3 text-sm">
-              {kids.map((k) => (
-                <li key={k.name} className="grid gap-1">
-                  <div className="flex justify-between">
-                    <span>{k.name}</span>
-                    <span className="tabular-nums">{pct(k.share)}</span>
-                  </div>
-                  <Meter value={k.share} color="var(--chart-2)" />
-                </li>
-              ))}
-            </ul>
+          <Panel title="Household size" note={`${avgSize ? `${avgSize.toFixed(1)} people on average · ` : ""}${pct(parentsIn)} with parents moving in`}>
+            <MiniBars rows={sizeRows} label="Buyers by number of people in the home" color="var(--chart-2)" />
           </Panel>
           <Panel title="Landed vs high-rise" note="What buyers told Mochi">
             <div className="grid gap-3">

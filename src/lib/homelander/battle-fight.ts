@@ -66,11 +66,15 @@ function figure(key: StatKey, f: Fighter, ctx: BattleContext): string {
     case "space":
       return `${f.unit.beds} bed, ${f.unit.builtUpSqft.toLocaleString("en-MY")} sq ft`;
     case "family": {
-      const primary = f.schools
-        .filter((s) => s.type.endsWith("primary"))
-        .sort((a, b) => a.km - b.km)[0];
-      if ((ctx.hasKids || ctx.schoolMatters) && primary)
-        return `School ${primary.km.toFixed(1)} km`;
+      const life = f.worries.find(
+        (w) =>
+          (w.worry === "safety_security" || w.worry === "near_family") &&
+          w.tone !== "unknown",
+      );
+      if (life)
+        return `${life.label}: ${life.tone === "good" ? "eased" : life.tone === "bad" ? "not eased" : "so-so"}`;
+      if (ctx.parentsMovingIn)
+        return f.unit.landed ? "Stairs for parents" : "Lifts for parents";
       return f.bedsSpare > 0
         ? `${f.bedsSpare} spare room${f.bedsSpare === 1 ? "" : "s"}`
         : f.bedsShort > 0
@@ -89,7 +93,7 @@ const hintOf: Record<StatKey, string> = {
   cash: "Down payment and fees against your savings",
   commute: "Hours a year getting to work",
   space: "Bedrooms for your household and floor area",
-  family: "Schools, parents, pets and room to grow",
+  family: "Safety, near family, parents, pets and room to grow",
   value: "Price per sq ft against similar homes",
   ready: "Years until the keys",
 };

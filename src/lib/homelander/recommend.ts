@@ -10,8 +10,10 @@ import {
   type Anchor,
   type Unit,
 } from "./data";
-import type { Profile } from "./profile";
+import { eligibility } from "./bank";
+import { toIncomeInput, worriesOf, type Profile } from "./profile";
 import type { Budget } from "./store";
+import { checkWorries, factsForUnit, placesOf } from "./worries";
 
 /**
  * Rule-based recommendations: every home gets a 0-100 match score from what Mochi learned,
@@ -53,9 +55,11 @@ export function anchorFor(workArea: string | undefined): Anchor | null {
 export function bedroomsNeeded(p: Profile) {
   if (p.minBedrooms) return p.minBedrooms;
   let n = p.livingWith === "alone" ? 1 : 2;
-  if ((p.kidsNow ?? 0) > 0 || p.kidsPlanned === "yes") n += 1;
-  if (p.parentsMovingIn) n += 1;
-  return n;
+  // A couple shares a room; everyone else gets their own (household size includes the buyer).
+  if (p.householdSize) n = Math.max(n, p.householdSize - (p.livingWith === "partner" || p.livingWith === "partner_kids" ? 1 : 0));
+  else if ((p.kidsNow ?? 0) > 0 || p.livingWith === "partner_kids") n += 1;
+  if (p.parentsMovingIn && !(p.householdSize && p.livingWith === "parents")) n += 1;
+  return Math.min(n, 6);
 }
 
 export function fitFor(price: number, budget: Budget | null): Fit {
@@ -103,9 +107,10 @@ export function scoreUnit(unit: Unit, p: Profile, budget: Budget | null, work: A
   } else catches.push(`Only ${unit.beds} bedrooms for your ${need}`);
 
   // Commute: 20
+  let weekly: number | null = null;
   if (work) {
     const oneWay = p.commuteMode === "train" ? transitMinutes(t.pos, work.pos).minutes : p.commuteMode === "car" ? driveMinutes(t.pos, work.pos) : Math.min(driveMinutes(t.pos, work.pos), transitMinutes(t.pos, work.pos).minutes);
-    const weekly = (oneWay * 2 * (p.officeDays ?? 5)) / 60;
+    weekly = (oneWay * 2 * (p.officeDays ?? 5)) / 60;
     const pts = clamp(20 - Math.max(weekly - 3, 0) * 2, 0, 20);
     score += pts;
     const how = p.commuteMode === "train" ? "by train" : p.commuteMode === "car" ? "by car" : "";
@@ -131,6 +136,35 @@ export function scoreUnit(unit: Unit, p: Profile, budget: Budget | null, work: A
 
   // Timing: 5
   const thisYear = 2026;
+  // Worries: the biggest one can move a home by up to 12 points, each other one by up to 5.
+  const worries = worriesOf(p);
+  if (worries.length) {
+    // Money for the worry checks: the bank check, else what Mochi heard, else unknown.
+    const input = budget ? null : toIncomeInput(p);
+    const e = input ? eligibility(input) : null;
+    const money = budget ?? (e ? { netRM: e.netRM, commitmentsRM: e.commitmentsRM, maxPriceRM: e.maxPriceRM } : null);
+    const facts = factsForUnit(unit, {
+      savingsRM: p.savingsRM ?? null,
+      firstHome: p.firstHome ?? null,
+      netRM: money?.netRM || null,
+      commitmentsRM: money?.commitmentsRM ?? 0,
+      maxPriceRM: money?.maxPriceRM || null,
+      commuteHoursWeek: weekly,
+      commuteFar: false,
+      workName: work?.name ?? null,
+      places: placesOf(p),
+      bedsNeeded: need,
+      year: thisYear,
+    });
+    checkWorries(worries, facts).forEach((c, i) => {
+      if (c.score === null) return;
+      const w = i === 0 ? 12 : 5;
+      score += ((c.score - 50) / 50) * w;
+      if (c.tone === "good") reasons.push([i === 0 ? 40 : 18 - i, c.text]);
+      else if (c.tone === "bad" && i === 0) catches.unshift(c.text);
+      else if (c.tone === "bad") catches.push(c.text);
+    });
+  }
   if (p.underConstructionOk === false && unit.completion > thisYear) catches.push(`Ready only in ${unit.completion}`);
   else score += 5;
 

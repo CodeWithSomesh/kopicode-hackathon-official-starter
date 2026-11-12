@@ -21,7 +21,7 @@ import { z } from "zod";
  * - Models: https://docs.camb.ai/models (mars-8.1-flash-beta: lower latency, better accents, beta).
  * - Voice ids come from GET https://client.camb.ai/apis/list-voices (or CAMB Studio). The docs'
  *   CAMB's library has no native Malay / Malaysian-English / Malaysian-Tamil voices, so Mochi uses a
- *   friendly multilingual voice (Audrey Hayes, 144295) and the ms-my / en-sg / ta-my accent settings;
+ *   cheerful young cartoon voice (Toby Parker, 147324; the clearest cute voice in Malay) and the ms-my / en-sg / ta-my accent settings;
  *   Mandarin uses a native voice (Xin Xu, 171146). Override per language with CAMB_VOICE_ID_*.
  *   https://docs.camb.ai/api-reference/endpoint/list-voices
  */
@@ -32,7 +32,7 @@ const CAMB_URL = "https://client.camb.ai/apis/tts-stream";
 const TIMEOUT_MS = 15_000;
 const MAX_CHARS = 600;
 /** The docs' default voice_id for tts-stream. */
-const DOC_DEFAULT_VOICE = "144295";
+const DOC_DEFAULT_VOICE = "147324";
 /** Native voices where CAMB has a good one for Mochi's tone. */
 const NATIVE_VOICE: Partial<Record<Lang, string>> = { zh: "171146" };
 

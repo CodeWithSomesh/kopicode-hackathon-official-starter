@@ -4,6 +4,8 @@ import { schoolTypeLabel, type SchoolType } from "@/lib/homelander/schools";
 import type { BattleContext } from "@/lib/homelander/battle-context";
 import type { Fighter } from "@/lib/homelander/battle-verdict";
 import type { Fit } from "@/lib/homelander/analysis";
+import { painPointLabel } from "@/lib/homelander/profile";
+import type { WorryTone } from "@/lib/homelander/worries";
 import {
   car,
   chart,
@@ -492,6 +494,37 @@ export function buildSections(
     );
   }
 
+  /* ------------------------------------------------------------ worries */
+  const worryTone: Record<WorryTone, Tone | undefined> = {
+    good: "good",
+    warn: "warn",
+    bad: "bad",
+    unknown: "muted",
+  };
+  const worryWord: Record<WorryTone, string> = {
+    good: "Eases it",
+    warn: "Partly",
+    bad: "Doesn't help",
+    unknown: "Can't tell",
+  };
+  const worryRows: Row[] = ctx.worries.map((w, i) => ({
+    id: `worry-${w}`,
+    label: painPointLabel[w],
+    hint: i === 0 ? "Your biggest worry" : undefined,
+    strong: i === 0,
+    cell: (f) => {
+      const c = f.worries.find((x) => x.worry === w);
+      if (!c) return { main: "Not judged", tone: "muted" };
+      return {
+        main: worryWord[c.tone],
+        sub: c.text,
+        tone: worryTone[c.tone],
+      };
+    },
+    value: (f) => f.worries.find((x) => x.worry === w)?.score ?? null,
+    better: "high",
+  }));
+
   /* ------------------------------------------------------------ family & schools */
   const schoolTypes = (Object.keys(schoolTypeLabel) as SchoolType[]).filter(
     (t) => fighters.some((f) => f.schools.some((s) => s.type === t)),
@@ -531,49 +564,12 @@ export function buildSections(
       familyRows.push({
         id: `school-${t}`,
         label: schoolTypeLabel[t],
-        hint:
-          ctx.schoolMatters && ctx.schoolMaxKm !== null
-            ? `Nearest; within ${ctx.schoolMaxKm} km is what you asked`
-            : "Nearest, straight line",
+        hint: "Nearest, straight line. For info, not scored",
         cell: (f) => {
           const s = f.schools.find((x) => x.type === t);
           if (!s) return { main: "None nearby", tone: "muted" };
-          return {
-            main: `${s.km.toFixed(1)} km`,
-            sub: s.name,
-            tone:
-              s.within === true
-                ? "good"
-                : s.within === false
-                  ? "bad"
-                  : undefined,
-          };
+          return { main: `${s.km.toFixed(1)} km`, sub: s.name };
         },
-        value: (f) => f.schools.find((x) => x.type === t)?.km ?? null,
-        better: "low",
-      });
-    if (ctx.schoolMatters && ctx.schoolMaxKm !== null)
-      familyRows.push({
-        id: "school-check",
-        label: `Within your ${ctx.schoolMaxKm} km`,
-        hint:
-          ctx.schoolTransport === "walk"
-            ? "You said they'll walk: under 1.5 km is kinder"
-            : ctx.schoolTransport === "school_bus"
-              ? "School bus: distance matters less"
-              : "Primary and secondary",
-        cell: (f) => {
-          const p = f.primaryWithin ? "Primary yes" : "Primary no";
-          const s = f.secondaryWithin ? "secondary yes" : "secondary no";
-          const n = Number(f.primaryWithin) + Number(f.secondaryWithin);
-          return {
-            main: `${n} of 2`,
-            sub: `${p}, ${s}`,
-            tone: n === 2 ? "good" : n === 0 ? "bad" : "warn",
-          };
-        },
-        value: (f) => Number(f.primaryWithin) + Number(f.secondaryWithin),
-        better: "high",
       });
   }
   if (ctx.parentsMovingIn)
@@ -795,7 +791,18 @@ export function buildSections(
         : `${days} a week${anyPartner ? ", plus your partner" : ""}`,
       rows: commuteRows,
     },
-    { id: "family", title: "Family & schools", art: family, rows: familyRows },
+    ...(worryRows.length
+      ? [
+          {
+            id: "worries",
+            title: "Your worries",
+            art: "heart" as const,
+            blurb: "How each home does on what you told Mochi worries you most",
+            rows: worryRows,
+          },
+        ]
+      : []),
+    { id: "family", title: "Family & home life", art: family, rows: familyRows },
     { id: "home", title: "The home", art: home, rows: homeRows },
     { id: "market", title: "Market", art: chart, rows: marketRows },
   ];

@@ -15,6 +15,7 @@ import {
   type LeadRecord,
   type LeadStatus,
 } from "./demand";
+import { painPoints, painPointShort, worriesOf, type PainPoint } from "./profile";
 import { realUnits } from "./recommend";
 
 /**
@@ -295,6 +296,14 @@ export const incomeBands = ["< RM5k", "RM5–8k", "RM8–12k", "RM12–20k", "RM
 export const householdGross = (s: BuyerSession) => (s.profile.grossRM ?? 0) + (s.profile.joint ? s.profile.jointGrossRM ?? 0 : 0);
 export const incomeBandOf = (g: number) => (g < 5_000 ? incomeBands[0] : g < 8_000 ? incomeBands[1] : g < 12_000 ? incomeBands[2] : g < 20_000 ? incomeBands[3] : incomeBands[4]);
 
+export const householdSizes = ["1", "2", "3", "4", "5+"] as const;
+/** Household size band; buyers who never said fall back to who they live with. */
+export const householdSizeOf = (s: BuyerSession): (typeof householdSizes)[number] => {
+  const lw = s.profile.livingWith;
+  const n = s.profile.householdSize ?? (lw === "alone" ? 1 : lw === "partner" ? 2 : lw === "partner_kids" ? 4 : 3);
+  return n >= 5 ? "5+" : (String(n) as (typeof householdSizes)[number]);
+};
+
 export function segments(ss: BuyerSession[]) {
   const b = ss.filter((s) => s.steps.onboarded);
   const n = b.length;
@@ -308,14 +317,10 @@ export function segments(ss: BuyerSession[]) {
   const income = count(incomeBands, (s) => incomeBandOf(householdGross(s)));
   const type = count(buyerTypes, (s) => s.buyerType);
   const firstHome = share(b.filter((s) => s.profile.firstHome).length, n);
-  const kids = [
-    { name: "Kids at home", share: share(b.filter((s) => (s.profile.kidsNow ?? 0) > 0).length, n) },
-    { name: "Planning kids", share: share(b.filter((s) => s.profile.kidsPlanned === "yes").length, n) },
-    { name: "School distance matters", share: share(b.filter((s) => s.profile.schoolMatters).length, n) },
-    { name: "Parents moving in", share: share(b.filter((s) => s.profile.parentsMovingIn).length, n) },
-  ];
-  const schoolKm = b.filter((s) => s.profile.schoolMatters && s.profile.schoolMaxKm);
-  const avgSchoolKm = schoolKm.length ? schoolKm.reduce((a, s) => a + s.profile.schoolMaxKm!, 0) / schoolKm.length : 0;
+  const size = count(householdSizes, (s) => householdSizeOf(s));
+  const sized = b.filter((s) => s.profile.householdSize);
+  const avgSize = sized.length ? sized.reduce((a, s) => a + s.profile.householdSize!, 0) / sized.length : 0;
+  const parentsIn = share(b.filter((s) => s.profile.parentsMovingIn).length, n);
   const homeType = (["landed", "high_rise", "either"] as const).map((h) => ({
     name: h === "landed" ? "Landed" : h === "high_rise" ? "High-rise" : "Either",
     buyers: b.filter((s) => s.profile.homeType === h).length,
@@ -344,7 +349,138 @@ export function segments(ss: BuyerSession[]) {
   combos.sort((x, y) => y.leadRate - x.leadRate);
   // Only suggest a segment that clearly beats the average on enough leads to mean something.
   const best = combos.find((c) => c.lift >= 1.2 && c.leadRate * c.n >= 3) ?? null;
-  return { n, household, age, income, type, firstHome, kids, avgSchoolKm, homeType, best, avgLead };
+  return { n, household, age, income, type, firstHome, size, avgSize, parentsIn, homeType, best, avgLead };
+}
+
+/* ---------------------------------------------------------------- worries */
+
+/** One marketing or sales move per worry: what to lead with when a buyer says it. */
+export const worryAction: Record<PainPoint, string> = {
+  upfront_cash: "Lead with the first-home stamp duty waiver, developer-paid legal fees and 100% financing schemes on homes ≤ RM500k; show cash needed on day one, not just the price",
+  loan_approval: "Offer a free bank pre-check at the gallery and in the app; show which panel banks say “likely” before the buyer books",
+  monthly_burden: "Advertise the monthly instalment, not the price; promote longer tenures and joint-borrower options",
+  hidden_costs: "Publish maintenance fee, sinking fund and quit rent on every listing; bundle a furnishing or reno package",
+  commute_traffic: "Show door-to-door times to the big job hubs in ads; push rail links, feeder buses and toll-free routes",
+  build_delay: "Push completed and near-completion stock; share build-progress photos and the handover date upfront",
+  resale_value: "Share transaction prices, rental yields, freehold status and the infrastructure planned around each township",
+  leasehold_worry: "Lead with freehold titles; for leasehold, state the years left and how renewal works in plain words",
+  safety_security: "Feature gated-and-guarded, 24-hour security and access cards in creative; let sales walk buyers through it on site",
+  near_family: "Geo-target ads around where buyers' families live; highlight dual-key and multi-generation layouts",
+  space_too_small: "Lead with floor plans, built-up size and family-size or dual-key layouts; upsell corner and end lots",
+  flood_risk: "Publish drainage, retention ponds and platform levels per site; point buyers to the JPS flood map",
+};
+
+const townOfUnit = new Map(realUnits.map((u) => [u.id, u.townshipId]));
+const topWorryOf = (s: BuyerSession): PainPoint | null => worriesOf(s.profile)[0] ?? null;
+
+export function worries(ss: BuyerSession[]) {
+  const b = ss.filter((s) => s.steps.onboarded && worriesOf(s.profile).length > 0);
+  const n = b.length;
+  const avgLead = share(b.filter((s) => s.steps.lead).length, n);
+  const likeRateOf = (who: BuyerSession[]) => {
+    const sw = who.flatMap((s) => s.swipes);
+    return { swipes: sw.length, likeRate: share(sw.filter((x) => x.liked).length, sw.length) };
+  };
+  const avgLike = likeRateOf(b).likeRate;
+
+  // Top worries overall, and how each one converts.
+  const overall = painPoints
+    .map((w) => {
+      const any = b.filter((s) => worriesOf(s.profile).includes(w));
+      const top = b.filter((s) => topWorryOf(s) === w);
+      const lr = likeRateOf(any);
+      return {
+        worry: w,
+        label: painPointShort[w],
+        buyers: any.length,
+        /** Share of buyers who mention it at all (rows sum to more than 100%). */
+        share: share(any.length, n),
+        topBuyers: top.length,
+        /** Share of buyers for whom it is the biggest worry (rows sum to 100%). */
+        topShare: share(top.length, n),
+        swipes: lr.swipes,
+        likeRate: lr.likeRate,
+        leadRate: share(any.filter((s) => s.steps.lead).length, any.length),
+        bankLikely: share(any.filter((s) => s.bank?.bestVerdict === "likely").length, any.filter((s) => s.bank).length),
+        action: worryAction[w],
+      };
+    })
+    .sort((a, c) => c.topShare - a.topShare || c.share - a.share);
+
+  // Biggest worry by segment: each row sums to 100%.
+  type Seg = { group: string; name: string; n: number; cells: Record<PainPoint, number>; top: PainPoint; topShare: number; leadRate: number };
+  const seg = (group: string, name: string, who: BuyerSession[]): Seg => {
+    const cells = Object.fromEntries(painPoints.map((w) => [w, share(who.filter((s) => topWorryOf(s) === w).length, who.length)])) as Record<PainPoint, number>;
+    const top = painPoints.reduce((a, w) => (cells[w] > cells[a] ? w : a), painPoints[0]);
+    return { group, name, n: who.length, cells, top, topShare: cells[top], leadRate: share(who.filter((s) => s.steps.lead).length, who.length) };
+  };
+  const bySegment: Seg[] = [
+    ...buyerTypes.map((t) => seg("Buyer type", t, b.filter((s) => s.buyerType === t))),
+    ...ageBands.map((a) => seg("Age", a, b.filter((s) => ageBandOf(s.profile.age ?? 30) === a))),
+    ...incomeBands.map((i) => seg("Household income", i, b.filter((s) => incomeBandOf(householdGross(s)) === i))),
+  ].filter((r) => r.n > 0);
+
+  // By township: how buyers with each biggest worry take to its homes, against the township's own like rate.
+  const towns = new Map<string, { id: string; name: string; shown: number; likes: number; cells: Map<PainPoint, { shown: number; likes: number }> }>();
+  for (const s of b) {
+    const w = topWorryOf(s)!;
+    for (const x of s.swipes) {
+      const tid = townOfUnit.get(x.unitId);
+      if (!tid) continue;
+      const t = townshipById[tid]!;
+      const row = towns.get(t.id) ?? { id: t.id, name: t.name, shown: 0, likes: 0, cells: new Map() };
+      towns.set(t.id, row);
+      const c = row.cells.get(w) ?? { shown: 0, likes: 0 };
+      row.cells.set(w, c);
+      row.shown++;
+      c.shown++;
+      if (x.liked) {
+        row.likes++;
+        c.likes++;
+      }
+    }
+  }
+  const MIN = 25;
+  const byTownship = [...towns.values()]
+    .filter((t) => t.shown >= 60)
+    .map((t) => {
+      const likeRate = share(t.likes, t.shown);
+      const cells = Object.fromEntries(
+        painPoints.map((w) => {
+          const c = t.cells.get(w);
+          return [w, c && c.shown >= MIN ? { shown: c.shown, likeRate: share(c.likes, c.shown), lift: share(share(c.likes, c.shown), likeRate) } : null];
+        }),
+      ) as Record<PainPoint, { shown: number; likeRate: number; lift: number } | null>;
+      // The worry whose holders like this township least, against its average.
+      const scored = painPoints.filter((w) => cells[w]);
+      const weakest = scored.length ? scored.reduce((a, w) => (cells[w]!.lift < cells[a]!.lift ? w : a), scored[0]!) : null;
+      const strongest = scored.length ? scored.reduce((a, w) => (cells[w]!.lift > cells[a]!.lift ? w : a), scored[0]!) : null;
+      return { id: t.id, name: t.name, shown: t.shown, likeRate, cells, weakest, strongest };
+    })
+    .sort((a, c) => c.shown - a.shown);
+  // Columns worth drawing: the worries with enough data in at least one township.
+  const townWorries = painPoints.filter((w) => byTownship.some((t) => t.cells[w]));
+
+  // Takeaways: the most concentrated segment worry, and the worry that converts worst.
+  const pick = bySegment.filter((r) => r.n >= 40).sort((a, c) => c.topShare - a.topShare)[0] ?? null;
+  const pickWho = pick ? b.filter((s) => topWorryOf(s) === pick.top && segMatch(s, pick)) : [];
+  const pickLead = share(pickWho.filter((s) => s.steps.lead).length, pickWho.length);
+  // Only judge worries held by enough buyers for the lead rate to mean something.
+  const ranked = overall.filter((r) => r.buyers >= Math.max(40, n * 0.08));
+  const worst = ranked.length ? ranked.reduce((a, r) => (r.leadRate < a.leadRate ? r : a), ranked[0]!) : null;
+  const townFlag =
+    byTownship
+      .filter((t) => t.weakest && t.cells[t.weakest]!.lift < 0.85)
+      .map((t) => ({ town: t.name, worry: t.weakest!, lift: t.cells[t.weakest!]!.lift, likeRate: t.cells[t.weakest!]!.likeRate, avg: t.likeRate }))
+      .sort((a, c) => a.lift - c.lift)[0] ?? null;
+
+  return { n, avgLead, avgLike, overall, bySegment, byTownship, townWorries, pick, pickLead, worst, townFlag };
+}
+
+function segMatch(s: BuyerSession, r: { group: string; name: string }) {
+  if (r.group === "Buyer type") return s.buyerType === r.name;
+  if (r.group === "Age") return ageBandOf(s.profile.age ?? 30) === r.name;
+  return incomeBandOf(householdGross(s)) === r.name;
 }
 
 /* ---------------------------------------------------------------- pass reasons */
@@ -454,7 +590,7 @@ export function bankInsights(ss: BuyerSession[]) {
 /* ---------------------------------------------------------------- CSV */
 
 export function leadsCsv(rows: LeadRow[]) {
-  const head = ["Lead ID", "Source", "Created", "Status", "Name", "Household", "Buyer type", "Household income band", "Best bank verdict", "Best bank", "Max loan (RM)", "Target home", "Township", "Target price (RM)", "Lead score"];
+  const head = ["Lead ID", "Source", "Created", "Status", "Name", "Household", "Buyer type", "Household income band", "Biggest worry", "Other worries", "Best bank verdict", "Best bank", "Max loan (RM)", "Target home", "Township", "Target price (RM)", "Lead score"];
   const fmt = new Intl.DateTimeFormat("en-MY", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kuala_Lumpur" });
   const lines = rows.map((r) => {
     const u = realUnits.find((x) => x.id === r.lead.targetUnitId);
@@ -467,6 +603,8 @@ export function leadsCsv(rows: LeadRow[]) {
       r.session.household,
       r.session.buyerType,
       incomeBandOf(householdGross(r.session)),
+      worriesOf(r.session.profile)[0] ? painPointShort[worriesOf(r.session.profile)[0]!] : "",
+      worriesOf(r.session.profile).slice(1).map((w) => painPointShort[w]).join("; "),
       r.session.bank?.bestVerdict ?? "Not checked",
       r.session.bank?.bestBank ?? "",
       r.session.bank?.maxLoanRM ?? r.session.maxLoanRM ?? "",

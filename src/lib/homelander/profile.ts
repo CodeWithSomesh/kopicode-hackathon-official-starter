@@ -9,17 +9,83 @@ import type { IncomeInput } from "./bank";
 
 const rm = z.number().min(0).max(10_000_000);
 
+/**
+ * The real struggles Malaysians face buying a home. Mochi asks which worry them most and the
+ * deck, Battle and the card details all judge homes against them.
+ */
+export const painPoints = [
+  "upfront_cash",
+  "loan_approval",
+  "monthly_burden",
+  "hidden_costs",
+  "commute_traffic",
+  "build_delay",
+  "resale_value",
+  "leasehold_worry",
+  "safety_security",
+  "near_family",
+  "space_too_small",
+  "flood_risk",
+] as const;
+export type PainPoint = (typeof painPoints)[number];
+
+/** Plain labels, as the buyer would say them. */
+export const painPointLabel: Record<PainPoint, string> = {
+  upfront_cash: "Cash upfront (deposit, stamp duty, legal fees)",
+  loan_approval: "Getting the loan approved",
+  monthly_burden: "Monthly instalment too high",
+  hidden_costs: "Hidden costs (maintenance, quit rent, reno)",
+  commute_traffic: "Traffic and a long commute",
+  build_delay: "Waiting years for the keys",
+  resale_value: "Resale value",
+  leasehold_worry: "Leasehold running out",
+  safety_security: "Safety and security",
+  near_family: "Being near family",
+  space_too_small: "Homes that are too small",
+  flood_risk: "Flooding",
+};
+
+/** Short labels for pills and table rows. */
+export const painPointShort: Record<PainPoint, string> = {
+  upfront_cash: "Cash upfront",
+  loan_approval: "Loan approval",
+  monthly_burden: "Monthly instalment",
+  hidden_costs: "Hidden costs",
+  commute_traffic: "Traffic",
+  build_delay: "Waiting for keys",
+  resale_value: "Resale value",
+  leasehold_worry: "Leasehold",
+  safety_security: "Safety",
+  near_family: "Near family",
+  space_too_small: "Space",
+  flood_risk: "Flooding",
+};
+
+/** The buyer's worries, biggest first (topWorry, then the rest), without repeats. */
+export function worriesOf(p: Profile): PainPoint[] {
+  const out: PainPoint[] = [];
+  if (p.topWorry) out.push(p.topWorry);
+  for (const w of p.painPoints ?? []) if (!out.includes(w)) out.push(w);
+  return out;
+}
+
+/**
+ * Fields older versions of onboarding asked for. Kept in the schema so saved profiles still parse,
+ * but Mochi never asks for them and never fills them.
+ */
+export const legacyProfileKeys = ["kidsNow", "kidsPlanned", "schoolMatters", "schoolMaxKm", "schoolTransport"] as const;
+
 export const profileSchema = z.object({
   // Household
   livingWith: z.enum(["alone", "partner", "partner_kids", "parents", "friends", "other"]).optional(),
-  kidsNow: z.number().int().min(0).max(10).optional(),
-  kidsPlanned: z.enum(["yes", "maybe", "no"]).optional(),
+  /** Everyone who will live in the home, the buyer included. */
+  householdSize: z.number().int().min(1).max(15).optional(),
   parentsMovingIn: z.boolean().optional(),
   pets: z.boolean().optional(),
-  // Schools: we never ask which school, only whether distance matters.
-  schoolMatters: z.boolean().optional(),
-  schoolMaxKm: z.number().min(0).max(100).optional(),
-  schoolTransport: z.enum(["drop_off", "school_bus", "walk", "other"]).optional(),
+  // Worries: what scares them most about buying a home.
+  painPoints: z.array(z.enum(painPoints)).max(painPoints.length).optional(),
+  topWorry: z.enum(painPoints).optional(),
+  worryNote: z.string().max(240).optional(),
   // Places
   workArea: z.string().max(120).optional(),
   officeDays: z.number().int().min(0).max(7).optional(),
@@ -51,6 +117,12 @@ export const profileSchema = z.object({
   age: z.number().int().min(18).max(80).optional(),
   buyWithin: z.enum(["3m", "6m", "1y", "2y_plus"]).optional(),
   underConstructionOk: z.boolean().optional(),
+  // Legacy (see legacyProfileKeys): never asked any more.
+  kidsNow: z.number().int().min(0).max(10).optional(),
+  kidsPlanned: z.enum(["yes", "maybe", "no"]).optional(),
+  schoolMatters: z.boolean().optional(),
+  schoolMaxKm: z.number().min(0).max(100).optional(),
+  schoolTransport: z.enum(["drop_off", "school_bus", "walk", "other"]).optional(),
 });
 
 export type Profile = z.infer<typeof profileSchema>;
@@ -59,8 +131,7 @@ export type ProfileKey = keyof Profile;
 /** What Mochi must have before the buyer can move on to swiping, with a plain label for each. */
 export const essentials: { key: ProfileKey; label: string; when?: (p: Profile) => boolean }[] = [
   { key: "livingWith", label: "Who you live with" },
-  { key: "kidsPlanned", label: "Kids in the next few years" },
-  { key: "schoolMatters", label: "Whether school distance matters", when: (p) => p.kidsPlanned !== "no" || (p.kidsNow ?? 0) > 0 },
+  { key: "topWorry", label: "What worries you most about buying" },
   { key: "workArea", label: "Where you work" },
   { key: "officeDays", label: "Office days a week" },
   { key: "commuteMode", label: "Car or train" },

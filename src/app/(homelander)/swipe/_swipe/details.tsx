@@ -15,7 +15,7 @@ const n = (v: number) => v.toLocaleString("en-MY");
 
 /**
  * The back of the card: every number that matters, worked out for this buyer.
- * Money, commute, family, the home itself, then Mochi's full take.
+ * Their worries first, then money, commute, family, the home itself, then Mochi's full take.
  */
 export function CardDetails({
   unit,
@@ -32,7 +32,7 @@ export function CardDetails({
   onClose: () => void;
 }) {
   const t = townshipById[unit.townshipId]!;
-  const { money, commute, family, completion } = d;
+  const { money, commute, family, completion, worries } = d;
   const a = availabilityOf(unit.id);
 
   return (
@@ -57,6 +57,30 @@ export function CardDetails({
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)] gap-5 px-4 pt-4 pb-6">
+        {/* Worries */}
+        {worries.length ? (
+          <Section art="heart" title="Your worries" tone="text-raya-deep">
+            <ul className="grid grid-cols-[minmax(0,1fr)] gap-2">
+              {worries.map((w, i) => (
+                <li key={w.worry} className="flex items-start gap-2.5 rounded-xl bg-cloud px-3 py-2.5 text-sm">
+                  <Sprite
+                    art={w.tone === "good" ? "heart" : w.tone === "bad" ? "cross" : "sparkle"}
+                    scale={1.5}
+                    className={cn("mt-1 shrink-0", worryToneClass[w.tone])}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs text-ink-soft">
+                      {w.label}
+                      {i === 0 ? " · your biggest worry" : ""}
+                    </span>
+                    <span className="block">{w.text}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        ) : null}
+
         {/* Money */}
         <Section art={swipeSprites.coin} title="Money" tone="text-kaya-deep">
           <div className="grid grid-cols-2 gap-2.5">
@@ -149,12 +173,12 @@ export function CardDetails({
             <ul className="grid grid-cols-[minmax(0,1fr)] gap-1.5">
               {family.schools.map((s) => (
                 <li key={s.type} className="flex items-start gap-2.5 text-sm">
-                  <Sprite art={swipeSprites.school} scale={2} className={cn("mt-0.5 shrink-0", s.tooFar ? "text-raya-deep" : "text-ink-soft")} />
+                  <Sprite art={swipeSprites.school} scale={2} className="mt-0.5 shrink-0 text-ink-soft" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs text-ink-soft">{s.label}</span>
                     <span className="block truncate">{s.school.name}</span>
                   </span>
-                  <span className={cn("shrink-0 font-semibold tabular-nums", s.tooFar && "text-raya-deep")}>
+                  <span className="shrink-0 font-semibold tabular-nums">
                     {s.school.km.toFixed(1)} km
                   </span>
                 </li>
@@ -163,9 +187,6 @@ export function CardDetails({
           ) : (
             <Note>No schools in our data around {t.name} yet.</Note>
           )}
-          {family.schoolLimitKm !== null && family.schools.some((s) => s.tooFar) ? (
-            <Note tone="bad">Red ones are beyond the {family.schoolLimitKm} km you said is okay.</Note>
-          ) : null}
         </Section>
 
         {/* Home */}
@@ -341,6 +362,8 @@ function Big({ label, value, hint, muted }: { label: string; value: string; hint
 function Rows({ children }: { children: ReactNode }) {
   return <ul className="grid grid-cols-[minmax(0,1fr)] divide-y divide-ink/10 rounded-xl border-2 border-ink/10 px-3">{children}</ul>;
 }
+
+const worryToneClass = { good: "text-pandan-deep", warn: "text-kaya-deep", bad: "text-raya-deep", unknown: "text-ink-soft" } as const;
 
 const toneClass = { good: "text-pandan-deep", warn: "text-kaya-deep", bad: "text-raya-deep" } as const;
 

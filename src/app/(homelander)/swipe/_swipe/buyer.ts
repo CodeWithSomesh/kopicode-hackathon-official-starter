@@ -12,15 +12,16 @@ import {
   type Township,
   type Unit,
 } from "@/lib/homelander/data";
-import { toIncomeInput, type Profile } from "@/lib/homelander/profile";
+import { toIncomeInput, worriesOf, type Profile } from "@/lib/homelander/profile";
 import { bedroomsNeeded } from "@/lib/homelander/recommend";
+import { checkWorries, factsForUnit, placesOf, type WorryCheck } from "@/lib/homelander/worries";
 import { nearestByType, schoolTypeLabel, type NearbySchool, type SchoolType } from "@/lib/homelander/schools";
 import type { Budget } from "@/lib/homelander/store";
 
 /**
  * Everything the "More details" side of a card says, worked out for THIS buyer: their income
  * (from Mochi, else their bank check), their workplace and office days, their household and
- * school limits. Real data only: when a figure can't be worked out from what the buyer told us
+ * the worries they told Mochi about. Real data only: when a figure can't be worked out from what the buyer told us
  * (no salary, no workplace), it is null and the card asks for it instead of inventing one.
  * Pure functions, so the card stays a view.
  */
@@ -103,9 +104,11 @@ export type HomeDetails = {
   family: {
     need: number | null;
     beds: number;
-    schools: { type: SchoolType; label: string; school: NearbySchool; tooFar: boolean }[];
-    schoolLimitKm: number | null;
+    /** Nearest school of each type: neutral info, never judged. */
+    schools: { type: SchoolType; label: string; school: NearbySchool }[];
   };
+  /** How this home does on the buyer's top 1-3 worries, biggest first; empty until Mochi asks. */
+  worries: WorryCheck[];
   completion: { year: number; cantWait: boolean };
 };
 
@@ -114,7 +117,7 @@ const THIS_YEAR = 2026;
 const FAR_KM = 90;
 
 const knowsHousehold = (p: Profile) =>
-  p.minBedrooms !== undefined || p.livingWith !== undefined || p.kidsPlanned !== undefined || p.kidsNow !== undefined;
+  p.minBedrooms !== undefined || p.livingWith !== undefined || p.householdSize !== undefined;
 
 export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis | null, anchor: Anchor | null): HomeDetails {
   const t = townshipById[unit.townshipId]!;
@@ -140,16 +143,32 @@ export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis | nu
   const upfrontRM = Math.round(c.upfront);
   const savingsRM = basis?.savingsRM ?? profile.savingsRM;
 
-  const limit = profile.schoolMatters ? (profile.schoolMaxKm ?? 5) : null;
   const near = nearestByType(t.pos);
   const schools = (Object.keys(schoolTypeLabel) as SchoolType[])
     .filter((k) => near[k])
-    .map((k) => ({
-      type: k,
-      label: schoolTypeLabel[k],
-      school: near[k]!,
-      tooFar: limit !== null && near[k]!.km > limit,
-    }));
+    .map((k) => ({ type: k, label: schoolTypeLabel[k], school: near[k]! }));
+
+  const top = worriesOf(profile).slice(0, 3);
+  const worries = top.length
+    ? checkWorries(
+        top,
+        factsForUnit(unit, {
+          savingsRM: savingsRM ?? null,
+          firstHome: profile.firstHome ?? null,
+          netRM: basis?.netRM || null,
+          commitmentsRM: basis?.commitmentsRM ?? 0,
+          maxPriceRM: maxPriceOf(profile),
+          tenureYears: basis?.tenureYears,
+          rate: basis?.rate,
+          commuteHoursWeek: commute && !commute.far ? ((commute.mode === "train" ? commute.cost.trainMinOneWay : commute.cost.driveMinPeak) * 2 * commute.officeDays) / 60 : null,
+          commuteFar: commute?.far ?? false,
+          workName: commute?.anchor.name ?? null,
+          places: placesOf(profile),
+          bedsNeeded: bedroomsNeeded(profile),
+          year: THIS_YEAR,
+        }),
+      )
+    : [];
 
   return {
     money: {
@@ -173,10 +192,16 @@ export function homeDetails(unit: Unit, profile: Profile, basis: MoneyBasis | nu
       need: knowsHousehold(profile) ? bedroomsNeeded(profile) : null,
       beds: unit.beds,
       schools,
-      schoolLimitKm: limit,
     },
+    worries,
     completion: { year: unit.completion, cantWait: profile.underConstructionOk === false && unit.completion > THIS_YEAR },
   };
+}
+
+/** What banks may lend against, from what the buyer told Mochi; null without salary and age. */
+function maxPriceOf(profile: Profile): number | null {
+  const input = toIncomeInput(profile);
+  return input ? eligibility(input).maxPriceRM || null : null;
 }
 
 function commuteFor(t: Township, profile: Profile, anchor: Anchor): NonNullable<HomeDetails["commute"]> {

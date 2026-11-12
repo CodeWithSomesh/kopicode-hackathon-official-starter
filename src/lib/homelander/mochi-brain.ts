@@ -3,7 +3,7 @@ import { groq } from "@ai-sdk/groq";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { env } from "@/lib/env";
-import { missingEssentials, profileSchema, type Profile } from "./profile";
+import { legacyProfileKeys, missingEssentials, painPointLabel, painPoints, profileSchema, type Profile } from "./profile";
 
 /**
  * Mochi's brain, shared by the browser voice and the live Agora agent: one model call per turn that
@@ -32,14 +32,19 @@ export type MochiMessage = { role: "user" | "assistant"; content: string };
  * Strict structured output (Groq, OpenAI) requires every property to be listed as required,
  * so on the wire each profile field is required-but-nullable: null means "not mentioned".
  */
+type LegacyKey = (typeof legacyProfileKeys)[number];
+type WireKey = Exclude<keyof typeof profileSchema.shape, LegacyKey>;
+/** Legacy fields (kids, schools) are left off the wire, so the model can't fill them. */
 const patchWire = z.object(
   Object.fromEntries(
-    Object.entries(profileSchema.shape).map(([k, v]) => [k, v.unwrap().nullable()]),
-  ) as { [K in keyof typeof profileSchema.shape]: z.ZodNullable<ReturnType<(typeof profileSchema.shape)[K]["unwrap"]>> },
+    Object.entries(profileSchema.shape)
+      .filter(([k]) => !(legacyProfileKeys as readonly string[]).includes(k))
+      .map(([k, v]) => [k, v.unwrap().nullable()]),
+  ) as { [K in WireKey]: z.ZodNullable<ReturnType<(typeof profileSchema.shape)[K]["unwrap"]>> },
 );
 
 const turnSchema = z.object({
-  reply: z.string().describe("What Mochi says out loud next. 1 to 3 short spoken sentences, one question at most."),
+  reply: z.string().describe("What Mochi says out loud next. 1 to 3 short spoken sentences, ending with exactly one question unless wrapping up."),
   lang: z.enum(mochiLangs).describe("Language of the reply: en (Malaysian English), ms, zh (Mandarin, simplified), ta (Tamil)."),
   patch: patchWire.describe("Every field the buyer stated or clearly implied in their LATEST message; null for everything else."),
   complete: z.boolean().describe("True only when nothing essential is missing and Mochi has said the wrap-up line."),
@@ -47,28 +52,56 @@ const turnSchema = z.object({
 
 export type MochiTurn = { reply: string; lang: MochiLang; patch: Partial<Profile>; complete: boolean };
 
-function systemPrompt(profile: Profile) {
-  const missing = missingEssentials(profile).map((m) => `- ${m.key}: ${m.label}`);
-  return `You are Mochi, a friendly helper bot who guides first-time buyers to a Gamuda Land home in the HomeLander app. You are on a voice call, so everything you say is spoken.
-
-How you talk
+/** Who Mochi is and how it talks: shared by the chat brain and the live voice agent. */
+const PERSONA = `How you talk
 - You are warm, gentle and encouraging: calm, patient and professional, with a small touch of cuteness ("Got it!", "That helps a lot", "Lovely, thank you"). You are your own character; don't imitate any film or cartoon character or quote anyone's catchphrases.
-- Short: 1 to 3 short spoken sentences, at most one question per turn. No lists, no markdown, no emoji.
-- Reply in the language of the buyer's latest message: English (clear Malaysian English), Bahasa Melayu, Mandarin (simplified Chinese) or Tamil. If they switch language, you switch too. Set "lang" to match.
+- Short: 1 to 3 short spoken sentences ending with one question (never more), until the wrap-up. No lists, no markdown, no emoji.
+- Reply in the language of the buyer's latest message: English (clear Malaysian English), Bahasa Melayu, Mandarin (simplified Chinese) or Tamil. If they switch language, you switch too.
 - No slang interjections or exclamations like "Haiyaa", "Aiyo", "Walao", "Alamak" or "Fuyoh", and no teasing or roasting. Acknowledge what they shared in a few kind words, then ask the next question.
 - Never judge anyone's money choices, income, debts, age, family, race, religion or gender. If the buyer sounds stressed or embarrassed, reassure them that every answer helps and there are no wrong answers.
 - Be on their side: practical, never pushy, never preachy.
-- Never give financial advice or promise loan approval. Money figures are only for estimates. Don't tell them to sell, cancel, refinance or pay off anything.
+- Never give financial advice or promise loan approval. Money figures are only for estimates. Don't tell them to sell, cancel, refinance or pay off anything.`;
 
-Your job
+const WORRY_LIST = painPoints.map((p) => `${p} (${painPointLabel[p].toLowerCase()})`).join(", ");
+
+const JOB = `Your job
 Collect what a home buyer must think about, conversationally, skipping anything already known:
-household (who they live with, kids now or planned, parents moving in, pets), whether distance to the kids' school matters (if yes: how far is OK and how they get there: drop-off, school bus or walking; never ask which school), where they work and how many office days, partner's workplace, car or train, preferred areas and what they must be near, landed or high-rise, bedrooms, must-haves and deal-breakers, monthly gross salary (take-home if they know it), other income, joint applicant and their salary, monthly loan payments (car, PTPTN, personal loan, other home loan) and credit card balance, savings for the down payment, first home or not, age, when they want to buy, and whether a home still under construction is OK.
+household (who they live with, how many people will live in the home, parents moving in, pets), their biggest worry or struggle about buying a home, where they work and how many office days, partner's workplace, car or train, preferred areas and what they must be near, landed or high-rise, bedrooms, must-haves and deal-breakers, monthly gross salary (take-home if they know it), other income, joint applicant and their salary, monthly loan payments (car, PTPTN, personal loan, other home loan) and credit card balance, savings for the down payment, first home or not, age, when they want to buy, and whether a home still under construction is OK.
+
+Their worries come early
+- Around your second or third question, once you know who they live with, ask what worries them most, or what their biggest struggle is, about buying a home. Many Malaysians struggle with the same things: the cash for the deposit and fees, fear the bank will reject the loan, a monthly instalment that eats the salary, hidden costs like maintenance fees and renovation, traffic jams to work, developers' delays and waiting years for keys, resale value, leasehold, safety, living near family, homes that are too small, and floods.
+- When they share a worry, empathise briefly and sincerely in one short phrase (for example "That's a very real worry, many buyers feel the same"), then move on. Tell them you'll look for homes that ease it. Don't lecture and don't give advice.
+- If they name several, ask nothing more about it; the first or the one they stress most is the biggest.
+- After the empathy, always carry on with your next question in the same reply (unless everything is collected).
+
+Never ask
+- Never ask whether they have or plan to have kids, and never ask about schools or school distance. If they mention kids themselves, simply count them in the household size.`;
+
+/** Mochi's full system prompt for one chat turn: persona, job, structured-patch rules and what's known. */
+/** Once Mochi knows the household, the worry question comes next. */
+function worryNudge(profile: Profile) {
+  if (profile.topWorry || profile.painPoints?.length) return "";
+  if (!profile.livingWith && !profile.householdSize)
+    return "\n\nAs soon as you know who they live with (even from their latest message), your NEXT question is what worries them most, or their biggest struggle, about buying a home. Ask it before work, money or anything else.";
+  return "\n\nYour NEXT question: you already know their household, so now gently ask what worries them most, or what their biggest struggle is, about buying a home. Ask this before work, money or anything else.";
+}
+
+export function mochiSystemPrompt(profile: Profile) {
+  const missing = missingEssentials(profile).map((m) => `- ${m.key}: ${m.label}`);
+  return `You are Mochi, a friendly helper bot who guides first-time buyers to a Gamuda Land home in the HomeLander app. You are on a voice call, so everything you say is spoken.
+
+${PERSONA}
+- Set "lang" to match the language of your reply.
+
+${JOB}
 
 Rules for "patch"
 - Only fields from the buyer's LATEST message. Never invent values. Every other field is null.
-- Money: monthly RM numbers ("8k" = 8000, "RM 2.5k" = 2500). savingsRM and cardBalanceRM are totals, not monthly.
+- Money: monthly RM numbers ("8k" = 8000, "RM 2.5k" = 2500). savingsRM and cardBalanceRM are totals, not monthly. A worry can carry a number too: "I only saved 30k" also sets savingsRM to 30000.
 - If they say they have no loans of some kind, set those loan fields to 0. "No car loan" sets carRM to 0.
-- livingWith: alone | partner | partner_kids | parents | friends | other. kidsPlanned: yes | maybe | no.
+- livingWith: alone | partner | partner_kids | parents | friends | other. householdSize counts everyone who will live in the home, the buyer included ("me, my wife and two kids" = 4).
+- painPoints: every worry they mention, from this list: ${WORRY_LIST}. topWorry: the single biggest one (the one they stress most, else the first they say). worryNote: their worry in a few of their own words, translated to English, only when it adds something the list doesn't capture.
+- Map everyday words to worries, in any language. Examples: "not enough for the deposit", "only saved 30k", "duit muka tak cukup", "stamp duty mahal" = upfront_cash. "scared bank reject", "takut loan tak lulus", "DSR too high", "CCRIS" = loan_approval. "instalment too high", "bayaran bulanan berat", "gaji habis bayar rumah" = monthly_burden. "maintenance fee mahal", "quit rent", "renovation cost" = hidden_costs. "jam teruk", "jem", "traffic", "commute too long", "塞车" = commute_traffic. "tak nak tunggu lama", "developer delay", "abandoned project", "projek terbengkalai", "want to move in fast" = build_delay. "can sell later?", "harga naik tak", "investment value" = resale_value. "leasehold", "pajakan" = leasehold_worry. "safe", "selamat", "pecah rumah", "gated and guarded" = safety_security. "near my parents", "dekat mak ayah", "kampung" family nearby = near_family. "rumah sempit", "too small", "need space" = space_too_small. "banjir", "flood" = flood_risk.
 - preferredAreas / mustBeNear / mustHaves / dealBreakers are short phrases, e.g. "Kajang", "near MRT", "gated".
 - buyWithin: 3m | 6m | 1y | 2y_plus.
 
@@ -76,9 +109,31 @@ Already known about this buyer (JSON):
 ${JSON.stringify(profile)}
 
 Still missing:
-${missing.length ? missing.join("\n") : "(nothing essential: wrap up warmly, tell them you'll show homes that fit, and set complete to true)"}
+${missing.length ? missing.join("\n") : "(nothing essential: wrap up warmly, tell them you'll show homes that fit, and set complete to true)"}${worryNudge(profile)}
 
 If this is the first turn and the buyer hasn't spoken yet, greet them in English, introduce yourself briefly as Mochi, here to help find a home that fits their life, and ask who they will be living with.`;
+}
+
+/**
+ * The same Mochi for a live voice agent that only talks (no JSON, no patch): persona, what to ask
+ * and what's already known. Something else records the answers.
+ */
+export function mochiPersonaForVoice(profile: Profile) {
+  const missing = missingEssentials(profile).map((m) => `- ${m.label}`);
+  const known = Object.keys(profile).length ? JSON.stringify(profile) : "(nothing yet)";
+  return `You are Mochi, a friendly helper bot who guides first-time buyers to a Gamuda Land home in the HomeLander app. You are talking to the buyer live on a voice call. Just talk: everything you say is spoken aloud, so never read out JSON, field names, brackets or lists.
+
+${PERSONA}
+
+${JOB}
+
+What you already know about this buyer (don't ask again):
+${known}
+
+Still to find out, roughly in this order:
+${missing.length ? missing.join("\n") : "(nothing essential: wrap up warmly and tell them you'll show homes that fit)"}${worryNudge(profile)}
+
+If the buyer hasn't spoken yet, greet them briefly, introduce yourself as Mochi, here to help find a home that fits their life, and ask who they will be living with.`;
 }
 
 /** Rough language of a message: script first (Tamil, Chinese), then common Malay words. */
@@ -87,7 +142,7 @@ export function detectLang(text: string): MochiLang {
   if (/[\u4E00-\u9FFF]/.test(text)) return "zh";
   const malay = text
     .toLowerCase()
-    .match(/\b(saya|kami|kerja|rumah|tiada|takde|tak|dengan|dan|ada|nak|boleh|sebulan|gaji|hari|naik|simpanan|hutang|anak|isteri|suami|dekat|mahu|untuk|bilik|tahun|umur|ribu|seminggu|tinggal|bersama|pinjaman|kereta)\b/g);
+    .match(/\b(saya|kami|kerja|rumah|tiada|takde|tak|dengan|dan|ada|nak|boleh|sebulan|gaji|hari|naik|simpanan|hutang|anak|isteri|suami|dekat|mahu|untuk|bilik|tahun|umur|ribu|seminggu|tinggal|bersama|pinjaman|kereta|takut|duit|tunggu|teruk|banjir|lama)\b/g);
   return (malay?.length ?? 0) >= 2 ? "ms" : "en";
 }
 
@@ -100,7 +155,7 @@ const LOAN_FIELDS = ["carRM", "ptptnRM", "personalRM", "housingRM", "cardBalance
 async function generate(model: Parameters<typeof generateText>[0]["model"], messages: MochiMessage[], profile: Profile, opts: { retries: number; groqReasoning?: boolean; nudge?: string }) {
   const { output } = await generateText({
     model,
-    system: systemPrompt(profile) + (opts.nudge ? `\n\nIMPORTANT: ${opts.nudge}` : ""),
+    system: mochiSystemPrompt(profile) + (opts.nudge ? `\n\nIMPORTANT: ${opts.nudge}` : ""),
     messages: messages.length ? messages.slice(-HISTORY) : [{ role: "user", content: "(The buyer just sat down. Start.)" }],
     output: Output.object({ schema: turnSchema }),
     maxRetries: opts.retries,
@@ -146,6 +201,17 @@ export async function mochiTurn(messages: MochiMessage[], profile: Profile): Pro
     if (v === null) continue;
     const ok = profileSchema.shape[k as keyof Profile].safeParse(v);
     if (ok.success) patch[k] = ok.data;
+  }
+  // A list of worries without a biggest one: the first they said is the biggest.
+  if (!patch.topWorry && !profile.topWorry && Array.isArray(patch.painPoints) && patch.painPoints.length)
+    patch.topWorry = patch.painPoints[0];
+  // The biggest worry is always one of their worries.
+  if (typeof patch.topWorry === "string") {
+    const all = new Set([...(profile.painPoints ?? []), ...((patch.painPoints as string[] | undefined) ?? [])]);
+    if (!all.has(patch.topWorry)) patch.painPoints = [...all, patch.topWorry];
+    else if (patch.painPoints) patch.painPoints = [...all];
+  } else if (Array.isArray(patch.painPoints)) {
+    patch.painPoints = [...new Set([...(profile.painPoints ?? []), ...patch.painPoints])];
   }
   // "No other debts": every loan field the buyer hasn't given yet becomes 0.
   if (lastUser && NO_DEBT.test(lastUser)) {

@@ -1,7 +1,15 @@
 "use client";
 
 import { PixPanel } from "@/components/homelander/pixel";
-import { essentials, missingEssentials, type Profile, type ProfileKey } from "@/lib/homelander/profile";
+import {
+  essentials,
+  missingEssentials,
+  painPointLabel,
+  painPoints,
+  type PainPoint,
+  type Profile,
+  type ProfileKey,
+} from "@/lib/homelander/profile";
 import { homelander } from "@/lib/homelander/store";
 import { cn } from "@/lib/utils";
 
@@ -11,7 +19,8 @@ type Field =
   | { key: ProfileKey; label: string; kind: "yesno" }
   | { key: ProfileKey; label: string; kind: "number"; prefix?: string; suffix?: string; hint?: string }
   | { key: ProfileKey; label: string; kind: "text"; placeholder?: string }
-  | { key: ProfileKey; label: string; kind: "tags"; placeholder?: string };
+  | { key: ProfileKey; label: string; kind: "tags"; placeholder?: string }
+  | { key: ProfileKey; label: string; kind: "worries" };
 
 const sections: { title: string; fields: Field[]; show?: (p: Profile) => boolean }[] = [
   {
@@ -30,38 +39,16 @@ const sections: { title: string; fields: Field[]; show?: (p: Profile) => boolean
           { value: "other", label: "Other" },
         ],
       },
-      { key: "kidsNow", label: "Kids now", kind: "number" },
-      {
-        key: "kidsPlanned",
-        label: "Kids in the next few years",
-        kind: "choice",
-        options: [
-          { value: "yes", label: "Yes" },
-          { value: "maybe", label: "Maybe" },
-          { value: "no", label: "No" },
-        ],
-      },
+      { key: "householdSize", label: "People in the home", kind: "number", hint: "You included" },
       { key: "parentsMovingIn", label: "Parents moving in", kind: "yesno" },
       { key: "pets", label: "Pets", kind: "yesno" },
     ],
   },
   {
-    title: "School run",
-    show: (p) => p.kidsPlanned !== "no" || (p.kidsNow ?? 0) > 0,
+    title: "What worries you",
     fields: [
-      { key: "schoolMatters", label: "Distance to school matters", kind: "yesno" },
-      { key: "schoolMaxKm", label: "Furthest OK", kind: "number", suffix: "km" },
-      {
-        key: "schoolTransport",
-        label: "Getting there",
-        kind: "choice",
-        options: [
-          { value: "drop_off", label: "Drop-off" },
-          { value: "school_bus", label: "School bus" },
-          { value: "walk", label: "Walk" },
-          { value: "other", label: "Other" },
-        ],
-      },
+      { key: "painPoints", label: "Worries", kind: "worries" },
+      { key: "worryNote", label: "In your words", kind: "text", placeholder: "Optional" },
     ],
   },
   {
@@ -173,9 +160,13 @@ export function ProfilePanel({
         .map((s) => (
           <fieldset key={s.title} className="grid gap-2.5 pt-3">
             <legend className="font-pixel-label text-[11px] text-ink-soft uppercase">{s.title}</legend>
-            {s.fields.map((f) => (
-              <Row key={f.key} field={f} profile={profile} fresh={fresh.has(f.key)} />
-            ))}
+            {s.fields.map((f) =>
+              f.kind === "worries" ? (
+                <Worries key={f.key} profile={profile} fresh={fresh.has("painPoints") || fresh.has("topWorry")} />
+              ) : (
+                <Row key={f.key} field={f} profile={profile} fresh={fresh.has(f.key)} />
+              ),
+            )}
           </fieldset>
         ))}
       </div>
@@ -203,6 +194,7 @@ export function ProfilePanel({
 }
 
 function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fresh: boolean }) {
+  if (f.kind === "worries") return null;
   const value = profile[f.key];
   const id = `pf-${f.key}`;
   const set = (v: Profile[ProfileKey] | undefined) => homelander.setProfileField(f.key, v as never);
@@ -278,6 +270,67 @@ function Row({ field: f, profile, fresh }: { field: Field; profile: Profile; fre
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Multi-select worry pills. Tapping a worry adds or removes it; the star marks the biggest one
+ * (the first worry picked becomes the biggest until the buyer moves the star).
+ */
+function Worries({ profile, fresh }: { profile: Profile; fresh: boolean }) {
+  const picked = profile.painPoints ?? [];
+  const top = profile.topWorry;
+  const toggle = (w: PainPoint) => {
+    const on = picked.includes(w);
+    const next = on ? picked.filter((x) => x !== w) : [...picked, w];
+    homelander.setProfileField("painPoints", next.length ? next : undefined);
+    if (on && top === w) homelander.setProfileField("topWorry", next[0]);
+    else if (!on && !top) homelander.setProfileField("topWorry", w);
+  };
+  const star = (w: PainPoint) => {
+    if (!picked.includes(w)) homelander.setProfileField("painPoints", [...picked, w]);
+    homelander.setProfileField("topWorry", w);
+  };
+
+  return (
+    <div className={cn("grid gap-2 rounded-lg px-1.5 py-1 transition-colors duration-700", fresh && "bg-kaya/35")}>
+      <p className="text-sm text-ink-soft">Tap all that worry you. Star the biggest.</p>
+      <ul className="flex flex-wrap gap-1.5" aria-label="Worries about buying a home">
+        {painPoints.map((w) => {
+          const on = picked.includes(w);
+          const isTop = top === w;
+          return (
+            <li key={w} className="flex">
+              <button
+                type="button"
+                aria-pressed={on}
+                onClick={() => toggle(w)}
+                className={cn(
+                  "border-[1.5px] px-2.5 py-1 text-left text-xs font-medium transition-colors",
+                  on ? "rounded-l-full border-pandan-deep bg-pandan-deep text-white" : "rounded-full border-ink/25 text-ink hover:border-ink/60",
+                )}
+              >
+                {painPointLabel[w]}
+              </button>
+              {on ? (
+                <button
+                  type="button"
+                  aria-pressed={isTop}
+                  aria-label={isTop ? `${painPointLabel[w]} is your biggest worry` : `Make ${painPointLabel[w]} your biggest worry`}
+                  onClick={() => star(w)}
+                  className={cn(
+                    "rounded-r-full border-[1.5px] border-l-0 border-pandan-deep px-2 text-xs transition-colors",
+                    isTop ? "bg-kaya text-ink" : "bg-white text-ink-soft hover:text-ink",
+                  )}
+                >
+                  {isTop ? "★" : "☆"}
+                </button>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

@@ -89,11 +89,7 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
                     <Sprite
                       art={t.icon}
                       scale={2}
-                      // Six tabs fit the header without icons; they return on wide (2xl) screens.
-                      className={cn(
-                        "hidden 2xl:block",
-                        isActive(t.href) ? "text-ink" : "text-ink-soft",
-                      )}
+                      className={cn("shrink-0", isActive(t.href) ? "text-ink" : "text-ink-soft")}
                     />
                     {t.label}
                   </Link>
@@ -104,7 +100,7 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
             <div className="pointer-events-auto ml-auto flex items-center gap-3">
               <PixPanel
                 flat
-                className="flex items-center gap-1.5 px-2.5 py-1.5 max-sm:hidden"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 max-sm:hidden lg:max-xl:hidden"
                 aria-live="polite"
               >
                 <Sprite art="heart" scale={2} className="text-raya" />
@@ -115,7 +111,7 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
               </PixPanel>
               {/* A surface behind each bare link: the Night toggle darkens the map but not these tokens, so ink-on-map was 1.19:1 */}
               <PixPanel asChild flat>
-                <Link href="/admin" className="hidden px-2 py-2 font-pixel-label text-xs whitespace-nowrap lg:inline">
+                <Link href="/admin" className="hidden px-2 py-2 font-pixel-label text-xs whitespace-nowrap xl:inline">
                   Gamuda view
                 </Link>
               </PixPanel>

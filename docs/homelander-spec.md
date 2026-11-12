@@ -43,14 +43,14 @@ HomeLander helps Malaysian home buyers find the Gamuda Land home that fits their
    - **Live side panel:** fills in as Mochi hears answers, and the user can type into it. Money fields offer "type instead".
    - **Testing:** voice can only be tested on Vercel preview deployments (or an ngrok tunnel), because Agora's cloud can't reach `localhost`.
    - **What Mochi collects** (about 10 turns, skipping anything already answered):
-     - **Household:** who they live with; kids now or planned; parents moving in; pets.
-     - **Schools:** does distance to the kids' school matter? If yes, how far is OK, and how will they get there (drop-off, school bus, walking)? Never which school.
+     - **Household:** who they live with; how many people will live in the home; parents moving in; pets. Mochi never asks about kids or schools.
+     - **Worries (asked early, turn 2-3):** the buyer's real struggles with buying a home, mapped to `painPoints` with one `topWorry` (and an optional `worryNote`): cash upfront, loan approval, monthly instalment, hidden costs, traffic, waiting for keys, resale value, leasehold, safety, near family, space, flooding.
      - **Places:** work location and office days; partner's work; preferred areas; must be near (LRT/MRT, family).
      - **Home:** landed or high-rise; minimum bedrooms; must-haves; deal-breakers.
      - **Money:** gross and net income; joint applicant's income; commitments (car, PTPTN, personal loan, cards, other home loans); savings for the down payment; first home or not.
      - **Timing and age:** when they want to buy; whether a home under construction is OK; age, which sets the maximum loan tenure.
 4. **Recommendations:**
-   - **Scoring:** rule-based. Budget fit from the bank estimate, distance to preferred areas and work, bedrooms vs household, school distance when it matters, and the landed/high-rise preference.
+   - **Scoring:** rule-based. Budget fit from the bank estimate, distance to preferred areas and work, bedrooms vs household, the landed/high-rise preference, and the buyer's worries (the top worry weighs most; each reason names the worry it eases). Shared checks live in `src/lib/homelander/worries.ts`.
    - **Reason line:** Claude writes one line on why each home was picked, cached per user and home.
    - **Over-budget homes:** the bank limit is worked out right after onboarding. Homes over budget appear tagged "stretch" and ranked lower, not hidden.
 5. **Swipe (`/swipe`):**
@@ -59,7 +59,7 @@ HomeLander helps Malaysian home buyers find the Gamuda Land home that fits their
    - Battle unlocks at 3 likes; the deck ends at 10 likes.
 6. **Battle (`/battle`):**
    - Up to 5 homes. If more are liked, the top 5 by match score are preselected and can be swapped.
-   - Rows: price, monthly instalment, cash upfront, money left, drive time with traffic, train time, toll cost (estimated), weekly commute hours, school distance per type, size vs need, tenure, completion, units left.
+   - Rows: price, monthly instalment, cash upfront, money left, drive time with traffic, train time, toll cost (estimated), weekly commute hours, your worries (how each home does on each), nearest school per type (info only), size vs need, tenure, completion, units left.
 7. **Bank (`/bank`):**
    - Uses the income and commitments from onboarding.
    - Shows the debt service ratio, the maximum loan, a sample table of 5 banks, and which homes are in range.

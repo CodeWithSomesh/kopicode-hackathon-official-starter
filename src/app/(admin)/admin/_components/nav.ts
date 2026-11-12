@@ -7,6 +7,7 @@ import {
   LandmarkIcon,
   LayoutGridIcon,
   MapPinIcon,
+  MessageSquareWarningIcon,
   ThumbsDownIcon,
   UsersIcon,
 } from "lucide-react";
@@ -19,6 +20,7 @@ export const sections = [
   { id: "location", label: "Live vs work", icon: MapPinIcon },
   { id: "pricing", label: "Price band gap", icon: BadgeDollarSignIcon },
   { id: "segments", label: "Buyer segments", icon: UsersIcon },
+  { id: "worries", label: "Buyer worries", icon: MessageSquareWarningIcon },
   { id: "passes", label: "Why buyers pass", icon: ThumbsDownIcon },
   { id: "products", label: "Product performance", icon: BarChart3Icon },
   { id: "leads", label: "Leads", icon: InboxIcon },

@@ -16,6 +16,7 @@ import { useHomeLander } from "@/lib/homelander/store";
 import { pillLean, pillLeanPhone, pillNudgePhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import { useMapColors } from "../use-map-colors";
+import { siteIndexOf, siteLayout } from "@/lib/first-key/site-layout";
 import { ZONE, groupById, groups } from "@/lib/first-key/landed";
 import { EnclaveSwitch } from "./enclave-switch";
 import { LANDED_PICK_LAYERS, landedSources } from "./landed-geo";
@@ -95,6 +96,12 @@ const enclaveView = () => {
   return { center: ZONE.centre as [number, number], zoom: Math.log2((free * 0.9 * M_PER_PX_Z0) / 300), pitch: 52, bearing: 0, padding };
 };
 const centres: Record<string, [number, number]> = { ...Object.fromEntries(township.buildings.map((b) => [b.id, centroid(b.footprint)])), ...Object.fromEntries(groups.map((g) => [g.id, [g.lng, g.lat]])) };
+// a spawned site building ("sb<n>") is not in `centres`: use its own spot from site-layout
+const centresOf = (id: string): [number, number] | undefined => {
+  const i = siteIndexOf(id);
+  const b = i === undefined ? undefined : siteLayout.buildings[i];
+  return centres[id] ?? (b ? [b.lng, b.lat] : undefined);
+};
 const buildingsGeoJson = {
   type: "FeatureCollection" as const,
   features: township.buildings.map((b) => ({
@@ -380,7 +387,9 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
   const flyTo = (id: string, then?: () => void) => {
     const map = mapRef.current?.getMap();
     if (!map) return;
-    const [lng, lat] = centres[id];
+    const c = centresOf(id);
+    if (!c) return;
+    const [lng, lat] = c;
     const target = { center: [lng, lat] as [number, number], zoom: 18.2, pitch: 60, bearing: map.getBearing() };
     if (reduced) {
       map.jumpTo(target);
@@ -399,7 +408,9 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
     first.current = false;
     if (!selectedId) return;
     if (isFirst && startAtSelected) {
-      const [lng, lat] = centres[selectedId];
+      const c = centresOf(selectedId);
+      if (!c) return;
+      const [lng, lat] = c;
       mapRef.current?.getMap().jumpTo({ center: [lng, lat], zoom: 18.2, pitch: 60 });
       onArrived();
       return;
@@ -453,7 +464,7 @@ export default function NeighbourhoodMap({ selectedId, houseId, onSelect, paused
   const showTownship = devId === COVE_ID || !!selectedId;
   const siteChips = useZoomGate(() => mapRef.current?.getMap(), loaded);
 
-  const from = selectedId ? centres[selectedId] : undefined;
+  const from = selectedId ? centresOf(selectedId) : undefined;
   const poiFit = useNamedPois(() => mapRef.current?.getMap(), loaded && showTownship, from);
 
   return (

@@ -226,7 +226,7 @@ function Find({ initialBuilding, initialUnit, initialDev }: Props) {
             <X />
           </Button>
         </div>
-        {spawned && (
+        {selectedId && (
           <p className="absolute top-[126px] left-4 z-10 rounded-full bg-card/90 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
             {t("Illustrative, made-up units and prices")}
           </p>

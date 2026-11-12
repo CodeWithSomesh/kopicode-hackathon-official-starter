@@ -83,7 +83,7 @@ export function CommandConsole({
           role="group"
           aria-label={t("Reply language")}
         >
-          <span className="mr-1 text-white/70">{t("Reply in")}</span>
+          <span className="mr-1 text-white opacity-75">{t("Reply in")}</span>
           {(
             [
               ["mg", "Manglish"],
@@ -96,10 +96,10 @@ export function CommandConsole({
               aria-pressed={lang === v}
               onClick={() => onLang(v)}
               className={cn(
-                "border-2 border-white/80 px-2 py-0.5 font-semibold",
+                "border-2 border-current px-2 py-0.5 font-semibold",
                 lang === v
-                  ? "bg-white text-ink"
-                  : "text-white hover:bg-white/10",
+                  ? "bg-white text-[color:var(--color-ink)]"
+                  : "text-white hover:bg-current/10",
               )}
             >
               {l}
@@ -110,19 +110,19 @@ export function CommandConsole({
 
       <div
         ref={box}
-        className="grid max-h-56 min-h-24 content-start gap-2 overflow-y-auto border-2 border-white/30 p-3 text-sm"
+        className="grid max-h-56 min-h-24 content-start gap-2 overflow-y-auto border-2 border-current/30 p-3 text-sm"
         aria-live="polite"
         aria-label={t("Conversation")}
       >
         {log.length === 0 ? (
-          <p className="text-white/70">
+          <p className="text-white opacity-75">
             {t("Type a command, or tap an example below.")}
           </p>
         ) : (
           log.map((e) => (
             <div key={e.id} className="grid gap-0.5">
               <p className="font-semibold">
-                <span className="text-white/60" aria-hidden="true">
+                <span className="text-white opacity-75" aria-hidden="true">
                   &gt;{" "}
                 </span>
                 {e.display ? (
@@ -132,7 +132,7 @@ export function CommandConsole({
                 )}
               </p>
               {e.heard?.length ? (
-                <p className="pl-4 text-xs text-white/60">
+                <p className="pl-4 text-xs text-white opacity-75">
                   {t("Understood as")}:{" "}
                   {e.heard.join(" · ")}
                 </p>
@@ -145,7 +145,7 @@ export function CommandConsole({
               {e.replies.map((r, i) => (
                 <p
                   key={i}
-                  className={cn("pl-4", r.ok ? "text-white/85" : "text-kaya")}
+                  className={cn("pl-4", r.ok ? "text-white" : "text-kaya")}
                 >
                   {r[lang]}
                 </p>
@@ -177,7 +177,7 @@ export function CommandConsole({
           autoComplete="off"
           maxLength={400}
           placeholder={t("move the sofa left 1 m then turn it")}
-          className="min-w-0 flex-1 border-2 border-white bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-soft/70"
+          className="min-w-0 flex-1 border-2 border-current bg-white px-3 py-2 text-sm text-[color:var(--color-ink)] placeholder:text-[color:var(--color-ink-soft)]"
         />
         {extra}
         <button
@@ -195,7 +195,7 @@ export function CommandConsole({
             key={c}
             type="button"
             onClick={() => submit(c)}
-            className="border-2 border-white/50 px-2 py-0.5 text-xs text-white hover:border-white hover:bg-white/10"
+            className="border-2 border-current/50 px-2 py-0.5 text-xs text-white hover:border-current hover:bg-current/10"
           >
             {c}
           </button>
@@ -221,7 +221,7 @@ function Said({ segments, raw }: { segments: SaidSegment[]; raw: string }) {
               <rp>(</rp>
               <rt
                 lang="zh-Latn-pinyin"
-                className="text-[10px] font-normal text-white/70"
+                className="text-[10px] font-normal text-white opacity-75"
               >
                 {seg.pinyin}
               </rt>

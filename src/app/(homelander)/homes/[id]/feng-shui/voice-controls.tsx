@@ -175,7 +175,7 @@ export function MicButton({
         "relative grid size-10 shrink-0 place-items-center overflow-hidden border-2 border-white disabled:opacity-60",
         state === "listening"
           ? "bg-raya text-white"
-          : "bg-white text-ink hover:bg-cloud",
+          : "bg-white text-[color:var(--color-ink)] hover:bg-cloud",
       )}
     >
       {/* Live mic level, so it's obvious it can hear you. */}
@@ -208,7 +208,7 @@ export function SpeechToolbar({
   const t = useT();
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-      <p className="text-white/80">
+      <p className="text-white opacity-80">
         {t("Tap the mic to speak in English, BM, 中文 or தமிழ்.")}
       </p>
       <button
@@ -219,8 +219,8 @@ export function SpeechToolbar({
           onSpeakOn(!speakOn);
         }}
         className={cn(
-          "flex items-center gap-1.5 border-2 border-white/80 px-2 py-1 font-semibold",
-          speakOn ? "bg-white text-ink" : "text-white hover:bg-white/10",
+          "flex items-center gap-1.5 border-2 border-current px-2 py-1 font-semibold",
+          speakOn ? "bg-white text-[color:var(--color-ink)]" : "text-white hover:bg-current/10",
         )}
       >
         {speakOn ? (

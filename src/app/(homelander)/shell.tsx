@@ -105,7 +105,7 @@ export function HomeLanderShell({ children }: { children: React.ReactNode }) {
               </PixPanel>
             </nav>
 
-            <div className="pointer-events-auto ml-auto flex items-center gap-1.5 sm:gap-3">
+            <div className="pointer-events-auto ml-auto flex items-center gap-1 sm:gap-3">
               <LanguageToggle />
               <ThemeSwitcher />
               <PixPanel

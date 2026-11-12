@@ -35,7 +35,7 @@ export function drawGlassTexture(colors: ThemeColors, dark: boolean, lit = 1, qu
   // Light: pale blue-green glass. Dark: deep glass with a few warm lit windows.
   const tones = dark
     ? (quiet ? [0.45, 0.55, 0.65, 0.75] : [0.25, 0.37, 0.5, 0.62]).map((t) => mix(tint, colors.background, t))
-    : [0.1, 0.2, 0.3, 0.42].map((t) => mix(tint, colors.background, t));
+    : (quiet ? [0.3, 0.38, 0.46, 0.54] : [0.1, 0.2, 0.3, 0.42]).map((t) => mix(tint, colors.background, t)); // quiet: paler, so ours stay the hero
   const frame = dark ? mix(colors.background, colors.foreground, 0.22) : mix(colors.foreground, colors.background, 0.82);
   ctx.fillStyle = frame;
   ctx.fillRect(0, 0, SIZE, SIZE);
@@ -50,6 +50,31 @@ export function drawGlassTexture(colors: ThemeColors, dark: boolean, lit = 1, qu
       // sky glint on the top edge of each pane
       ctx.fillStyle = dark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.35)";
       ctx.fillRect(c * CELL + 2, r * CELL + 2, CELL - 3, 2);
+    }
+  }
+  return ctx.getImageData(0, 0, SIZE, SIZE);
+}
+
+/**
+ * Low buildings (houses, shophouses): a plastered wall in a warm neutral from the tokens, with small windows
+ * (one window in each 16 px cell, two cells a floor). At night the plaster darkens and about a quarter of the windows are lit.
+ */
+export function drawWallTexture(colors: ThemeColors, dark: boolean): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = SIZE;
+  const ctx = canvas.getContext("2d")!;
+  const plaster = dark ? mix(colors.muted, colors.background, 0.4) : mix(colors.muted, colors.card, 0.55);
+  const shade = dark ? mix(plaster, colors.background, 0.3) : mix(plaster, colors.foreground, 0.08);
+  ctx.fillStyle = plaster;
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  for (let r = 0; r < CELLS; r++) {
+    for (let c = 0; c < CELLS; c++) {
+      const n = noise(c + 7, r + 3);
+      const lit = dark && n > 1 - LIT_QUIET.share;
+      ctx.fillStyle = lit ? LIT_QUIET.colour : dark ? mix(plaster, colors.background, 0.5) : mix(plaster, colors.foreground, 0.3);
+      ctx.fillRect(c * CELL + 4, r * CELL + 3, CELL - 8, CELL - 9); // a small window
+      ctx.fillStyle = shade;
+      ctx.fillRect(c * CELL, r * CELL + CELL - 2, CELL, 2); // a sill line under every row
     }
   }
   return ctx.getImageData(0, 0, SIZE, SIZE);

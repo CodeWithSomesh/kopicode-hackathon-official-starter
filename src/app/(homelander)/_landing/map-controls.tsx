@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { PixButton } from "@/components/homelander/pixel";
 import { Sprite } from "@/components/homelander/sprite";
 import { cn } from "@/lib/utils";
+import { setMapNight, useMapNight } from "@/components/first-key/use-map-colors";
 import { mapSprites } from "./map-data";
 
 const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -13,6 +14,7 @@ const reduced = () => window.matchMedia("(prefers-reduced-motion: reduce)").matc
 export function MapControls({ map, panelOpen }: { map: MLMap | null; panelOpen: boolean }) {
   const [bearing, setBearing] = useState(0);
   const [is3D, setIs3D] = useState(true);
+  const night = useMapNight();
   useEffect(() => {
     if (!map) return;
     const onRotate = () => setBearing(map.getBearing());
@@ -28,8 +30,9 @@ export function MapControls({ map, panelOpen }: { map: MLMap | null; panelOpen: 
   }, [map]);
   if (!map) return null;
   const animate = !reduced();
+  // phones: two columns, so the stack ends above the township sheet (which starts ~280 px down) and Night / 2D stay tappable
   return (
-    <div className={cn("absolute top-[136px] right-4 z-10 grid gap-3", "lg:top-[92px]", panelOpen ? "lg:right-[436px]" : "lg:right-6")}>
+    <div className={cn("absolute top-[120px] right-4 z-10 grid grid-cols-2 gap-2 lg:top-[92px] lg:grid-cols-1 lg:gap-3", panelOpen ? "lg:right-[436px]" : "lg:right-6")}>
       <PixButton size="sm" className="size-10 px-0" onClick={() => map.zoomIn({ animate })} aria-label="Zoom in">
         <Sprite art={mapSprites.plus} scale={3} />
       </PixButton>
@@ -46,6 +49,16 @@ export function MapControls({ map, panelOpen }: { map: MLMap | null; panelOpen: 
         aria-label={is3D ? "Switch to flat 2D view" : "Switch to tilted 3D view"}
       >
         {is3D ? "2D" : "3D"}
+      </PixButton>
+      <PixButton
+        size="sm"
+        tone={night ? "kaya" : "white"}
+        className="size-10 px-0 font-pixel-label text-[9px] uppercase"
+        onClick={() => setMapNight(!night)}
+        aria-pressed={night}
+        aria-label="Night view of the map and the building"
+      >
+        Night
       </PixButton>
     </div>
   );

@@ -34,6 +34,7 @@ export function paletteFrom(c: ThemeColors, dark: boolean): Record<PaletteKey, s
     blanket2: mix(c["chart-3"], paper, 0.55),
     rug: mix(c["chart-4"], paper, 0.45),
     lamp: mix(c["chart-2"], card, 0.5),
+    water: mix("#4f9bc9", paper, 0.3),
   };
 }
 

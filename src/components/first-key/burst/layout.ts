@@ -37,10 +37,13 @@ export type PaletteKey =
   | "blanket"
   | "blanket2"
   | "rug"
-  | "lamp";
+  | "lamp"
+  | "water";
 
-export const ROOM_FLOOR: Record<string, PaletteKey> = { ruang_tamu: "wood", makan: "wood", dapur: "tile" };
-export const roomFloor = (id: string) => ROOM_FLOOR[id] ?? "carpet";
+const ROOM_FLOOR: Record<string, PaletteKey> = { ruang_tamu: "wood", makan: "wood", keluarga: "wood", dewan: "wood", kedai: "wood", lobi: "tile", dek: "tile", parkir: "corridor" };
+/** Floor finish by room: wet rooms and balconies tiled, living areas wood, bedrooms carpet, the car park concrete. */
+export const roomFloor = (id: string): PaletteKey =>
+  ROOM_FLOOR[id] ?? (/^(dapur|tandas|balkoni|utiliti)/.test(id) ? "tile" : "carpet");
 
 const bbox = (u: Unit) => {
   const pts = u.rooms.flatMap((r) => r.polygon);
@@ -73,7 +76,21 @@ function furnish(id: string, rx: number, ry: number, rw: number, rh: number): Lo
     add(x, y, 0, tw, 0.75, td, "table");
     for (const sx of [-0.35, 0.35])
       for (const sy of [-1, 1]) add(x + sx, y + sy * (td / 2 + 0.2), 0, 0.42, 0.46, 0.4, "chair");
-  } else if (id === "dapur") {
+  } else if (id.startsWith("tandas")) {
+    add(rx + 0.3, ry + rh - 0.35, 0, 0.4, 0.4, 0.55, "fridge"); // toilet
+    add(rx + rw - 0.35, ry + 0.35, 0, 0.5, 0.85, 0.45, "counter"); // basin
+    add(rx + rw / 2, ry + rh / 2, 0, Math.min(0.9, rw - 0.5), 0.05, 0.9, "counterTop", 0.02); // shower tray
+  } else if (id === "balkoni") {
+    const n = Math.max(1, Math.min(3, Math.floor(rw / 2.6)));
+    for (let i = 0; i < n; i++) add(rx + (rw * (i + 0.5)) / n, ry + rh / 2, 0, 0.45, 0.45, 0.45, "chair");
+    if (rw > 4) add(rx + rw / 2, ry + rh / 2, 0, 0.6, 0.5, 0.6, "table");
+  } else if (id === "utiliti") {
+    add(rx + rw / 2, ry + rh - 0.6, 0, Math.min(0.9, rw - 0.3), 0.4, 1.6, "bed");
+    add(rx + 0.35, ry + 0.4, 0, 0.55, 0.85, 0.6, "fridge"); // washer
+  } else if (id === "kajian") {
+    add(rx + rw / 2, ry + 0.35, 0, Math.min(1.6, rw - 0.4), 0.74, 0.6, "darkWood"); // desk
+    add(rx + rw / 2, ry + 0.95, 0, 0.45, 0.45, 0.45, "chair");
+  } else if (id.startsWith("dapur")) {
     add(rx + rw - 0.32, ry + rh / 2, 0, 0.6, 0.9, rh - 0.1, "counter");
     add(rx + rw - 0.32, ry + rh / 2, 0.9, 0.64, 0.05, rh - 0.06, "counterTop", 0.02);
     add(rx + rw / 2 - 0.3, ry + rh - 0.32, 0, rw - 0.7, 0.9, 0.6, "counter");
@@ -81,6 +98,7 @@ function furnish(id: string, rx: number, ry: number, rw: number, rh: number): Lo
     add(rx + 0.45, ry + rh - 0.4, 0, 0.7, 1.8, 0.68, "fridge");
   } else if (id.startsWith("bilik")) {
     const master = id === "bilik_utama";
+    if (rh < 2.8) return out;
     const bw = Math.min(master ? 1.6 : 1.1, rw - 0.5);
     add(cx, ry + 0.06, 0, bw + 0.12, 1.0, 0.12, "darkWood"); // headboard on the inner wall
     add(cx, ry + 1.12, 0, bw, 0.45, 2.0, "bed");
@@ -96,34 +114,40 @@ function furnish(id: string, rx: number, ry: number, rw: number, rh: number): Lo
   return out;
 }
 
-/** Lay one floor out as rooms, walls and furniture. Chooses one or two rows to best match the block's footprint shape. */
-export function planFloor(units: Unit[], footprintAspect: number): FloorPlan {
+/**
+ * Lay one floor of flats out as rooms, walls and furniture: `rows` rows round the corridor (the second split off by
+ * width). Each row is stretched to the full width and depth, so a floor of studios is a row of slim flats and a floor
+ * of 3-beds has fewer, wider ones.
+ */
+export function planFloor(units: Unit[], rows: 1 | 2): FloorPlan {
   const dims = units.map(bbox);
-  const rowsFor = (rows: 1 | 2) => {
-    const k = Math.ceil(units.length / rows);
-    const split = rows === 1 ? [dims.map((_, i) => i)] : [dims.map((_, i) => i).slice(0, k), dims.map((_, i) => i).slice(k)];
-    const w = Math.max(...split.map((r) => r.reduce((s, i) => s + dims[i].w, 0)));
-    const depths = split.map((r) => Math.max(0, ...r.map((i) => dims[i].d)));
-    const d = depths.reduce((s, v) => s + v, 0) + CORRIDOR;
-    return { split, w, d };
-  };
-  const one = rowsFor(1);
-  const two = rowsFor(2);
-  const pick = units.length < 2 ? one : Math.abs(Math.log(one.w / one.d / footprintAspect)) < Math.abs(Math.log(two.w / two.d / footprintAspect)) ? one : two;
-  const { w: W, d: D } = pick;
+  const idx = dims.map((_, i) => i);
+  let cut = idx.length;
+  if (rows === 2) {
+    const half = dims.reduce((s, d) => s + d.w, 0) / 2;
+    let acc = 0;
+    cut = idx.findIndex((i) => (acc += dims[i].w) >= half - dims[i].w / 2);
+    cut = Math.min(idx.length - 1, Math.max(1, cut + 1));
+  }
+  const split = rows === 2 && idx.length > 1 ? [idx.slice(0, cut), idx.slice(cut)] : [idx];
+  const rowW = split.map((r) => r.reduce((s, i) => s + dims[i].w, 0));
+  const rowD = split.map((r) => Math.max(0, ...r.map((i) => dims[i].d)));
+  const W = Math.max(...rowW);
+  const D = rowD.reduce((s, v) => s + v, 0) + CORRIDOR;
 
   const placed: PlacedUnit[] = [];
   const walls: Wall[] = [];
-  pick.split.forEach((row, ri) => {
-    const rowW = row.reduce((s, i) => s + dims[i].w, 0);
-    let x = -rowW / 2;
+  split.forEach((row, ri) => {
+    const kx = W / rowW[ri];
+    let x = -W / 2;
     // Row 0 has its facade on the south side (+z), row 1 on the north (-z). y = 0 is the corridor side of the unit.
     const dir = ri === 0 ? 1 : -1;
     for (const [n, i] of row.entries()) {
       const u = units[i];
       const { w, d } = dims[i];
-      const zOrigin = dir * (D / 2 - d); // z of the unit's corridor edge
-      const toPlate = (lx: number, ly: number) => ({ x: x + lx, z: zOrigin + dir * ly });
+      const ky = rowD[ri] / d;
+      const zOrigin = dir * (D / 2 - rowD[ri]); // z of the unit's corridor edge
+      const toPlate = (lx: number, ly: number) => ({ x: x + lx * kx, z: zOrigin + dir * ly * ky });
       const rectOf = (lx0: number, ly0: number, lx1: number, ly1: number): Rect => {
         const a = toPlate(lx0, ly0);
         const b = toPlate(lx1, ly1);
@@ -157,19 +181,22 @@ export function planFloor(units: Unit[], footprintAspect: number): FloorPlan {
           const b = toPlate(bx - nx * inset, by - ny * inset);
           const wall = { nx, nz: dir * ny, outer, unit: placed.length };
           // The flat's front door: a gap in the living room's corridor wall.
-          if (r.id === "ruang_tamu" && ny === -1) {
-            const g0 = toPlate(0.8, ay - ny * inset);
-            const g1 = toPlate(0.8 + DOOR_W, ay - ny * inset);
+          const doorAt = r.id === u.door.room ? u.door.at[0] : r.id === "dapur_2" ? rx + 0.4 : undefined;
+          if (doorAt !== undefined && ny === -1 && ry <= 1e-6) {
+            const g0 = toPlate(doorAt, ay - ny * inset);
+            const g1 = toPlate(doorAt + DOOR_W, ay - ny * inset);
             walls.push({ x0: a.x, z0: a.z, x1: g0.x, z1: g0.z, ...wall }, { x0: g1.x, z0: g1.z, x1: b.x, z1: b.z, ...wall });
           } else walls.push({ x0: a.x, z0: a.z, x1: b.x, z1: b.z, ...wall });
         }
       }
       placed.push({ index: i, rect: rectOf(0, 0, w, d), rooms, furniture });
-      x += w;
+      x += w * kx;
     }
   });
+  // The corridor's two dead ends.
+  for (const sx of [-1, 1]) walls.push({ x0: (sx * W) / 2, z0: -CORRIDOR / 2, x1: (sx * W) / 2, z1: CORRIDOR / 2, nx: sx, nz: 0, outer: true, unit: -1 });
   return { w: W, d: D, units: placed, walls };
 }
 
-/** Floors of a block that are identical: the plan of floor 1, keyed by unit index within a floor. */
+/** The flats on one floor, in the order planFloor indexes them. */
 export const unitsOnFloor = (b: Building, floor: number) => b.units.filter((u) => u.floor === floor);

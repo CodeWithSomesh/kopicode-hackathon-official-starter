@@ -3,7 +3,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Map, { Marker, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
-import { addProtocol, setWorkerUrl, type LayerSpecification, type Map as MLMap, type StyleSpecification } from "maplibre-gl";
+import { addProtocol, setWorkerUrl, type ExpressionSpecification, type LayerSpecification, type Map as MLMap, type StyleSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import { gsap } from "gsap";
 import { layers as basemapLayers, namedFlavor } from "@protomaps/basemaps";
@@ -16,7 +16,7 @@ import { useHomeLander } from "@/lib/homelander/store";
 import { pillLean, pillLeanPhone, railGeoJSON, stationGeoJSON, towns } from "@/app/(homelander)/_landing/map-data";
 import { TownPill, WorkMarker } from "@/app/(homelander)/_landing/town-pill";
 import { useMapColors } from "../use-map-colors";
-import { drawGlassTexture, drawWallTexture } from "./glass-texture";
+import { drawGlassTexture, mix } from "./glass-texture";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 
 // Turbopack can't resolve MapLibre's module worker next to the bundle, so it is served from /public (a copy of
@@ -168,37 +168,35 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
   const idFor = (step: number) =>
     `glass-${dark ? "d" : "l"}-${colors["chart-3"]}-${colors.background}-${colors.primary}-${colors.foreground}${dark ? `-L${step}` : ""}`;
   const glassId = idFor(lit);
-  // Basemap buildings get windows by height: plastered walls under 12 m (houses, shophouses), a quieter glass tower from 12 m up.
-  const themeKey = `${dark ? "d" : "l"}-${colors["chart-3"]}-${colors.background}-${colors.muted}-${colors.card}-${colors.foreground}`;
-  const quietId = `quiet-${themeKey}`;
-  const wallId = `wall-${themeKey}`;
-  // Protomaps layers for the theme, with its flat `buildings` fill swapped for soft, plain extrusions: the real
-  // neighbourhood stands up quietly around ours (the township is the only textured thing). Height from the data, else 6 m.
-  const basemap = useMemo<LayerSpecification[]>(
-    () => [
+  // The real neighbourhood: plain massing, no texture (a repeating window pattern read as bathroom tiles on walls and roofs and
+  // shimmered as the camera moved). Soft tone by height, walls shaded against roofs by the vertical gradient. Only OUR towers carry windows.
+  const roofColor = dark ? mix(colors.background, colors.foreground, 0.3) : mix(colors.foreground, colors.background, 0.72);
+  // Protomaps layers for the theme, with its flat `buildings` fill swapped for plain extrusions. Height from the data, else 6 m.
+  // Only `building` outlines are drawn: a `building_part` shares its walls with the outline (both start at the ground), so
+  // drawing both put two coplanar faces in the same place and they z-fought (flicker) as the camera moved.
+  const basemap = useMemo<LayerSpecification[]>(() => {
+    const base = mix(colors.muted, dark ? colors.background : colors.card, dark ? 0.4 : 0.55);
+    const tones = [base, mix(base, colors["chart-3"], dark ? 0.12 : 0.1), mix(base, colors["chart-3"], dark ? 0.24 : 0.22)];
+    const heightOf: ExpressionSpecification = ["coalesce", ["to-number", ["get", "height"], 0], 6];
+    return [
       ...basemapLayers("protomaps", namedFlavor(dark ? "dark" : "light"), { lang: "en" }).filter((l) => l.id !== "buildings" && l.id !== "background"), // its grey background would show outside the file
-      // Heights from the data, else 6 m. Parts (podium, tower) carry their own min_height, so they stack on each other.
-      ...(["low", "high"] as const).map((band): LayerSpecification => ({
-        id: `basemap-buildings-${band}`,
+      {
+        id: "basemap-buildings",
         type: "fill-extrusion",
         source: "protomaps",
         "source-layer": "buildings",
         minzoom: 14,
-        filter: [
-          "all",
-          ["in", ["get", "kind"], ["literal", ["building", "building_part"]]],
-          [band === "low" ? "<" : ">=", ["coalesce", ["to-number", ["get", "height"], 0], 6], 12],
-        ],
+        filter: ["==", ["get", "kind"], "building"],
         paint: {
-          "fill-extrusion-height": ["coalesce", ["to-number", ["get", "height"], 0], 6],
-          "fill-extrusion-base": ["coalesce", ["to-number", ["get", "min_height"], 0], 0],
-          "fill-extrusion-opacity": dark ? 0.9 : 0.85,
-          "fill-extrusion-pattern": band === "low" ? wallId : quietId,
+          "fill-extrusion-height": heightOf,
+          "fill-extrusion-base": 0,
+          "fill-extrusion-opacity": 1,
+          "fill-extrusion-vertical-gradient": true,
+          "fill-extrusion-color": ["interpolate", ["linear"], heightOf, 6, tones[0], 40, tones[1], 120, tones[2]],
         },
-      })),
-    ],
-    [dark, wallId, quietId],
-  );
+      },
+    ];
+  }, [dark, colors]);
   const style = useMemo<StyleSpecification>(() => {
     const flavor = namedFlavor(dark ? "dark" : "light");
     const overlays: LayerSpecification[] = [
@@ -252,6 +250,20 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         },
       },
       {
+        // Plain roof cap: the window pattern would otherwise wrap over the roofs. 0.6 m slab in a flat roof colour.
+        id: "township-roofs",
+        type: "fill-extrusion",
+        source: "buildings",
+        minzoom: 14,
+        filter: ["!=", ["get", "id"], selectedId ?? ""],
+        paint: {
+          "fill-extrusion-height": ["+", ["get", "height"], 0.6],
+          "fill-extrusion-base": ["get", "height"],
+          "fill-extrusion-opacity": 1,
+          "fill-extrusion-color": roofColor,
+        },
+      },
+      {
         id: "township-selected",
         type: "fill-extrusion",
         source: "buildings",
@@ -299,7 +311,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         ...overlays,
       ],
     };
-  }, [colors, dark, selectedId, glassId, withBasemap, basemap, libertyStyle, underlay]);
+  }, [colors, dark, selectedId, glassId, roofColor, withBasemap, basemap, libertyStyle, underlay]);
 
   // Draw the window texture for the current theme. MapLibre may ask before or after this runs, so register it now,
   // on every style change, and when the style asks for it by name. In dark all night-reveal frames are drawn up
@@ -314,9 +326,6 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
           map.addImage(id, drawGlassTexture(colors, dark, step / NIGHT_STEPS), { pixelRatio: window.innerWidth < 640 ? 3.5 : 2 });
         }
       }
-      const pr = { pixelRatio: window.innerWidth < 640 ? 3.5 : 2 };
-      if (!map.hasImage(quietId)) map.addImage(quietId, drawGlassTexture(colors, dark, 1, true), pr);
-      if (!map.hasImage(wallId)) map.addImage(wallId, drawWallTexture(colors, dark), pr);
     };
     ensure();
     map.on("styledata", ensure);
@@ -426,7 +435,7 @@ export default function NeighbourhoodMap({ selectedId, onSelect, paused, onArriv
         maxPitch={70}
         minZoom={8.5}
         maxBounds={withBasemap ? PMTILES_BOUNDS : undefined}
-        interactiveLayerIds={["township-buildings", "township-selected"]}
+        interactiveLayerIds={["township-buildings", "township-roofs", "township-selected"]}
         cursor="auto"
         onError={(e) => {
           // Only a request that was really aborted (the view moved on) is quiet. Everything else stays loud, most of

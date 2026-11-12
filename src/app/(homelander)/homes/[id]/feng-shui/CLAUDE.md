@@ -30,6 +30,13 @@ These override the list above where they differ.
 - **Saving:** `localStorage` per unit. No Supabase table.
 - **Build order:** 1 plans and sun, 2 furniture, 3 feng shui rules, 4 parser, 5 AI and voice, 6 3D.
 
+## AI and voice (phase 5)
+
+- `src/app/api/feng-shui/route.ts` turns free text or speech into the parser's own commands (`commands.ts`). It re-parses every command and drops any it can't read, so the model can never edit the layout directly.
+- Same credit guard as `/api/chat`: signed-in users only, unless the app is in demo mode. Locally it needs `AI_GATEWAY_API_KEY` in `.env.local`. `FENG_SHUI_AI_MODEL` overrides `AI_MODEL` for this route only.
+- If the AI fails, the page falls back to the quick parser and stops calling the AI for the rest of the session.
+- Voice uses the browser's own speech recognition and speech output (`voice.ts`). Tamil speech output depends on the device having a Tamil voice installed.
+
 ## How people get here
 
 - **From the landing map:** the home details panel has a **Feng Shui** button. Teammate A builds that.

@@ -6,7 +6,16 @@ import { PixButton, PixPanel, PixTag } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import { CATALOG, defaultItems, type Item, type Kind } from "./furniture";
 import { CommandConsole, type LogEntry } from "./command-console";
-import { runText, type Ctx, type Lang, type World } from "./commands";
+import {
+  describeItems,
+  ROOM_PHRASE,
+  runText,
+  unreadable,
+  type Ctx,
+  type Lang,
+  type Reply,
+  type World,
+} from "./commands";
 import { baguaCells, ongScore, readFengShui, type Note } from "./fengshui";
 import { FengShuiPanel } from "./fengshui-panel";
 import { FurniturePanel } from "./furniture-panel";
@@ -34,6 +43,8 @@ import {
   type Heat,
 } from "./sun";
 import { clearLayout, loadLayout, saveLayout } from "./saved";
+import { speak, type SpeechLang } from "./voice";
+import { MicButton, SpeechToolbar } from "./voice-controls";
 
 type Props = { unitId: string; planId: Plan["id"]; lat: number; lng: number };
 
@@ -62,6 +73,11 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
   const [showBagua, setShowBagua] = useState(false);
   const [lang, setLang] = useState<Lang>("mg");
   const [log, setLog] = useState<LogEntry[]>([]);
+  const [speechLang, setSpeechLang] = useState<SpeechLang>("en");
+  const [speakOn, setSpeakOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  /** Set once the AI route fails, so later requests skip straight to the quick parser. */
+  const [aiDown, setAiDown] = useState<{ en: string; mg: string } | null>(null);
 
   // The server renders the default layout; the buyer's saved one loads after hydration.
   useEffect(() => {
@@ -307,13 +323,137 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
     setShowBagua(w.showBagua);
   };
 
-  const runCommand = (text: string) => {
-    const r = runText(text, world, ctx);
-    applyWorld(r.world);
+  const addLog = (e: Omit<LogEntry, "id">) =>
     setLog((prev) => [
       ...prev.slice(-30),
-      { id: Date.now(), said: text, replies: r.replies },
+      { ...e, id: Date.now() + Math.random() },
     ]);
+
+  /** Read the outcome aloud: the AI's reply for 中文 / தமிழ், otherwise the local replies. */
+  const voiceOut = (
+    replies: Reply[],
+    ai?: { text: string; lang: SpeechLang },
+  ) => {
+    if (!speakOn) return undefined;
+    const said = ai
+      ? speak(ai.text, ai.lang)
+      : speak(
+          replies.map((r) => r[lang]).join(" "),
+          lang === "mg" ? "ms" : "en",
+        );
+    if (!said && ai) {
+      const en =
+        ai.lang === "ta"
+          ? "Tamil"
+          : ai.lang === "zh"
+            ? "Mandarin"
+            : "that language";
+      const mg =
+        ai.lang === "ta"
+          ? "Tamil"
+          : ai.lang === "zh"
+            ? "Mandarin"
+            : "bahasa tu";
+      return {
+        en: `No ${en} voice on this device, so the reply is text only.`,
+        mg: `Device ni takde suara ${mg}, so jawapan dalam tulisan je.`,
+      };
+    }
+    return undefined;
+  };
+
+  /**
+   * Quick commands run locally and instantly. Anything the parser can't read, and anything
+   * in Mandarin or Tamil, goes to the AI route, which hands back commands in the parser's own
+   * words. If the AI isn't available, the local parser's answer stands.
+   */
+  const runCommand = async (text: string, spoken?: SpeechLang) => {
+    const script: SpeechLang | undefined = /[\u3400-\u9fff]/.test(text)
+      ? "zh"
+      : /[\u0b80-\u0bff]/.test(text)
+        ? "ta"
+        : undefined;
+    const speech = script ?? spoken ?? (lang === "mg" ? "ms" : "en");
+    const needsAI =
+      speech === "zh" || speech === "ta" || unreadable(text).length > 0;
+
+    if (!needsAI) {
+      const r = runText(text, world, ctx);
+      applyWorld(r.world);
+      addLog({ said: text, replies: r.replies, note: voiceOut(r.replies) });
+      return;
+    }
+
+    if (aiDown) {
+      const r = runText(text, world, ctx);
+      applyWorld(r.world);
+      addLog({ said: text, replies: r.replies, note: aiDown });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await fetch("/api/feng-shui", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal: AbortSignal.timeout(15_000),
+        body: JSON.stringify({
+          text,
+          speech,
+          replyStyle: lang,
+          rooms: plan.floors
+            .flatMap((f) => f.rooms.map((r) => ROOM_PHRASE[r.id]))
+            .filter(Boolean),
+          items: describeItems(plan, items),
+          selected: selectedItem
+            ? describeItems(plan, [selectedItem])[0]
+            : null,
+        }),
+      });
+      if (!res.ok) throw new Error(res.status === 401 ? "signin" : "down");
+      const data = (await res.json()) as { commands: string[]; reply: string };
+      const foreign = speech === "zh" || speech === "ta";
+      const ai =
+        foreign || !data.commands.length
+          ? { text: data.reply, lang: speech }
+          : undefined;
+      if (!data.commands.length) {
+        addLog({
+          said: text,
+          replies: [],
+          aiReply: ai,
+          note: voiceOut([], ai),
+        });
+        return;
+      }
+      const r = runText(data.commands.join(" then "), world, ctx);
+      applyWorld(r.world);
+      addLog({
+        said: text,
+        heard: data.commands,
+        aiReply: ai,
+        replies: r.replies,
+        note: voiceOut(r.replies, ai),
+      });
+    } catch (err) {
+      // Fall back to the quick parser so the buyer still gets an answer.
+      const r = runText(text, world, ctx);
+      applyWorld(r.world);
+      const why =
+        err instanceof Error && err.message === "signin"
+          ? {
+              en: "Log in to let the AI handle free-form requests. The quick commands still work.",
+              mg: "Log in dulu baru AI boleh tolong ayat bebas. Arahan cepat masih jalan.",
+            }
+          : {
+              en: "The AI isn't reachable right now, so only the quick commands work.",
+              mg: "AI tak dapat sambung sekarang, arahan cepat je jalan.",
+            };
+      setAiDown(why);
+      addLog({ said: text, replies: r.replies, note: why });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const pickNote = (n: Note) => {
@@ -404,7 +544,23 @@ export function FengShuiBuilder({ unitId, planId, lat, lng }: Props) {
           log={log}
           lang={lang}
           onLang={setLang}
-          onRun={runCommand}
+          onRun={(t) => void runCommand(t)}
+          busy={busy}
+          toolbar={
+            <SpeechToolbar
+              lang={speechLang}
+              onLang={setSpeechLang}
+              speakOn={speakOn}
+              onSpeakOn={setSpeakOn}
+            />
+          }
+          extra={
+            <MicButton
+              lang={speechLang}
+              disabled={busy}
+              onHeard={(t) => void runCommand(t, speechLang)}
+            />
+          }
         />
       </div>
 

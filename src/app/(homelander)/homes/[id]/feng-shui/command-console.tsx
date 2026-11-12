@@ -5,15 +5,27 @@ import { PixPanel } from "@/components/homelander/pixel";
 import { cn } from "@/lib/utils";
 import type { Lang, Reply } from "./commands";
 
-export type LogEntry = { id: number; said: string; replies: Reply[] };
+export type LogEntry = {
+  id: number;
+  said: string;
+  replies: Reply[];
+  /** Commands the AI turned the request into, when the quick parser couldn't read it. */
+  heard?: string[];
+  /** The AI's own reply, shown when it's in a language the toggle doesn't cover (中文, தமிழ்). */
+  aiReply?: { text: string; lang: string };
+  /** A notice about the AI or voice, e.g. "log in to use AI". */
+  note?: { en: string; mg: string };
+};
 
 type Props = {
   log: LogEntry[];
   lang: Lang;
   onLang: (l: Lang) => void;
   onRun: (text: string) => void;
-  /** Slot for extra input controls, e.g. the mic button in phase 5. */
+  /** Extra control inside the input row, e.g. the mic button. */
   extra?: ReactNode;
+  /** A row above the input, e.g. spoken language and read-aloud. */
+  toolbar?: ReactNode;
   busy?: boolean;
 };
 
@@ -31,7 +43,15 @@ const CHIPS = [
   "mula semula",
 ];
 
-export function CommandConsole({ log, lang, onLang, onRun, extra, busy }: Props) {
+export function CommandConsole({
+  log,
+  lang,
+  onLang,
+  onRun,
+  extra,
+  toolbar,
+  busy,
+}: Props) {
   const [text, setText] = useState("");
   const box = useRef<HTMLDivElement>(null);
 
@@ -49,7 +69,11 @@ export function CommandConsole({ log, lang, onLang, onRun, extra, busy }: Props)
     <PixPanel tone="ink" className="grid gap-3 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-pixel text-lg font-bold">Cakap je</h2>
-        <div className="flex items-center gap-1 text-xs" role="group" aria-label="Reply language">
+        <div
+          className="flex items-center gap-1 text-xs"
+          role="group"
+          aria-label="Reply language"
+        >
           <span className="mr-1 text-white/70">Reply in</span>
           {(
             [
@@ -64,7 +88,9 @@ export function CommandConsole({ log, lang, onLang, onRun, extra, busy }: Props)
               onClick={() => onLang(v)}
               className={cn(
                 "border-2 border-white/80 px-2 py-0.5 font-semibold",
-                lang === v ? "bg-white text-ink" : "text-white hover:bg-white/10",
+                lang === v
+                  ? "bg-white text-ink"
+                  : "text-white hover:bg-white/10",
               )}
             >
               {l}
@@ -94,15 +120,34 @@ export function CommandConsole({ log, lang, onLang, onRun, extra, busy }: Props)
                 </span>
                 {e.said}
               </p>
+              {e.heard?.length ? (
+                <p className="pl-4 text-xs text-white/60">
+                  {lang === "mg" ? "Faham sebagai" : "Understood as"}:{" "}
+                  {e.heard.join(" · ")}
+                </p>
+              ) : null}
+              {e.aiReply ? (
+                <p className="pl-4 text-white" lang={e.aiReply.lang}>
+                  {e.aiReply.text}
+                </p>
+              ) : null}
               {e.replies.map((r, i) => (
-                <p key={i} className={cn("pl-4", r.ok ? "text-white/85" : "text-kaya")}>
+                <p
+                  key={i}
+                  className={cn("pl-4", r.ok ? "text-white/85" : "text-kaya")}
+                >
                   {r[lang]}
                 </p>
               ))}
+              {e.note ? (
+                <p className="pl-4 text-xs text-kaya">{e.note[lang]}</p>
+              ) : null}
             </div>
           ))
         )}
       </div>
+
+      {toolbar}
 
       <form
         className="flex gap-2"
@@ -119,7 +164,11 @@ export function CommandConsole({ log, lang, onLang, onRun, extra, busy }: Props)
           value={text}
           onChange={(e) => setText(e.target.value)}
           autoComplete="off"
-          placeholder={lang === "mg" ? "alih sofa kiri 1 lepas tu pusing dia" : "move the sofa left 1 m then turn it"}
+          placeholder={
+            lang === "mg"
+              ? "alih sofa kiri 1 lepas tu pusing dia"
+              : "move the sofa left 1 m then turn it"
+          }
           className="min-w-0 flex-1 border-2 border-white bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-soft/70"
         />
         {extra}

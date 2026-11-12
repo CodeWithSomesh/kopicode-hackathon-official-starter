@@ -13,23 +13,26 @@ import { FLOOR_H } from "../burst/layout";
 
 export type Facade = "curtain" | "columns" | "balcony" | "fins";
 export type Crown = "plant" | "frame";
-export type Role = "glass" | "frame" | "podium" | "rail" | "roof";
-export type Design = { facade: Facade; crown: Crown; setback: boolean };
+export type Role = "glass" | "frame" | "podium" | "sign" | "water" | "green" | "roof" | "rail";
+export type Design = {
+  facade: Facade;
+  crown: Crown;
+  setback: boolean;
+  /** "retail": shopfronts behind a five-foot-way arcade with a signage band (Maya Bay's podium of shops); "plain": lobby + car park. */
+  podium?: "retail" | "plain";
+  /** Storeys (L-numbers, 1 = ground) drawn as an open facilities deck instead of flats (North Woods' L6 and L30). */
+  decks?: number[];
+};
 
-// Assigned by hand so neighbours differ: two glass towers, two column towers, two balcony towers; low-rise fins and balconies.
+// The Cove block: 5 towers in the north row. a-c after Maya Bay Residences (3 serviced-apartment towers on a retail
+// podium), d-e after North Woods Residences (2 blocks with facilities decks). Neighbours differ in facade or crown.
+// ponytail: deck storeys are placeholders until exec-fk-plans sends the real ones; edit `decks` here.
 const DESIGNS: Record<string, Design> = {
-  a: { facade: "curtain", crown: "frame", setback: false },
-  b: { facade: "balcony", crown: "plant", setback: false },
-  c: { facade: "columns", crown: "frame", setback: true },
-  d: { facade: "curtain", crown: "plant", setback: true },
-  e: { facade: "balcony", crown: "frame", setback: true },
-  f: { facade: "columns", crown: "plant", setback: false },
-  g: { facade: "fins", crown: "plant", setback: false },
-  h: { facade: "balcony", crown: "plant", setback: false },
-  j: { facade: "fins", crown: "frame", setback: false },
-  k: { facade: "balcony", crown: "plant", setback: false },
-  l: { facade: "fins", crown: "plant", setback: false },
-  m: { facade: "balcony", crown: "frame", setback: false },
+  a: { facade: "balcony", crown: "frame", setback: false, podium: "retail" },
+  b: { facade: "columns", crown: "plant", setback: true, podium: "retail" },
+  c: { facade: "balcony", crown: "plant", setback: false, podium: "retail" },
+  d: { facade: "curtain", crown: "frame", setback: false, podium: "plain", decks: [6, 30] },
+  e: { facade: "fins", crown: "plant", setback: true, podium: "plain", decks: [6, 30] },
 };
 export const designOf = (b: Building): Design => DESIGNS[b.id] ?? { facade: "balcony", crown: "plant", setback: false };
 
@@ -45,7 +48,9 @@ const TEX_W = 6; // metres across one texture tile
 const TEX_FLOORS = 4; // floors up one texture tile
 const SETBACK = 1.6;
 const SETBACK_FLOORS = 2;
-const podiumFloors = (b: Building) => (b.floors >= 15 ? 2 : 0);
+const ARCADE = 3.6; // the five-foot way: shopfronts sit this far behind the podium's edge (it is wider than five feet)
+const podiumFloors = (b: Building, d: Design) =>
+  d.podium === "retail" ? (b.floors >= 28 ? 3 : 2) : d.podium === "plain" || b.floors >= 15 ? 2 : 0;
 
 type P = [number, number]; // x east, z south
 type Edge = { a: P; b: P; dir: P; n: P; len: number };
@@ -173,8 +178,9 @@ const along = (len: number, step: number, margin: number) => {
 export function towerParts(b: Building, outline: P[], from: number, to: number, roof: boolean): Partial<Record<Role, THREE.BufferGeometry>> {
   const d = designOf(b);
   const f = FACADE[d.facade];
-  const M: Record<Role, Mesher> = { glass: new Mesher(), frame: new Mesher(), podium: new Mesher(), rail: new Mesher(), roof: new Mesher() };
-  const pod = podiumFloors(b);
+  const M = Object.fromEntries(ROLES.map((r) => [r, new Mesher()])) as Record<Role, Mesher>;
+  const pod = podiumFloors(b, d);
+  const deck = new Set((d.decks ?? []).map((l) => l - 1).filter((fl) => fl >= pod && fl < b.floors - 1)); // 0-based, never the roof storey
   const top = b.floors;
   const setFrom = d.setback && top - SETBACK_FLOORS > pod + 3 ? top - SETBACK_FLOORS : top;
   const shape = (fl: number) => (fl >= setFrom ? offset(outline, -SETBACK) : outline);
@@ -184,6 +190,27 @@ export function towerParts(b: Building, outline: P[], from: number, to: number, 
   for (let fl = from; fl < to; fl++) {
     const y0 = fl * FLOOR_H;
     const y1 = y0 + FLOOR_H;
+    if (fl < pod && d.podium === "retail") {
+      const edge = 4; // the podium reaches 4 m past the tower
+      if (fl === 0) {
+        // Shopfronts behind an arcade: glass set back, a mullion between shops, columns on the podium edge, a signage band on the canopy fascia.
+        M.glass.prism(offset(outline, edge - ARCADE), y0, y1 - 0.4, { top: false, bottom: false });
+        for (const e of faces) {
+          for (const t of along(e.len, 6, 0)) M.frame.edgeBox(e, t, 0.15, 0.2, edge - ARCADE, y0, y1 - 0.4);
+          for (const t of along(e.len, 5, 0.5)) M.podium.edgeBox(e, t, 0.5, 0.5, edge - 0.55, y0, y1 - 0.4);
+          const shops = along(e.len, 6, 0);
+          for (let i = 0; i < shops.length - 1; i++)
+            M[i % 2 ? "podium" : "sign"].edgeBox(e, (shops[i] + shops[i + 1]) / 2, shops[i + 1] - shops[i] - 0.3, 0.08, edge, y1 - 0.4 - 0.55, y1 - 0.4 - 0.08);
+        }
+        M.podium.prism(offset(outline, edge), y1 - 0.4, y1); // the canopy: the arcade's roof is the first floor slab
+      } else {
+        M.podium.prism(offset(outline, edge - 0.2), y0, y0 + 0.8, { top: false, bottom: false });
+        M.glass.prism(offset(outline, edge - 0.5), y0 + 0.8, y1 - 0.6, { top: false, bottom: false });
+        M.podium.prism(offset(outline, edge), y1 - 0.6, y1);
+        if (fl === pod - 1) for (const e of longest) M.green.edgeBox(e, e.len / 2, e.len - 2, 1.2, 1.6, y1, y1 + 0.7); // planters on the podium roof
+      }
+      continue;
+    }
     if (fl < pod) {
       // Podium: a lobby glass band at ground, a solid car-park floor with a dark opening band above, wider than the tower.
       if (fl === 0) {
@@ -197,7 +224,19 @@ export function towerParts(b: Building, outline: P[], from: number, to: number, 
       continue;
     }
     const o = shape(fl);
-    M.glass.prism(offset(o, -f.inset), y0, y1, { top: false, bottom: fl === from });
+    if (deck.has(fl)) {
+      // A facilities deck: open between slabs, columns at the corners, a glass balustrade, a pool strip and planters round a core.
+      M.frame.prism(offset(o, f.slabOut), y0, y0 + 0.35);
+      for (const p of offset(o, -0.5)) M.frame.post(p, 0.6, y0 + 0.35, y1);
+      M.rail.prism(offset(o, -0.2), y0 + 0.35, y0 + 1.45, { top: false, bottom: false });
+      const core = offset(o, -Math.min(...longest.map((e) => e.len), 18) * 0.28);
+      M.podium.prism(core, y0 + 0.35, y1, { top: false, bottom: false });
+      const [l0, l1] = longest;
+      if (l0) M.water.edgeBox(l0, l0.len / 2, l0.len * 0.6, 2.4, -3.2, y0 + 0.35, y0 + 0.5);
+      if (l1) M.green.edgeBox(l1, l1.len / 2, l1.len * 0.7, 1, -1.8, y0 + 0.35, y0 + 0.95);
+      continue;
+    }
+    M.glass.prism(offset(o, -f.inset), y0, y1, { top: false, bottom: fl === from || deck.has(fl - 1) });
     M.frame.prism(offset(o, f.slabOut), y0, y0 + f.slabH);
     if (fl === setFrom) M.frame.prism(offset(outline, f.slabOut), y0 - 0.05, y0 + 0.35); // the terrace slab under the setback
     if (d.facade === "balcony" && fl < setFrom) {
@@ -382,9 +421,13 @@ export function towerMaterials(b: Building, colors: ThemeColors, dark: boolean, 
     glass,
     frame: solid(frameCol, 0.55),
     podium: solid(dark ? "#4a4640" : "#d8cfc2", 0.8),
-    rail,
+    // shop signage: the theme's accent, muted towards the stone so a row of shops reads as signs, not as an alarm
+    sign: solid(mix(colors.primary, dark ? "#4a4640" : "#d8cfc2", 0.35), 0.6),
+    water: solid(mix(colors["chart-3"], "#5fb4d6", 0.6), 0.1),
+    green: solid(mix(colors["chart-2"], "#6f9a5a", 0.7), 0.9),
     roof: solid(dark ? "#4d525a" : "#e4dfd7", 0.7),
+    rail,
   };
 }
 
-export const ROLES: Role[] = ["glass", "frame", "podium", "roof", "rail"]; // rail last: it is see-through
+export const ROLES: Role[] = ["glass", "frame", "podium", "sign", "water", "green", "roof", "rail"]; // rail last: it is see-through

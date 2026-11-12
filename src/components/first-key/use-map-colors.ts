@@ -45,6 +45,10 @@ const applyNight = (on: boolean) => {
   }
 };
 applyNight(mapNight);
+/** The night tokens belong to the HomeLander screens only: pages outside them (admin, dashboard, 404) follow the theme alone, so drop the vars there and restore them when back in. */
+export function syncNightVars() {
+  applyNight(mapNight && !!document.querySelector("[data-jtheme]:not([data-embedded])"));
+}
 export function setMapNight(on: boolean) {
   mapNight = on;
   applyNight(on);

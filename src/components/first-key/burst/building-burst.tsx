@@ -11,7 +11,7 @@ import { useThemeColors, type ThemeColors } from "../use-theme-colors";
 import { usePrefersReducedMotion } from "../use-reduced-motion";
 import { BANDS, bandOf } from "./price-band";
 import { FLOOR_H, LOW_H, planFloor, unitsOnFloor } from "./layout";
-import { glassMaterials, InteriorMeshes, RoofTop, ShellBox, Balconies } from "./dollhouse";
+import { glassMaterials, InteriorMeshes, RoofTop, ShellBox, Balconies, outlineGeom, slabGeom } from "./dollhouse";
 import type { MapView } from "./map-view";
 
 const END_PITCH = 50; // the three-quarter view, degrees from straight down
@@ -43,7 +43,9 @@ const footprintOf = (b: Building) => {
   const kz = 110_574;
   const xs = b.footprint.map((p) => (p[0] - c[0]) * kx);
   const zs = b.footprint.map((p) => (p[1] - c[1]) * kz);
-  return { c, kx, kz, w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs) };
+  // The map's (chamfered) footprint in metres, x east and z south, so the 3D shell has the same corners.
+  const outline = b.footprint.slice(0, -1).map((_, i) => [xs[i], -zs[i]] as [number, number]);
+  return { c, kx, kz, w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs), outline };
 };
 
 const isDark = (rgb: string) => (rgb.match(/\d+/g) ?? ["255"]).slice(0, 3).reduce((t, v) => t + Number(v), 0) / 3 < 128;
@@ -172,6 +174,8 @@ function Scene({
     () => new THREE.MeshLambertMaterial({ color: colors.primary, transparent: true, opacity: 0, depthWrite: false }),
     [colors.primary],
   );
+  const tintGeom = useMemo(() => outlineGeom(fp.outline, 0.05, building.heightM + 0.15, 0.01, 0.05), [fp, building.heightM]);
+  const plateGeom = useMemo(() => slabGeom(fp.w + 0.5, 0.3, fp.d + 0.5, 0.08), [fp]); // 8 cm fillet on the floor slab
   const ground = useMemo(
     () => new THREE.MeshStandardMaterial({ color: colors.muted, transparent: true, opacity: 0, roughness: 1 }),
     [colors.muted],
@@ -203,7 +207,14 @@ function Scene({
   const rig = useRef<Rig>({ bearing: 0, pitch: 60, dist: 300, tx: 0, ty: 0, tz: 0, off: 0, bg: 0, lift: 0 });
   const played = useRef(false);
   const [labels, setLabels] = useState(false);
-  const showLabels = open && (reduced || labels); // chips appear once the roof is off
+  // drei's Html mounts its own React root; mounting it in the scene's first commit trips StrictMode's double mount
+  // (a reduced-motion deep link did exactly that), so chips wait one tick after the scene mounts.
+  const [labelReady, setLabelReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setLabelReady(true), 0);
+    return () => clearTimeout(t);
+  }, []);
+  const showLabels = labelReady && open && (reduced || labels); // chips appear once the roof is off
 
   // The shot: one timeline in, a shorter one back out. Reduced motion jumps to the end pose.
   useEffect(() => {
@@ -283,25 +294,21 @@ function Scene({
         <circleGeometry args={[3000, 64]} />
       </mesh>
 
-      <mesh material={tint} position-y={building.heightM / 2 + 0.05} renderOrder={3}>
-        <boxGeometry args={[fp.w + 0.1, building.heightM + 0.1, fp.d + 0.1]} />
-      </mesh>
+      <mesh geometry={tintGeom} material={tint} renderOrder={3} />
 
       {/* Floors below the cut: a glass shell with balconies. */}
       {floor > 1 && (
         <group>
-          <ShellBox w={fp.w} d={fp.d} y0={0} y1={floorY} mats={mats.solid} />
+          <ShellBox outline={fp.outline} y0={0} y1={floorY} mats={mats.solid} />
           <Balconies w={fp.w} d={fp.d} levels={floor - 1} from={1} material={mats.slab} />
         </group>
       )}
 
       {/* The revealed floor. */}
       <group position-y={floorY}>
-        <mesh position-y={-0.13} material={mats.plate} receiveShadow>
-          <boxGeometry args={[fp.w + 0.5, 0.3, fp.d + 0.5]} />
-        </mesh>
+        <mesh position-y={-0.13} geometry={plateGeom} material={mats.plate} receiveShadow />
         <group scale={[sx, 1, sz]} position-y={0.02}>
-          <InteriorMeshes plan={plan} toCam={toCam} dark={dark} />
+          <InteriorMeshes plan={plan} toCam={toCam} dark={dark} colors={colors} />
           {plan.units.map((pu) => {
             const u = floorUnits[pu.index];
             if (!u) return null;
@@ -356,9 +363,9 @@ function Scene({
 
       {/* Everything above the revealed floor (and its own facade): lifts, slides off and fades. */}
       <group ref={upper}>
-        <ShellBox w={fp.w} d={fp.d} y0={floorY} y1={building.floors * FLOOR_H} mats={mats.fadingShell} />
+        <ShellBox outline={fp.outline} y0={floorY} y1={building.floors * FLOOR_H} mats={mats.fadingShell} />
         <Balconies w={fp.w} d={fp.d} levels={building.floors - floor} from={floor} material={mats.fadingSlab} />
-        <RoofTop w={fp.w} d={fp.d} y={building.floors * FLOOR_H} material={mats.fadingRoof} />
+        <RoofTop w={fp.w} d={fp.d} outline={fp.outline} y={building.floors * FLOOR_H} material={mats.fadingRoof} />
       </group>
     </>
   );
